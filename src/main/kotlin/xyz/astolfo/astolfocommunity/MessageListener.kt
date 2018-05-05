@@ -30,12 +30,19 @@ class MessageListener(val astolfoCommunityApplication: AstolfoCommunityApplicati
     }
 
     private fun processCommand(event: MessageReceivedEvent, timeIssued: Long, commands: List<Command>, commandMessage: String): Boolean {
-        val commandName = commandMessage.substringBefore(" ")
-        val commandContent = commandMessage.substringAfter(" ")
+        val commandName: String
+        val commandContent: String
+        if (commandMessage.contains(" ")) {
+            commandName = commandMessage.substringBefore(" ").trim()
+            commandContent = commandMessage.substringAfter(" ").trim()
+        } else {
+            commandName = commandMessage
+            commandContent = ""
+        }
 
         val command = commands.find { it.name.equals(commandName, ignoreCase = true) } ?: return false
 
-        if (!processCommand(event, timeIssued, command.subCommands, commandContent)) command.action.invoke(CommandExecution(astolfoCommunityApplication.shardManager, event, timeIssued))
+        if (!processCommand(event, timeIssued, command.subCommands, commandContent)) command.action.invoke(CommandExecution(astolfoCommunityApplication, event, commandContent, timeIssued))
 
         return true
     }

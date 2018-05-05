@@ -25,6 +25,7 @@ fun initModules(): List<Module> {
             action {
                 message(embed {
                     title("Astolfo Community Info")
+                    val shardManager = application.shardManager
                     val guildCount = shardManager.guildCache.size()
                     val totalChannels = shardManager.textChannelCache.size() + shardManager.voiceChannelCache.size()
                     val userCount = shardManager.userCache.size()
@@ -36,8 +37,9 @@ fun initModules(): List<Module> {
             }
         }
     }
+    val musicModule = createMusicModule()
 
-    return listOf(infomodule)
+    return listOf(infomodule, musicModule)
 }
 
 class Module(val name: String, val commands: List<Command>)

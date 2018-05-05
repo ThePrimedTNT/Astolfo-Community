@@ -10,5 +10,5 @@ fun embed(builder: EmbedBuilder.() -> Unit): MessageEmbed {
 }
 
 fun EmbedBuilder.title(title: String, url: String? = null) = setTitle(title, url)!!
-
 fun EmbedBuilder.field(name: String, value: String, inline: Boolean) = addField(name, value, inline)!!
+fun EmbedBuilder.field(name: String, inline: Boolean, value: () -> String) = addField(name, value.invoke(), inline)!!

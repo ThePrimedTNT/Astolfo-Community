@@ -15,15 +15,18 @@ import org.springframework.boot.runApplication
 @EnableConfigurationProperties(AstolfoProperties::class)
 class AstolfoCommunityApplication(properties: AstolfoProperties) {
 
-    val shardManager: ShardManager = DefaultShardManagerBuilder()
-            .setCompressionEnabled(true)
-            .setToken(properties.token)
-            .setStatus(OnlineStatus.DO_NOT_DISTURB)
-            .setGame(Game.watching("myself boot"))
-            .addEventListeners(MessageListener(this))
-            .build()
+    final val musicManager = MusicManager(this, properties)
+    final val shardManager: ShardManager
 
     init {
+        shardManager = DefaultShardManagerBuilder()
+                .setCompressionEnabled(true)
+                .setToken(properties.token)
+                .setStatus(OnlineStatus.DO_NOT_DISTURB)
+                .setGame(Game.watching("myself boot"))
+                .addEventListeners(MessageListener(this), musicManager.lavaLink)
+                .setShardsTotal(properties.shard_count)
+                .build()
         launch {
             while (isActive && shardManager.shardsTotal != shardManager.shardsTotal) delay(1000)
             shardManager.setGame(Game.listening("the community"))
@@ -35,6 +38,10 @@ class AstolfoCommunityApplication(properties: AstolfoProperties) {
 @ConfigurationProperties
 class AstolfoProperties {
     var token = ""
+    var bot_user_id = ""
+    var shard_count = 0
+    var lavalink_nodes = ""
+    var lavalink_password = ""
 }
 
 fun main(args: Array<String>) {
