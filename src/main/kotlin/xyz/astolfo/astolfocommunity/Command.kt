@@ -24,7 +24,7 @@ fun CommandBuilder.action(action: CommandExecution.() -> Unit) {
     this.action = action
 }
 
-class CommandExecution(val shardManager: ShardManager, val event: MessageReceivedEvent, val timeIssued: Long)
+open class CommandExecution(val application: AstolfoCommunityApplication, val event: MessageReceivedEvent, val args: String, val timeIssued: Long)
 
 fun CommandExecution.message(text: CharSequence) = event.channel.sendMessage(text)!!
 fun CommandExecution.message(embed: MessageEmbed) = event.channel.sendMessage(embed)!!

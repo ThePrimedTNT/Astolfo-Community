@@ -1,6 +1,6 @@
 buildscript {
     ext {
-        kotlinVersion = '1.2.20'
+        kotlinVersion = '1.2.41'
         springBootVersion = '2.0.1.RELEASE'
     }
     repositories {
@@ -21,13 +21,15 @@ apply plugin: 'io.spring.dependency-management'
 
 repositories {
     jcenter()
-
+    maven { url 'https://jitpack.io' }
     mavenCentral()
 }
 
 
 dependencies {
-    compile 'net.dv8tion:JDA:3.6.0_361'
+    compile "net.dv8tion:JDA:3.6.0_361"
+    compile "com.github.Frederikam:Lavalink:2bb46dcd4ed93387805724cc9aba6afcc5a85355"
+
 
     //compile('org.springframework.boot:spring-boot-starter-data-jpa')
     //compile('org.springframework.boot:spring-boot-starter-data-redis')
