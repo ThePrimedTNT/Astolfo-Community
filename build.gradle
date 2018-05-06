@@ -29,6 +29,7 @@ repositories {
 dependencies {
     compile "net.dv8tion:JDA:3.6.0_361"
     compile "com.github.Frederikam:Lavalink:2bb46dcd4ed93387805724cc9aba6afcc5a85355"
+    compile "com.google.guava:guava:25.0-jre"
 
 
     //compile('org.springframework.boot:spring-boot-starter-data-jpa')

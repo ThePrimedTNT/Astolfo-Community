@@ -16,6 +16,7 @@ import org.springframework.boot.runApplication
 class AstolfoCommunityApplication(properties: AstolfoProperties) {
 
     final val musicManager = MusicManager(this, properties)
+    final val commandHandler = CommandHandler(this)
     final val shardManager: ShardManager
 
     init {
@@ -24,7 +25,7 @@ class AstolfoCommunityApplication(properties: AstolfoProperties) {
                 .setToken(properties.token)
                 .setStatus(OnlineStatus.DO_NOT_DISTURB)
                 .setGame(Game.watching("myself boot"))
-                .addEventListeners(MessageListener(this), musicManager.lavaLink)
+                .addEventListeners(commandHandler, musicManager.lavaLink)
                 .setShardsTotal(properties.shard_count)
                 .build()
         launch {

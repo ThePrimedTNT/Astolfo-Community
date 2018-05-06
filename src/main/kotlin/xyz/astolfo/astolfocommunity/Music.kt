@@ -23,6 +23,7 @@ import net.dv8tion.jda.core.utils.PermissionUtil
 import java.net.URI
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.LinkedBlockingDeque
+import java.util.concurrent.TimeUnit
 
 class MusicManager(astolfoCommunityApplication: AstolfoCommunityApplication, properties: AstolfoProperties) {
     val lavaLink = Lavalink(
@@ -153,31 +154,35 @@ fun createMusicModule() = module("Music") {
     command("nowplaying") {
         musicAction(memberInVoice = false, activeSession = true) {
             val musicSession = application.musicManager.getMusicSession(event.guild)!!
-            message(embed {
-                title("Astolfo-Community Music Queue")
-                field("Now Playing", false) {
+            updatableMessage(7, TimeUnit.SECONDS) {
+                embed {
+                    title("Astolfo-Community Music Queue")
                     val currentTrack = musicSession.player.playingTrack
-                    if (currentTrack == null) {
-                        "No song currently playing"
-                    } else {
-                        "[${currentTrack.info.title}](${currentTrack.info.uri})"
-                    }
-                }
-                field("\uD83C\uDFBC Queue", false) {
-                    val songs = musicSession.songQueue
-                    val songsPerPage = 8
-                    if (songs.isEmpty()) {
-                        "No songs in queue"
-                    } else {
-                        val songList = songs.take(songsPerPage).map { "[${it.info.title}](${it.info.uri})" }.fold("", { a, b -> "$a\n$b" })
-                        if (songs.size > songsPerPage) {
-                            "$songList\n**and ${songs.size - songsPerPage} more...**"
+                    field("\uD83C\uDFB6 Now Playing" + if(currentTrack != null) "${formatSongDurationMS(musicSession.player.trackPosition)}/${formatSongDurationMS(currentTrack.info.length, currentTrack.info.isStream)}" else "", false) {
+                        if (currentTrack == null) {
+                            "No song currently playing"
                         } else {
-                            songList
+                            "[${currentTrack.info.title}](${currentTrack.info.uri})"
+                        }
+                    }
+                    field("\uD83C\uDFBC Queue", false) {
+                        val songs = musicSession.songQueue
+                        val songsPerPage = 8
+                        if (songs.isEmpty()) {
+                            "No songs in queue"
+                        } else {
+                            val songList = songs.take(songsPerPage).mapIndexed { index, audioTrack ->
+                                "`${index + 1}` [${audioTrack.info.title}](${audioTrack.info.uri}) **${formatSongDurationMS(audioTrack.info.length, audioTrack.info.isStream)}**"
+                            }.fold("", { a, b -> "$a\n$b" })
+                            if (songs.size > songsPerPage) {
+                                "$songList\n**and ${songs.size - songsPerPage} more...**"
+                            } else {
+                                songList
+                            }
                         }
                     }
                 }
-            }).queue()
+            }
         }
     }
     command("skip") {
@@ -206,6 +211,24 @@ fun createMusicModule() = module("Music") {
             }.queue()
         }
     }
+}
+
+// TODO: Make this in its own class and make it more universal
+fun formatSongDurationMS(duration: Long, isStream: Boolean = false): String {
+
+    if (isStream) return "LIVE"
+
+    val hours = TimeUnit.MILLISECONDS.toHours(duration)
+    val minutes = TimeUnit.MILLISECONDS.toMinutes(duration) % TimeUnit.HOURS.toMinutes(1)
+    val seconds = TimeUnit.MILLISECONDS.toSeconds(duration) % TimeUnit.MINUTES.toSeconds(1)
+
+    val list = hours.takeIf { it > 0 }?.let { arrayOf(hours, minutes, seconds) }
+            ?: arrayOf(minutes, seconds)
+
+    val stringBuilder = StringBuilder()
+    list.forEachIndexed { index, time -> stringBuilder.append(if (index == 0) String.format("%d", time) else ":" + String.format("%02d", time)) }
+
+    return stringBuilder.toString()
 }
 
 fun Lavalink.connect(voiceChannel: VoiceChannel) = getLink(voiceChannel.guild).connect(voiceChannel)
