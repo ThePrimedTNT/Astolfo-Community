@@ -1,6 +1,8 @@
 package xyz.astolfo.astolfocommunity
 
 import net.dv8tion.jda.core.JDAInfo
+import net.dv8tion.jda.core.entities.User
+import java.awt.Color
 import java.text.DecimalFormat
 
 val modules = initModules()
@@ -33,6 +35,22 @@ fun initModules(): List<Module> {
                             "\n*$totalChannels* channels," +
                             "\n*$userCount* users", false)
                     field("Library", JDAInfo.VERSION, false)
+                }).queue()
+            }
+        }
+        command("avatar") {
+            action {
+                message(embed {
+                    val mentionedUser = try {
+                        event.message.mentionedUsers[0]
+                    } catch (e: Exception) {
+                        event.message.author
+                    }
+
+                    color(Color(173, 20, 87 ))
+                    title("Astolfo Profile Pictures", mentionedUser.avatarUrl)
+                    description("${mentionedUser.asMention} Profile Picture!")
+                    image(mentionedUser.avatarUrl)
                 }).queue()
             }
         }
