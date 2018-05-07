@@ -171,9 +171,9 @@ fun createMusicModule() = module("Music") {
                             }
                         }).complete()
                     }
-                    // Check up serach after the command has ended
+                    // Clean up search after the command has ended
                     destroyListener { launch { searchMenu.await().delete().queue() } }
-                    // Waits for a follow up response to happen
+                    // Waits for a follow up response for song selection
                     responseListener {
                         if (it.args.matches("\\d+".toRegex())) {
                             val numSelection = it.args.toBigInteger().toInt()
@@ -185,7 +185,7 @@ fun createMusicModule() = module("Music") {
                             application.musicManager.getMusicSession(guild)?.queue(selectedTrack)
                             message(embed { description("[${selectedTrack.info.title}](${selectedTrack.info.uri}) has been added to the queue") }).queue()
                             removeListener()
-                            false // Response listener no longer valid
+                            false // Don't run the command since song was added
                         } else {
                             message(embed { description("Please type the # of the song you want") }).queue()
                             false // Still waiting for valid response
