@@ -27,13 +27,20 @@ fun CommandBuilder.action(action: CommandExecution.() -> Unit) {
     this.action = action
 }
 
-open class CommandExecution(val application: AstolfoCommunityApplication, val event: MessageReceivedEvent, val args: String, val timeIssued: Long)
+open class CommandExecution(val application: AstolfoCommunityApplication, val event: MessageReceivedEvent, val commandPath: String, val args: String, val timeIssued: Long)
 
 fun CommandExecution.message(text: CharSequence) = event.channel.sendMessage(text)!!
 fun CommandExecution.message(embed: MessageEmbed) = event.channel.sendMessage(embed)!!
 fun CommandExecution.message(msg: Message) = event.channel.sendMessage(msg)!!
 
-fun CommandExecution.session() = application.commandHandler.commandSessionMap.get(CommandHandler.SessionKey(event.guild.idLong, event.author.idLong, event.channel.idLong), { CommandSession() })!!
+fun <T> CommandExecution.tempMessage(text: CharSequence, temp: () -> T): T {
+    val messageAsync = async { message(text).complete() }
+    val toReturn = temp.invoke()
+    launch { messageAsync.await().delete().queue() }
+    return toReturn
+}
+
+fun CommandExecution.session() = application.commandHandler.commandSessionMap.get(CommandHandler.SessionKey(event.guild.idLong, event.author.idLong, event.channel.idLong), { CommandSession(commandPath) })!!
 fun CommandExecution.updatable(rate: Long, unit: TimeUnit = TimeUnit.SECONDS, updater: (CommandSession) -> Unit) = session().updatable(rate, unit, updater)
 fun CommandExecution.updatableMessage(rate: Long, unit: TimeUnit = TimeUnit.SECONDS, messageUpdater: () -> MessageEmbed) {
     var messageAsync = async { message(messageUpdater.invoke()).complete() }
@@ -44,7 +51,12 @@ fun CommandExecution.updatableMessage(rate: Long, unit: TimeUnit = TimeUnit.SECO
     }
 }
 
-class CommandSession {
+fun CommandExecution.responseListener(listener: ResponseListener.(CommandExecution) -> Boolean) = session().addReponseListener(listener)
+fun CommandExecution.destroyListener(listener: () -> Unit) = session().addDestroyListener(listener)
+
+class CommandSession(val commandPath: String) {
+    private var responseListeners = mutableListOf<ResponseListener.(CommandExecution) -> Boolean>()
+    private var destroyListener = mutableListOf<() -> Unit>()
     private val jobs = mutableListOf<Job>()
     fun updatable(rate: Long, unit: TimeUnit = TimeUnit.SECONDS, updater: (CommandSession) -> Unit) {
         synchronized(jobs) {
@@ -57,10 +69,25 @@ class CommandSession {
         }
     }
 
+    fun addDestroyListener(listener: () -> Unit) = destroyListener.add(listener)
+    fun removeDestroyListener(listener: () -> Unit) = destroyListener.remove(listener)
+    fun addReponseListener(listener: ResponseListener.(CommandExecution) -> Boolean) = responseListeners.add(listener)
+    fun removeReponseListener(listener: ResponseListener.(CommandExecution) -> Boolean) = responseListeners.remove(listener)
+
+    fun shouldRunCommand(execution: CommandExecution): Boolean {
+        if (responseListeners.isEmpty()) return true
+        return responseListeners.toList().any { it.invoke(ResponseListener(this, it), execution) }
+    }
+
     fun destroy() {
         synchronized(jobs) {
             jobs.forEach { it.cancel() }
             jobs.clear()
+            destroyListener.toList().forEach { it.invoke() }
         }
     }
+}
+
+class ResponseListener(val session: CommandSession, val listener: ResponseListener.(CommandExecution) -> Boolean) {
+    fun removeListener() = session.removeReponseListener(listener)
 }

@@ -19,12 +19,18 @@ class CommandHandler(val astolfoCommunityApplication: AstolfoCommunityApplicatio
             val rawMessage = event!!.message.contentRaw!!
             val prefix = "c?"
 
-            if (!rawMessage.startsWith(prefix, ignoreCase = true)) return@launch
+            if (!rawMessage.startsWith(prefix, ignoreCase = true)) {
+                val sessionKey = SessionKey(event.guild.idLong, event.author.idLong, event.channel.idLong)
+                // Gets previous command ran and checks if its a follow up response
+                if (commandSessionMap.getIfPresent(sessionKey)?.let { it.shouldRunCommand(CommandExecution(astolfoCommunityApplication, event, it.commandPath, rawMessage, timeIssued)) } != false)
+                    commandSessionMap.invalidate(sessionKey)
+                return@launch
+            }
 
             launch(commandProcessorContext) {
                 val commandMessage = rawMessage.substring(prefix.length)
 
-                modules.find { processCommand(event, timeIssued, it.commands, commandMessage) }
+                modules.find { processCommand(event, timeIssued, it.commands, "", commandMessage) }
             }
         }
     }
@@ -36,7 +42,7 @@ class CommandHandler(val astolfoCommunityApplication: AstolfoCommunityApplicatio
 
     data class SessionKey(val guildId: Long, val memberId: Long, val channelId: Long)
 
-    private fun processCommand(event: MessageReceivedEvent, timeIssued: Long, commands: List<Command>, commandMessage: String): Boolean {
+    private fun processCommand(event: MessageReceivedEvent, timeIssued: Long, commands: List<Command>, commandPath: String, commandMessage: String): Boolean {
         val commandName: String
         val commandContent: String
         if (commandMessage.contains(" ")) {
@@ -49,12 +55,18 @@ class CommandHandler(val astolfoCommunityApplication: AstolfoCommunityApplicatio
 
         val command = commands.find { it.name.equals(commandName, ignoreCase = true) } ?: return false
 
-        if (!processCommand(event, timeIssued, command.subCommands, commandContent)) {
-            // TODO: Make it so the sessions would transfer to continuous commands
-            commandSessionMap.invalidate(SessionKey(event.guild.idLong, event.author.idLong, event.channel.idLong))
-            command.action.invoke(CommandExecution(astolfoCommunityApplication, event, commandContent, timeIssued))
-        }
+        val newCommandPath = "$commandPath ${command.name}"
 
+        if (!processCommand(event, timeIssued, command.subCommands, newCommandPath, commandContent)) {
+            val execution = CommandExecution(astolfoCommunityApplication, event, newCommandPath, commandContent, timeIssued)
+            val sessionKey = SessionKey(event.guild.idLong, event.author.idLong, event.channel.idLong)
+            val currentSession = commandSessionMap.getIfPresent(sessionKey)
+            // Checks if command is the same as the previous, if so, check if its a follow up response
+            if (currentSession?.takeIf { it.commandPath.equals(newCommandPath, true) }?.shouldRunCommand(execution) != false) {
+                commandSessionMap.invalidate(sessionKey)
+                command.action.invoke(execution)
+            }
+        }
         return true
     }
 

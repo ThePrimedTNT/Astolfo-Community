@@ -10,9 +10,12 @@ import com.sedmelluq.discord.lavaplayer.source.twitch.TwitchStreamAudioSourceMan
 import com.sedmelluq.discord.lavaplayer.source.vimeo.VimeoAudioSourceManager
 import com.sedmelluq.discord.lavaplayer.source.youtube.YoutubeAudioSourceManager
 import com.sedmelluq.discord.lavaplayer.tools.FriendlyException
+import com.sedmelluq.discord.lavaplayer.track.AudioItem
 import com.sedmelluq.discord.lavaplayer.track.AudioPlaylist
 import com.sedmelluq.discord.lavaplayer.track.AudioTrack
 import com.sedmelluq.discord.lavaplayer.track.AudioTrackEndReason
+import kotlinx.coroutines.experimental.async
+import kotlinx.coroutines.experimental.launch
 import lavalink.client.io.Lavalink
 import lavalink.client.player.event.AudioEventAdapterWrapped
 import net.dv8tion.jda.core.Permission
@@ -21,6 +24,7 @@ import net.dv8tion.jda.core.entities.TextChannel
 import net.dv8tion.jda.core.entities.VoiceChannel
 import net.dv8tion.jda.core.utils.PermissionUtil
 import java.net.URI
+import java.util.concurrent.CompletableFuture
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.LinkedBlockingDeque
 import java.util.concurrent.TimeUnit
@@ -123,26 +127,80 @@ fun createMusicModule() = module("Music") {
             // Make the play command work like the join command as well
             if (!joinAction()) return@musicAction
             val guild = event.guild
-            message("Searching for **$args**...").queue()
-            application.musicManager.audioPlayerManager.loadItem(args, object : AudioLoadResultHandler {
-                override fun trackLoaded(track: AudioTrack?) {
-                    application.musicManager.getMusicSession(guild)?.queue(track!!)
-                }
-
-                override fun loadFailed(exception: FriendlyException?) {
-                    message("Failed due to an error: **${exception!!.message}**").queue()
-                }
-
-                override fun noMatches() {
-                    message("No matches found for **$args**").queue()
-                }
-
-                override fun playlistLoaded(playlist: AudioPlaylist?) {
-                    playlist!!.tracks.forEach {
-                        application.musicManager.getMusicSession(guild)?.queue(it)
+            val trackResponse = tempMessage("\uD83D\uDD0E Searching for **$args**...") {
+                val future = CompletableFuture<Pair<AudioItem?, FriendlyException?>>()
+                application.musicManager.audioPlayerManager.loadItem(args, object : AudioLoadResultHandler {
+                    override fun trackLoaded(track: AudioTrack?) {
+                        future.complete(track to null)
                     }
+
+                    override fun loadFailed(exception: FriendlyException?) {
+                        future.complete(null to exception)
+                    }
+
+                    override fun noMatches() {
+                        future.complete(null to null)
+                    }
+
+                    override fun playlistLoaded(playlist: AudioPlaylist?) {
+                        future.complete(playlist to null)
+                    }
+                })
+                future.get(1, TimeUnit.MINUTES)!!
+            }
+            val audioItem = trackResponse.first
+            val exception = trackResponse.second
+            if (audioItem != null && audioItem is AudioTrack?) {
+                // If the track returned is a normal audio track
+                val audioTrack: AudioTrack = audioItem
+                application.musicManager.getMusicSession(guild)?.queue(audioTrack)
+                message(embed { description("[${audioTrack.info.title}](${audioTrack.info.uri}) has been added to the queue") }).queue()
+            } else if (audioItem != null && audioItem is AudioPlaylist?) {
+                // If the track returned is a list of tracks
+                val audioPlaylist: AudioPlaylist = audioItem
+                if (audioPlaylist.isSearchResult) {
+                    // If the tracks returned are from a ytsearch: or scsearch:
+                    val searchMenu = async {
+                        message(embed {
+                            title("\uD83D\uDD0E Music Search Results:")
+                            description {
+                                val desc = "Type the number of the song you want.\n"
+                                desc + audioPlaylist.tracks.take(8).mapIndexed { index, audioTrack ->
+                                    "`${index + 1}` - **${audioTrack.info.title}** *by ${audioTrack.info.author}*"
+                                }.fold("", { a, b -> "$a\n$b" })
+                            }
+                        }).complete()
+                    }
+                    // Check up serach after the command has ended
+                    destroyListener { launch { searchMenu.await().delete().queue() } }
+                    // Waits for a follow up response to happen
+                    responseListener {
+                        if (it.args.matches("\\d+".toRegex())) {
+                            val numSelection = it.args.toBigInteger().toInt()
+                            if (numSelection < 1 || numSelection > audioPlaylist.tracks.size) {
+                                message("Unknown Selection").queue()
+                                return@responseListener false
+                            }
+                            val selectedTrack = audioPlaylist.tracks[numSelection - 1]
+                            application.musicManager.getMusicSession(guild)?.queue(selectedTrack)
+                            message(embed { description("[${selectedTrack.info.title}](${selectedTrack.info.uri}) has been added to the queue") }).queue()
+                            removeListener()
+                            false // Response listener no longer valid
+                        } else {
+                            removeListener()
+                            true // Still waiting for valid response
+                        }
+                    }
+                } else {
+                    // If the tracks are from directly from a url
+                    audioPlaylist.tracks.forEach { application.musicManager.getMusicSession(guild)?.queue(it) }
+                    message(embed { setDescription("The playlist [${audioPlaylist.name}]($args) has been added to the queue") }).queue()
                 }
-            })
+            } else if (exception != null) {
+                message("Failed due to an error: **${exception.message}**").queue()
+            } else {
+                message("No matches found for **$args**").queue()
+            }
         }
     }
     command("leave") {
@@ -158,7 +216,7 @@ fun createMusicModule() = module("Music") {
                 embed {
                     title("Astolfo-Community Music Queue")
                     val currentTrack = musicSession.player.playingTrack
-                    field("\uD83C\uDFB6 Now Playing" + if(currentTrack != null) "${formatSongDurationMS(musicSession.player.trackPosition)}/${formatSongDurationMS(currentTrack.info.length, currentTrack.info.isStream)}" else "", false) {
+                    field("\uD83C\uDFB6 Now Playing" + if (currentTrack != null) " - ${formatSongDurationMS(musicSession.player.trackPosition)}/${formatSongDurationMS(currentTrack.info.length, currentTrack.info.isStream)}" else "", false) {
                         if (currentTrack == null) {
                             "No song currently playing"
                         } else {
