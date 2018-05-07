@@ -19,3 +19,4 @@ fun EmbedBuilder.field(name: String, value: String, inline: Boolean) = addField(
 fun EmbedBuilder.field(name: String, inline: Boolean, value: () -> String) = addField(name, value.invoke(), inline)!!
 fun EmbedBuilder.thumbnail(imageUrl: String) = setThumbnail(imageUrl)!!
 fun EmbedBuilder.image(imageUrl: String) = setImage(imageUrl)!!
+fun EmbedBuilder.author(name: String, uri: String? = null, icon: String? = null) = setAuthor(name, uri, icon)!!

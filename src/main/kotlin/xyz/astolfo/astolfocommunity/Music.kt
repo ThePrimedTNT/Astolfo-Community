@@ -14,12 +14,15 @@ import com.sedmelluq.discord.lavaplayer.track.AudioItem
 import com.sedmelluq.discord.lavaplayer.track.AudioPlaylist
 import com.sedmelluq.discord.lavaplayer.track.AudioTrack
 import com.sedmelluq.discord.lavaplayer.track.AudioTrackEndReason
+import kotlinx.coroutines.experimental.Deferred
 import kotlinx.coroutines.experimental.async
 import kotlinx.coroutines.experimental.launch
 import lavalink.client.io.Lavalink
 import lavalink.client.player.event.AudioEventAdapterWrapped
+import net.dv8tion.jda.core.MessageBuilder
 import net.dv8tion.jda.core.Permission
 import net.dv8tion.jda.core.entities.Guild
+import net.dv8tion.jda.core.entities.Message
 import net.dv8tion.jda.core.entities.TextChannel
 import net.dv8tion.jda.core.entities.VoiceChannel
 import net.dv8tion.jda.core.utils.PermissionUtil
@@ -72,6 +75,8 @@ class MusicSession(musicManager: MusicManager, guild: Guild, var boundChannel: T
     private val queueLock = Any()
     val songQueue = LinkedBlockingDeque<AudioTrack>()
 
+    private var nowPlayingMessage: Deferred<Message>? = null
+
     init {
         player.addListener(this)
     }
@@ -97,13 +102,32 @@ class MusicSession(musicManager: MusicManager, guild: Guild, var boundChannel: T
             if (player.playingTrack != null) return
 
             if (songQueue.isEmpty()) {
-                // Song Queue Finished
+                boundChannel.sendMessage(embed {
+                    description("\uD83C\uDFC1 Song Queue Finished!")
+                }).queue()
                 return
             }
 
             val track = songQueue.poll() ?: return
 
             player.playTrack(track)
+        }
+    }
+
+    override fun onTrackStart(player: AudioPlayer?, track: AudioTrack?) {
+        val newMessage = MessageBuilder().setEmbed(embed {
+            author("Now Playing: ${track!!.info.title}", track.info.uri)
+        }).build()
+
+        val lastMessage = nowPlayingMessage
+        nowPlayingMessage = async {
+            val message = lastMessage?.await()
+            if (message != null && boundChannel.latestMessageIdLong == message.idLong) {
+                message.editMessage(newMessage).complete()
+            } else {
+                message?.delete()?.queue()
+                boundChannel.sendMessage(newMessage).complete()
+            }
         }
     }
 
@@ -114,6 +138,7 @@ class MusicSession(musicManager: MusicManager, guild: Guild, var boundChannel: T
     fun destroy() {
         player.removeListener(this)
         player.link.resetPlayer()
+        nowPlayingMessage?.let { launch { it.await().delete().queue() } }
     }
 
 }
@@ -153,7 +178,10 @@ fun createMusicModule() = module("Music") {
             if (audioItem != null && audioItem is AudioTrack?) {
                 // If the track returned is a normal audio track
                 val audioTrack: AudioTrack = audioItem
-                application.musicManager.getMusicSession(guild)?.queue(audioTrack)
+                application.musicManager.getMusicSession(guild)?.let {
+                    it.boundChannel = event.message.textChannel
+                    it.queue(audioTrack)
+                }
                 message(embed { description("[${audioTrack.info.title}](${audioTrack.info.uri}) has been added to the queue") }).queue()
             } else if (audioItem != null && audioItem is AudioPlaylist?) {
                 // If the track returned is a list of tracks
@@ -182,7 +210,10 @@ fun createMusicModule() = module("Music") {
                                 return@responseListener false
                             }
                             val selectedTrack = audioPlaylist.tracks[numSelection - 1]
-                            application.musicManager.getMusicSession(guild)?.queue(selectedTrack)
+                            application.musicManager.getMusicSession(guild)?.let {
+                                it.boundChannel = event.message.textChannel
+                                it.queue(selectedTrack)
+                            }
                             message(embed { description("[${selectedTrack.info.title}](${selectedTrack.info.uri}) has been added to the queue") }).queue()
                             removeListener()
                             false // Don't run the command since song was added
@@ -193,7 +224,10 @@ fun createMusicModule() = module("Music") {
                     }
                 } else {
                     // If the tracks are from directly from a url
-                    audioPlaylist.tracks.forEach { application.musicManager.getMusicSession(guild)?.queue(it) }
+                    application.musicManager.getMusicSession(guild)?.let { session ->
+                        session.boundChannel = event.message.textChannel
+                        audioPlaylist.tracks.forEach { session.queue(it) }
+                    }
                     message(embed { setDescription("The playlist [${audioPlaylist.name}]($args) has been added to the queue") }).queue()
                 }
             } else if (exception != null) {
