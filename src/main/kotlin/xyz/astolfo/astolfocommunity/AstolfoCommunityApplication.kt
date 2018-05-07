@@ -30,7 +30,7 @@ class AstolfoCommunityApplication(properties: AstolfoProperties) {
                 .setShardsTotal(properties.shard_count)
                 .build()
         launch {
-            while (isActive && shardManager.shardsTotal != shardManager.shardsTotal) delay(1000)
+            while (isActive && shardManager.shardsRunning != shardManager.shardsTotal) delay(1000)
             shardManager.setGame(Game.listening("the community"))
             shardManager.setStatus(OnlineStatus.ONLINE)
         }
