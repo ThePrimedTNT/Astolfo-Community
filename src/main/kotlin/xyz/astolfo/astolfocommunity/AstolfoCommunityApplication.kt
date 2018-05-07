@@ -15,6 +15,7 @@ import org.springframework.boot.runApplication
 @EnableConfigurationProperties(AstolfoProperties::class)
 class AstolfoCommunityApplication(properties: AstolfoProperties) {
 
+    final val properties = properties
     final val musicManager = MusicManager(this, properties)
     final val commandHandler = CommandHandler(this)
     final val shardManager: ShardManager
@@ -43,6 +44,7 @@ class AstolfoProperties {
     var shard_count = 0
     var lavalink_nodes = ""
     var lavalink_password = ""
+    var osu_api_token = ""
 }
 
 fun main(args: Array<String>) {

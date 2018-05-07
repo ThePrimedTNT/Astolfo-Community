@@ -187,8 +187,8 @@ fun createMusicModule() = module("Music") {
                             removeListener()
                             false // Response listener no longer valid
                         } else {
-                            removeListener()
-                            true // Still waiting for valid response
+                            message(embed { description("Please type the # of the song you want") }).queue()
+                            false // Still waiting for valid response
                         }
                     }
                 } else {
