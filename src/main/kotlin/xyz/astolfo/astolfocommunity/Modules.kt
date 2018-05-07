@@ -41,11 +41,7 @@ fun initModules(): List<Module> {
         command("avatar") {
             action {
                 message(embed {
-                    val mentionedUser = try {
-                        event.message.mentionedUsers[0]
-                    } catch (e: Exception) {
-                        event.message.author
-                    }
+                    val mentionedUser = event.message.mentionedUsers.getOrNull(0) ?: event.message.author
 
                     color(Color(173, 20, 87 ))
                     title("Astolfo Profile Pictures", mentionedUser.avatarUrl)
