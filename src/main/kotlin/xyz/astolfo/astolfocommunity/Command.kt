@@ -9,16 +9,16 @@ import net.dv8tion.jda.core.entities.MessageEmbed
 import net.dv8tion.jda.core.events.message.MessageReceivedEvent
 import java.util.concurrent.TimeUnit
 
-class Command(val name: String, val subCommands: List<Command>, val action: CommandExecution.() -> Unit)
+class Command(val name: String, val alts: Array<out String>, val subCommands: List<Command>, val action: CommandExecution.() -> Unit)
 
-class CommandBuilder(private val name: String) {
+class CommandBuilder(private val name: String, private val alts: Array<out String>) {
     val subCommands = mutableListOf<Command>()
     var action: CommandExecution.() -> Unit = { message("Hello! This is a default command!").queue() }
-    fun build() = Command(name, subCommands, action)
+    fun build() = Command(name, alts, subCommands, action)
 }
 
-fun CommandBuilder.command(subName: String, builder: CommandBuilder.() -> Unit) {
-    val commandBuilder = CommandBuilder(subName)
+fun CommandBuilder.command(subName: String, vararg alts: String, builder: CommandBuilder.() -> Unit) {
+    val commandBuilder = CommandBuilder(subName, alts)
     builder.invoke(commandBuilder)
     subCommands.add(commandBuilder.build())
 }

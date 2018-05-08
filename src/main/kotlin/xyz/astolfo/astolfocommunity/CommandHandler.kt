@@ -53,7 +53,8 @@ class CommandHandler(val astolfoCommunityApplication: AstolfoCommunityApplicatio
             commandContent = ""
         }
 
-        val command = commands.find { it.name.equals(commandName, ignoreCase = true) } ?: return false
+        val command = commands.find { it.name.equals(commandName, ignoreCase = true) || it.alts.any { it.equals(commandName, ignoreCase = true) } }
+                ?: return false
 
         val newCommandPath = "$commandPath ${command.name}"
 

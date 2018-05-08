@@ -144,10 +144,10 @@ class MusicSession(musicManager: MusicManager, guild: Guild, var boundChannel: T
 }
 
 fun createMusicModule() = module("Music") {
-    command("join") {
+    command("join", "j") {
         musicAction { joinAction(true) }
     }
-    command("play") {
+    command("play", "p", "search", "yt", "q", "queue") {
         musicAction {
             // Make the play command work like the join command as well
             if (!joinAction()) return@musicAction
@@ -237,13 +237,13 @@ fun createMusicModule() = module("Music") {
             }
         }
     }
-    command("leave") {
+    command("leave", "l", "disconnect") {
         musicAction {
             application.musicManager.stopMusicSession(event.guild)
             message("I have disconnected").queue()
         }
     }
-    command("nowplaying") {
+    command("nowplaying", "nowplaying", "np") {
         musicAction(memberInVoice = false, activeSession = true) {
             val musicSession = application.musicManager.getMusicSession(event.guild)!!
             updatableMessage(7, TimeUnit.SECONDS) {
@@ -277,7 +277,7 @@ fun createMusicModule() = module("Music") {
             }
         }
     }
-    command("skip") {
+    command("skip", "s") {
         musicAction(activeSession = true) {
             val musicSession = application.musicManager.getMusicSession(event.guild)!!
             val amountToSkip = args.takeIf { it.isNotBlank() }?.let {

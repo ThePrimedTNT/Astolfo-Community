@@ -1,8 +1,5 @@
 package xyz.astolfo.astolfocommunity
 
-import com.oopsjpeg.osu4j.GameMode
-import com.oopsjpeg.osu4j.backend.EndpointUsers
-import com.oopsjpeg.osu4j.backend.Osu
 import net.dv8tion.jda.core.JDAInfo
 import java.awt.Color
 import java.text.DecimalFormat
@@ -73,8 +70,8 @@ fun module(name: String, builder: ModuleBuilder.() -> Unit): Module {
     return moduleBuilder.build()
 }
 
-fun ModuleBuilder.command(name: String, builder: CommandBuilder.() -> Unit) {
-    val commandBuilder = CommandBuilder(name)
+fun ModuleBuilder.command(name: String, vararg alts: String, builder: CommandBuilder.() -> Unit) {
+    val commandBuilder = CommandBuilder(name, alts)
     builder.invoke(commandBuilder)
     commands.add(commandBuilder.build())
 }

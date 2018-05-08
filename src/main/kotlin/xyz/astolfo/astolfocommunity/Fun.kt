@@ -65,17 +65,17 @@ fun createFunModule() = module("Fun") {
             }).queue()
         }
     }
-    command("cat") {
+    command("cat", "cats") {
         action {
-            message(webJson<Cat>("http://aws.random.cat/meow")!!.file!!).queue()
+            message(webJson<Cat>("http://aws.random.cat/meow", null)!!.file!!).queue()
         }
     }
-    command("catgirl") {
+    command("catgirl", "neko", "catgirls") {
         action {
             message(webJson<Neko>("https://nekos.life/api/neko")!!.neko!!).queue()
         }
     }
-    command("coinflip") {
+    command("coinflip", "flip", "coin") {
         val random = Random()
         action {
             message("Flipping a coin for you...").queue {
@@ -83,7 +83,7 @@ fun createFunModule() = module("Fun") {
             }
         }
     }
-    command("csshumor") {
+    command("csshumor", "cssjoke", "cssh") {
         action {
             message(embed {
                 description("```css" +
@@ -92,7 +92,7 @@ fun createFunModule() = module("Fun") {
             }).queue()
         }
     }
-    command("cyanideandhappiness") {
+    command("cyanideandhappiness", "cnh") {
         val random = Random()
         action {
             val r = random.nextInt(4665) + 1
@@ -105,7 +105,7 @@ fun createFunModule() = module("Fun") {
             }).queue()
         }
     }
-    command("dadjoke") {
+    command("dadjoke", "djoke", "dadjokes", "djokes") {
         action {
             message(embed { description("\uD83D\uDCD6 **Dadjoke:** ${webJson<DadJoke>("https://icanhazdadjoke.com/")!!.joke!!}") }).queue()
         }

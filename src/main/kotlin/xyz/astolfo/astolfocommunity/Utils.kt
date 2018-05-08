@@ -8,7 +8,7 @@ import okhttp3.Request
 val ASTOLFO_GSON = Gson()
 val ASTOLFO_HTTP_CLIENT = OkHttpClient()
 
-inline fun <reified T : Any> webJson(url: String): T? = ASTOLFO_GSON.fromJson(web(url, "application/json"))
+inline fun <reified T : Any> webJson(url: String, accept: String? = "application/json"): T? = ASTOLFO_GSON.fromJson(web(url, accept))
 
 fun web(url: String, accept: String? = null): String {
     val requestBuilder = Request.Builder().url(url)
