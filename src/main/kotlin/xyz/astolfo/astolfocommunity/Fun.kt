@@ -1,6 +1,5 @@
 package xyz.astolfo.astolfocommunity
 
-import com.oopsjpeg.osu4j.GameMode
 import com.oopsjpeg.osu4j.backend.EndpointUsers
 import com.oopsjpeg.osu4j.backend.Osu
 import net.dv8tion.jda.core.MessageBuilder
@@ -38,17 +37,22 @@ fun createFunModule() = module("Fun") {
             action {
                 message(embed {
                     val osu = Osu.getAPI(application.properties.osu_api_token)
-                    val user = osu.users.query(EndpointUsers.ArgumentsBuilder(args)
-                            .setMode(GameMode.STANDARD)
-                            .build())
+                    fun getUser(args: String) = osu.users.query(EndpointUsers.ArgumentsBuilder(args).build())
+                    val user = try {
+                        getUser(args)
+                    } catch (e: Exception) {
+                        message(":mag: I looked for `$args`, but couldn't find them!" +
+                                "\n Try using the sig command instead. Here's `ThePrimedTNT`'s stats while you do that").queue()
+                        getUser("theprimedtnt")
+                    }
                     val topPlayBeatmap = user.getTopScores(1).get()[0].beatmap.get()
                     color(purpleEmbedColor)
                     title("Osu stats for ${user.username}", user.url.toString())
-
                     description("\nProfile url: ${user.url}" +
+                            "\nCountry: **${user.country}**" +
                             "\nGlobal Rank: **#${user.rank} (${user.pp}pp)**" +
                             "\nAccuracy: **${user.accuracy}%**" +
-                            "\nTotal score: **${user.totalScore}**" +
+                            "\nPlay Count: **${user.playCount} (Lv${user.level})**" +
                             "\nTop play: **$topPlayBeatmap** ${topPlayBeatmap.url}")
                 }).queue()
             }
