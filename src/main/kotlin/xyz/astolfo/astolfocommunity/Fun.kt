@@ -12,7 +12,7 @@ fun createFunModule() = module("Fun") {
     command("osu") {
         val purpleEmbedColor = Color(119, 60, 138)
         action {
-            message(embed {
+            messageAction(embed {
                 val osuPicture = "https://upload.wikimedia.org/wikipedia/commons/d/d3/Osu%21Logo_%282015%29.png"
                 color(purpleEmbedColor)
                 title("Astolfo Osu Integration")
@@ -24,7 +24,7 @@ fun createFunModule() = module("Fun") {
         command("sig") {
             action {
                 val osuUsername = args
-                message(embed {
+                messageAction(embed {
                     val url = "http://lemmmy.pw/osusig/sig.php?colour=purple&uname=$osuUsername&pp=1"
                     color(purpleEmbedColor)
                     title("Astolfo Osu Signature", url)
@@ -35,13 +35,13 @@ fun createFunModule() = module("Fun") {
         }
         command("profile") {
             action {
-                message(embed {
+                messageAction(embed {
                     val osu = Osu.getAPI(application.properties.osu_api_token)
                     fun getUser(args: String) = osu.users.query(EndpointUsers.ArgumentsBuilder(args).build())
                     val user = try {
                         getUser(args)
                     } catch (e: Exception) {
-                        message(":mag: I looked for `$args`, but couldn't find them!" +
+                        messageAction(":mag: I looked for `$args`, but couldn't find them!" +
                                 "\n Try using the sig command instead. Here's `ThePrimedTNT`'s stats while you do that").queue()
                         getUser("theprimedtnt")
                     }
@@ -60,32 +60,32 @@ fun createFunModule() = module("Fun") {
     }
     command("advice") {
         action {
-            message(embed {
+            messageAction(embed {
                 description("\uD83D\uDCD6 ${webJson<Advice>("http://api.adviceslip.com/advice")!!.slip!!.advice}")
             }).queue()
         }
     }
     command("cat", "cats") {
         action {
-            message(webJson<Cat>("http://aws.random.cat/meow", null)!!.file!!).queue()
+            messageAction(webJson<Cat>("http://aws.random.cat/meow", null)!!.file!!).queue()
         }
     }
     command("catgirl", "neko", "catgirls") {
         action {
-            message(webJson<Neko>("https://nekos.life/api/neko")!!.neko!!).queue()
+            messageAction(webJson<Neko>("https://nekos.life/api/neko")!!.neko!!).queue()
         }
     }
     command("coinflip", "flip", "coin") {
         val random = Random()
         action {
-            message("Flipping a coin for you...").queue {
+            messageAction("Flipping a coin for you...").queue {
                 it.editMessage(MessageBuilder().append("Coin landed on **${if (random.nextBoolean()) "Heads" else "Tails"}**").build()).queueAfter(1, TimeUnit.SECONDS)
             }
         }
     }
     command("csshumor", "cssjoke", "cssh") {
         action {
-            message(embed {
+            messageAction(embed {
                 description("```css" +
                         "\n${Jsoup.parse(web("https://csshumor.com/")).select(".crayon-code").text()}" +
                         "\n```")
@@ -96,7 +96,7 @@ fun createFunModule() = module("Fun") {
         val random = Random()
         action {
             val r = random.nextInt(4665) + 1
-            message(embed {
+            messageAction(embed {
                 title("Cyanide and Happiness")
                 image(Jsoup.parse(web("http://explosm.net/comics/$r/"))
                         .select("#main-comic").first()
@@ -107,7 +107,7 @@ fun createFunModule() = module("Fun") {
     }
     command("dadjoke", "djoke", "dadjokes", "djokes") {
         action {
-            message(embed { description("\uD83D\uDCD6 **Dadjoke:** ${webJson<DadJoke>("https://icanhazdadjoke.com/")!!.joke!!}") }).queue()
+            messageAction(embed { description("\uD83D\uDCD6 **Dadjoke:** ${webJson<DadJoke>("https://icanhazdadjoke.com/")!!.joke!!}") }).queue()
         }
     }
 }

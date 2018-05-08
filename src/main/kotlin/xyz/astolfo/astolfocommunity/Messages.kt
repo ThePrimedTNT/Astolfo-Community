@@ -1,14 +1,24 @@
 package xyz.astolfo.astolfocommunity
 
 import net.dv8tion.jda.core.EmbedBuilder
+import net.dv8tion.jda.core.MessageBuilder
+import net.dv8tion.jda.core.entities.Message
 import net.dv8tion.jda.core.entities.MessageEmbed
 import java.awt.Color
 
+fun embed(text: String) = embed { description(text) }
 fun embed(builder: EmbedBuilder.() -> Unit): MessageEmbed {
     val embedBuilder = EmbedBuilder()
     embedBuilder.setColor(Color(119, 60, 138))
     builder.invoke(embedBuilder)
     return embedBuilder.build()
+}
+
+fun message(text: String) = message { setContent(text) }
+fun message(builder: MessageBuilder.() -> Unit): Message {
+    val messageBuilder = MessageBuilder()
+    builder.invoke(messageBuilder)
+    return messageBuilder.build()
 }
 
 fun EmbedBuilder.color(color: java.awt.Color) = setColor(color)!!

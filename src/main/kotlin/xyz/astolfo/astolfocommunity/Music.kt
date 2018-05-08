@@ -16,10 +16,10 @@ import com.sedmelluq.discord.lavaplayer.track.AudioTrack
 import com.sedmelluq.discord.lavaplayer.track.AudioTrackEndReason
 import kotlinx.coroutines.experimental.Deferred
 import kotlinx.coroutines.experimental.async
+import kotlinx.coroutines.experimental.delay
 import kotlinx.coroutines.experimental.launch
 import lavalink.client.io.Lavalink
 import lavalink.client.player.event.AudioEventAdapterWrapped
-import net.dv8tion.jda.core.MessageBuilder
 import net.dv8tion.jda.core.Permission
 import net.dv8tion.jda.core.entities.Guild
 import net.dv8tion.jda.core.entities.Message
@@ -57,6 +57,22 @@ class MusicManager(astolfoCommunityApplication: AstolfoCommunityApplication, pro
         audioPlayerManager.registerSourceManager(VimeoAudioSourceManager())
         audioPlayerManager.registerSourceManager(TwitchStreamAudioSourceManager())
         audioPlayerManager.registerSourceManager(BeamAudioSourceManager())
+
+        launch {
+            while (isActive) {
+                val currentTime = System.currentTimeMillis()
+                musicSessionMap.toMap().forEach { guild, session ->
+                    val currentVoiceChannel = session.player.link.channel
+                    if (currentVoiceChannel != null && currentVoiceChannel.members.any { !it.user.isBot }) session.lastSeenMember = currentTime
+                    // Auto Leave if no one is in voice channel for more then 5 minutes
+                    if (currentTime - session.lastSeenMember > 5 * 60 * 1000) {
+                        stopMusicSession(guild)
+                        session.boundChannel.sendMessage(embed { description("Disconnected due to being all alone...") }).queue()
+                    }
+                }
+                delay(2, TimeUnit.MINUTES)
+            }
+        }
     }
 
     fun getMusicSession(guild: Guild) = musicSessionMap[guild]
@@ -74,6 +90,8 @@ class MusicSession(musicManager: MusicManager, guild: Guild, var boundChannel: T
 
     private val queueLock = Any()
     val songQueue = LinkedBlockingDeque<AudioTrack>()
+
+    var lastSeenMember = System.currentTimeMillis()
 
     private var nowPlayingMessage: Deferred<Message>? = null
 
@@ -115,9 +133,11 @@ class MusicSession(musicManager: MusicManager, guild: Guild, var boundChannel: T
     }
 
     override fun onTrackStart(player: AudioPlayer?, track: AudioTrack?) {
-        val newMessage = MessageBuilder().setEmbed(embed {
-            author("Now Playing: ${track!!.info.title}", track.info.uri)
-        }).build()
+        val newMessage = message {
+            embed {
+                author("\uD83C\uDFB6 Now Playing: ${track!!.info.title}", track.info.uri)
+            }
+        }
 
         val lastMessage = nowPlayingMessage
         nowPlayingMessage = async {
@@ -152,7 +172,7 @@ fun createMusicModule() = module("Music") {
             // Make the play command work like the join command as well
             if (!joinAction()) return@musicAction
             val guild = event.guild
-            val trackResponse = tempMessage("\uD83D\uDD0E Searching for **$args**...") {
+            val trackResponse = tempMessage(message { embed("\uD83D\uDD0E Searching for **$args**...") }) {
                 val future = CompletableFuture<Pair<AudioItem?, FriendlyException?>>()
                 application.musicManager.audioPlayerManager.loadItem(args, object : AudioLoadResultHandler {
                     override fun trackLoaded(track: AudioTrack?) {
@@ -182,14 +202,14 @@ fun createMusicModule() = module("Music") {
                     it.boundChannel = event.message.textChannel
                     it.queue(audioTrack)
                 }
-                message(embed { description("[${audioTrack.info.title}](${audioTrack.info.uri}) has been added to the queue") }).queue()
+                messageAction(embed { description("[${audioTrack.info.title}](${audioTrack.info.uri}) has been added to the queue") }).queue()
             } else if (audioItem != null && audioItem is AudioPlaylist?) {
                 // If the track returned is a list of tracks
                 val audioPlaylist: AudioPlaylist = audioItem
                 if (audioPlaylist.isSearchResult) {
                     // If the tracks returned are from a ytsearch: or scsearch:
                     val searchMenu = async {
-                        message(embed {
+                        messageAction(embed {
                             title("\uD83D\uDD0E Music Search Results:")
                             description {
                                 val desc = "Type the number of the song you want.\n"
@@ -206,7 +226,7 @@ fun createMusicModule() = module("Music") {
                         if (it.args.matches("\\d+".toRegex())) {
                             val numSelection = it.args.toBigInteger().toInt()
                             if (numSelection < 1 || numSelection > audioPlaylist.tracks.size) {
-                                message("Unknown Selection").queue()
+                                messageAction("Unknown Selection").queue()
                                 return@responseListener false
                             }
                             val selectedTrack = audioPlaylist.tracks[numSelection - 1]
@@ -214,11 +234,11 @@ fun createMusicModule() = module("Music") {
                                 it.boundChannel = event.message.textChannel
                                 it.queue(selectedTrack)
                             }
-                            message(embed { description("[${selectedTrack.info.title}](${selectedTrack.info.uri}) has been added to the queue") }).queue()
+                            messageAction(embed { description("[${selectedTrack.info.title}](${selectedTrack.info.uri}) has been added to the queue") }).queue()
                             removeListener()
                             false // Don't run the command since song was added
                         } else {
-                            message(embed { description("Please type the # of the song you want") }).queue()
+                            messageAction(embed { description("Please type the # of the song you want") }).queue()
                             false // Still waiting for valid response
                         }
                     }
@@ -228,22 +248,22 @@ fun createMusicModule() = module("Music") {
                         session.boundChannel = event.message.textChannel
                         audioPlaylist.tracks.forEach { session.queue(it) }
                     }
-                    message(embed { setDescription("The playlist [${audioPlaylist.name}]($args) has been added to the queue") }).queue()
+                    messageAction(embed { setDescription("The playlist [${audioPlaylist.name}]($args) has been added to the queue") }).queue()
                 }
             } else if (exception != null) {
-                message("Failed due to an error: **${exception.message}**").queue()
+                messageAction("Failed due to an error: **${exception.message}**").queue()
             } else {
-                message("No matches found for **$args**").queue()
+                messageAction("No matches found for **$args**").queue()
             }
         }
     }
     command("leave", "l", "disconnect") {
         musicAction {
             application.musicManager.stopMusicSession(event.guild)
-            message("I have disconnected").queue()
+            messageAction("I have disconnected").queue()
         }
     }
-    command("nowplaying", "nowplaying", "np") {
+    command("playing", "nowplaying", "np") {
         musicAction(memberInVoice = false, activeSession = true) {
             val musicSession = application.musicManager.getMusicSession(event.guild)!!
             updatableMessage(7, TimeUnit.SECONDS) {
@@ -283,26 +303,64 @@ fun createMusicModule() = module("Music") {
             val amountToSkip = args.takeIf { it.isNotBlank() }?.let {
                 val amountNum = it.toBigIntegerOrNull()?.toInt()
                 if (amountNum == null) {
-                    message("Amount to skip must be a whole number!").queue()
+                    messageAction("Amount to skip must be a whole number!").queue()
                     return@musicAction
                 }
                 if (amountNum < 1) {
-                    message("Amount to skip must be a greater then zero!").queue()
+                    messageAction("Amount to skip must be a greater then zero!").queue()
                     return@musicAction
                 }
                 amountNum
             } ?: 1
             val songsSkipped = musicSession.skip(amountToSkip)
-            when {
-                songsSkipped.isEmpty() -> message("No songs where skipped.")
-                songsSkipped.size == 1 -> {
-                    val skippedSong = songsSkipped.first()
-                    message("⏩ [${skippedSong.info.title}](${skippedSong.info.uri}) was skipped.")
+            messageAction(embed {
+                when {
+                    songsSkipped.isEmpty() -> description("No songs where skipped.")
+                    songsSkipped.size == 1 -> {
+                        val skippedSong = songsSkipped.first()
+                        description("⏩ [${skippedSong.info.title}](${skippedSong.info.uri}) was skipped.")
+                    }
+                    else -> description("⏩ ${songsSkipped.size} songs where skipped")
                 }
-                else -> message("⏩ ${songsSkipped.size} songs where skipped")
-            }.queue()
+            }).queue()
         }
     }
+    command("volume", "v") {
+        musicAction(activeSession = true) {
+            val musicSession = application.musicManager.getMusicSession(event.guild)!!
+            val newVolume = args.takeIf { it.isNotBlank() }?.let {
+                val amountNum = it.toBigIntegerOrNull()?.toInt()
+                if (amountNum == null) {
+                    messageAction("The new volume must be a whole number!").queue()
+                    return@musicAction
+                }
+                if (amountNum < 5) {
+                    messageAction("The new volume must be at least 5%!").queue()
+                    return@musicAction
+                }
+                if (amountNum > 150) {
+                    messageAction("The new volume must be no more than 150%!").queue()
+                    return@musicAction
+                }
+                amountNum
+            }
+            if (newVolume == null) {
+                val currentVolume = musicSession.player.volume
+                messageAction(embed { description("Current volume is **$currentVolume%**!") }).queue()
+            } else {
+                val oldVolume = musicSession.player.volume
+                musicSession.player.volume = newVolume
+                messageAction(embed { description("${volumeIcon(newVolume)} Volume has changed from **$oldVolume%** to **$newVolume%**") }).queue()
+            }
+        }
+    }
+}
+
+fun volumeIcon(volume: Int) = when {
+    volume == 0 -> Emotes.MUTE
+    volume < 30 -> Emotes.SPEAKER
+    volume < 70 -> Emotes.SPEAKER_1
+    else -> Emotes.SPEAKER_2
 }
 
 // TODO: Make this in its own class and make it more universal
@@ -330,16 +388,16 @@ fun CommandBuilder.musicAction(memberInVoice: Boolean = true, sameVoiceChannel: 
     action {
         val author = event.member!!
         if (activeSession && !application.musicManager.hasMusicSession(event.guild)) {
-            message("There is no active music session!").queue()
+            messageAction("There is no active music session!").queue()
             return@action
         }
         if (memberInVoice && !author.voiceState.inVoiceChannel()) {
-            message("You must join a voice channel to use music commands!").queue()
+            messageAction("You must join a voice channel to use music commands!").queue()
             return@action
         }
         if (memberInVoice && sameVoiceChannel && application.musicManager.hasMusicSession(event.guild) && event.guild.selfMember.voiceState.inVoiceChannel()) {
             if (author.voiceState.channel !== event.guild.selfMember.voiceState.channel) {
-                message("You must be in the same voice channel as Astolfo to use music commands!").queue()
+                messageAction("You must be in the same voice channel as Astolfo to use music commands!").queue()
                 return@action
             }
         }
@@ -352,24 +410,24 @@ fun CommandExecution.joinAction(forceJoinMessage: Boolean = false): Boolean {
     val guild = event.guild!!
     val vc = author.voiceState.channel
     if (guild.afkChannel?.let { it == vc } == true) {
-        message("I cannot join a afk channel.").queue()
+        messageAction("I cannot join a afk channel.").queue()
         return false
     }
     if (!PermissionUtil.checkPermission(vc, guild.selfMember, Permission.VOICE_MOVE_OTHERS) && vc !== guild.selfMember.voiceState.audioChannel && vc.userLimit > 0 && vc.members.size >= vc.userLimit) {
-        message("I cannot join a full channel.").queue()
+        messageAction("I cannot join a full channel.").queue()
         return false
     }
     if (!PermissionUtil.checkPermission(vc, guild.selfMember, Permission.VOICE_CONNECT)) {
-        message("I don't have permission to connect to **${vc.name}**").queue()
+        messageAction("I don't have permission to connect to **${vc.name}**").queue()
         return false
     }
     if (!PermissionUtil.checkPermission(vc, guild.selfMember, Permission.VOICE_SPEAK)) {
-        message("I don't have permission to speak in **${vc.name}**").queue()
+        messageAction("I don't have permission to speak in **${vc.name}**").queue()
         return false
     }
     val changedChannels = application.musicManager.lavaLink.getLink(vc.guild).channel != vc
     application.musicManager.lavaLink.connect(vc)
     application.musicManager.getMusicSession(guild, event.textChannel)
-    if (changedChannels || forceJoinMessage) message("I have joined your voice channel!").queue()
+    if (changedChannels || forceJoinMessage) messageAction("I have joined your voice channel!").queue()
     return true
 }

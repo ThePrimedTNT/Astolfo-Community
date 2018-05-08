@@ -13,7 +13,7 @@ class Command(val name: String, val alts: Array<out String>, val subCommands: Li
 
 class CommandBuilder(private val name: String, private val alts: Array<out String>) {
     val subCommands = mutableListOf<Command>()
-    var action: CommandExecution.() -> Unit = { message("Hello! This is a default command!").queue() }
+    var action: CommandExecution.() -> Unit = { messageAction("Hello! This is a default command!").queue() }
     fun build() = Command(name, alts, subCommands, action)
 }
 
@@ -29,12 +29,12 @@ fun CommandBuilder.action(action: CommandExecution.() -> Unit) {
 
 open class CommandExecution(val application: AstolfoCommunityApplication, val event: MessageReceivedEvent, val commandPath: String, val args: String, val timeIssued: Long)
 
-fun CommandExecution.message(text: CharSequence) = event.channel.sendMessage(text)!!
-fun CommandExecution.message(embed: MessageEmbed) = event.channel.sendMessage(embed)!!
-fun CommandExecution.message(msg: Message) = event.channel.sendMessage(msg)!!
+fun CommandExecution.messageAction(text: CharSequence) = event.channel.sendMessage(text)!!
+fun CommandExecution.messageAction(embed: MessageEmbed) = event.channel.sendMessage(embed)!!
+fun CommandExecution.messageAction(msg: Message) = event.channel.sendMessage(msg)!!
 
-fun <T> CommandExecution.tempMessage(text: CharSequence, temp: () -> T): T {
-    val messageAsync = async { message(text).complete() }
+fun <T> CommandExecution.tempMessage(msg: Message, temp: () -> T): T {
+    val messageAsync = async { messageAction(msg).complete() }
     val toReturn = temp.invoke()
     launch { messageAsync.await().delete().queue() }
     return toReturn
@@ -43,7 +43,7 @@ fun <T> CommandExecution.tempMessage(text: CharSequence, temp: () -> T): T {
 fun CommandExecution.session() = application.commandHandler.commandSessionMap.get(CommandHandler.SessionKey(event.guild.idLong, event.author.idLong, event.channel.idLong), { CommandSession(commandPath) })!!
 fun CommandExecution.updatable(rate: Long, unit: TimeUnit = TimeUnit.SECONDS, updater: (CommandSession) -> Unit) = session().updatable(rate, unit, updater)
 fun CommandExecution.updatableMessage(rate: Long, unit: TimeUnit = TimeUnit.SECONDS, messageUpdater: () -> MessageEmbed) {
-    var messageAsync = async { message(messageUpdater.invoke()).complete() }
+    var messageAsync = async { messageAction(messageUpdater.invoke()).complete() }
     updatable(rate, unit) {
         if (!messageAsync.isCompleted) return@updatable
         val message = messageAsync.getCompleted()!!
