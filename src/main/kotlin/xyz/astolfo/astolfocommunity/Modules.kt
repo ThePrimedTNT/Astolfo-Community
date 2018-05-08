@@ -50,6 +50,19 @@ fun initModules(): List<Module> {
                 }).queue()
             }
         }
+        command("help") {
+            action {
+                message(embed {
+                    title("Astolfo Command Help")
+                    description("If you're having  trouble with anything, you can always stop by our support server!" +
+                            "\nInvite Link: https://discord.gg/23RB2Wc")
+                    for (module in modules) {
+                        val commandNames = module.commands.map { "`${it.name}` " }.fold("", {a, b -> "$a $b"})
+                        field("${module.name} Commands", commandNames, false)
+                    }
+                }).queue()
+            }
+        }
     }
     val funmodule = createFunModule()
     val musicModule = createMusicModule()
