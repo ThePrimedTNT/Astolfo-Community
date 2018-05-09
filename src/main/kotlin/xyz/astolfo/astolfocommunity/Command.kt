@@ -73,6 +73,7 @@ class CommandSession(val commandPath: String) {
     fun removeDestroyListener(listener: () -> Unit) = destroyListener.remove(listener)
     fun addReponseListener(listener: ResponseListener.(CommandExecution) -> Boolean) = responseListeners.add(listener)
     fun removeReponseListener(listener: ResponseListener.(CommandExecution) -> Boolean) = responseListeners.remove(listener)
+    fun hasResponseListeners() = responseListeners.isNotEmpty()
 
     fun shouldRunCommand(execution: CommandExecution): Boolean {
         if (responseListeners.isEmpty()) return true

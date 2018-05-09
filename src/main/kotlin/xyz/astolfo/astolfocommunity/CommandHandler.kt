@@ -21,9 +21,15 @@ class CommandHandler(val astolfoCommunityApplication: AstolfoCommunityApplicatio
 
             if (!rawMessage.startsWith(prefix, ignoreCase = true)) {
                 val sessionKey = SessionKey(event.guild.idLong, event.author.idLong, event.channel.idLong)
-                // Gets previous command ran and checks if its a follow up response
-                if (commandSessionMap.getIfPresent(sessionKey)?.let { it.shouldRunCommand(CommandExecution(astolfoCommunityApplication, event, it.commandPath, rawMessage, timeIssued)) } != false)
-                    commandSessionMap.invalidate(sessionKey)
+                val currentSession = commandSessionMap.getIfPresent(sessionKey)
+                // Checks if there is currently a session, if so, check if its a follow up response
+                if (currentSession != null && currentSession.hasResponseListeners()) {
+                    val execution = CommandExecution(astolfoCommunityApplication, event, currentSession.commandPath, rawMessage, timeIssued)
+                    if (currentSession.shouldRunCommand(execution) || !currentSession.hasResponseListeners()) {
+                        // If the response listeners return true or all the response listeners removed themselves
+                        commandSessionMap.invalidate(sessionKey)
+                    }
+                }
                 return@launch
             }
 
@@ -63,7 +69,16 @@ class CommandHandler(val astolfoCommunityApplication: AstolfoCommunityApplicatio
             val sessionKey = SessionKey(event.guild.idLong, event.author.idLong, event.channel.idLong)
             val currentSession = commandSessionMap.getIfPresent(sessionKey)
             // Checks if command is the same as the previous, if so, check if its a follow up response
-            if (currentSession?.takeIf { it.commandPath.equals(newCommandPath, true) }?.shouldRunCommand(execution) != false) {
+            if (currentSession != null && currentSession.hasResponseListeners() && currentSession.commandPath.equals(newCommandPath, true)) {
+                if (currentSession.shouldRunCommand(execution)) {
+                    // If the response listeners return true
+                    commandSessionMap.invalidate(sessionKey)
+                    command.action.invoke(execution)
+                } else if (!currentSession.hasResponseListeners()) {
+                    // If the response listeners all ran and removed themselves
+                    commandSessionMap.invalidate(sessionKey)
+                }
+            } else {
                 commandSessionMap.invalidate(sessionKey)
                 command.action.invoke(execution)
             }

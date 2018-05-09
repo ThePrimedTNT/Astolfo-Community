@@ -21,6 +21,9 @@ fun message(builder: MessageBuilder.() -> Unit): Message {
     return messageBuilder.build()
 }
 
+fun MessageBuilder.embed(text: String) = embed { description(text) }
+fun MessageBuilder.embed(builder: EmbedBuilder.() -> Unit) = setEmbed(xyz.astolfo.astolfocommunity.embed(builder))!!
+
 fun EmbedBuilder.color(color: java.awt.Color) = setColor(color)!!
 fun EmbedBuilder.title(title: String, url: String? = null) = setTitle(title, url)!!
 fun EmbedBuilder.description(description: String) = setDescription(description)!!

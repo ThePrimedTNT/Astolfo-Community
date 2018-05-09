@@ -43,6 +43,15 @@ class MusicManager(astolfoCommunityApplication: AstolfoCommunityApplication, pro
 
     private val musicSessionMap = ConcurrentHashMap<Guild, MusicSession>()
 
+    val sessionCount: Int
+        get() = musicSessionMap.size
+    val queuedSongCount: Int
+        get() = musicSessionMap.toMap().values.map { it.songQueue.size }.sum()
+    val listeningCount: Int
+        get() = musicSessionMap.toMap().values.map {
+            it.player.link.channel?.members?.filter { !it.user.isBot }?.size ?: 0
+        }.sum()
+
     init {
         properties.lavalink_nodes.split(",").forEach {
             lavaLink.addNode(URI(it), properties.lavalink_password)
@@ -266,35 +275,32 @@ fun createMusicModule() = module("Music") {
     command("playing", "nowplaying", "np") {
         musicAction(memberInVoice = false, activeSession = true) {
             val musicSession = application.musicManager.getMusicSession(event.guild)!!
-            updatableMessage(7, TimeUnit.SECONDS) {
-                embed {
-                    title("Astolfo-Community Music Queue")
-                    val currentTrack = musicSession.player.playingTrack
-                    field("\uD83C\uDFB6 Now Playing" + if (currentTrack != null) " - ${formatSongDurationMS(musicSession.player.trackPosition)}/${formatSongDurationMS(currentTrack.info.length, currentTrack.info.isStream)}" else "", false) {
-                        if (currentTrack == null) {
-                            "No song currently playing"
-                        } else {
-                            "[${currentTrack.info.title}](${currentTrack.info.uri})"
-                        }
+            val paginator = paginator("Astolfo-Community Music Queue") {
+                provider(8, {
+                    val songs = musicSession.songQueue
+                    if (songs.isEmpty()) listOf("No songs in queue")
+                    else songs.map { audioTrack ->
+                        "[${audioTrack.info.title}](${audioTrack.info.uri}) **${formatSongDurationMS(audioTrack.info.length, audioTrack.info.isStream)}**"
                     }
-                    field("\uD83C\uDFBC Queue", false) {
-                        val songs = musicSession.songQueue
-                        val songsPerPage = 8
-                        if (songs.isEmpty()) {
-                            "No songs in queue"
-                        } else {
-                            val songList = songs.take(songsPerPage).mapIndexed { index, audioTrack ->
-                                "`${index + 1}` [${audioTrack.info.title}](${audioTrack.info.uri}) **${formatSongDurationMS(audioTrack.info.length, audioTrack.info.isStream)}**"
-                            }.fold("", { a, b -> "$a\n$b" })
-                            if (songs.size > songsPerPage) {
-                                "$songList\n**and ${songs.size - songsPerPage} more...**"
-                            } else {
-                                songList
+                })
+                renderer {
+                    message {
+                        embed {
+                            titleProvider.invoke()?.let { title(it) }
+                            val currentTrack = musicSession.player.playingTrack
+                            field("\uD83C\uDFB6 Now Playing" + if (currentTrack != null) " - ${formatSongDurationMS(musicSession.player.trackPosition)}/${formatSongDurationMS(currentTrack.info.length, currentTrack.info.isStream)}" else "", false) {
+                                if (currentTrack == null) {
+                                    "No song currently playing"
+                                } else {
+                                    "[${currentTrack.info.title}](${currentTrack.info.uri})"
+                                }
                             }
+                            field("\uD83C\uDFBC Queue", false) { providedString }
                         }
                     }
                 }
             }
+            updatable(7, TimeUnit.SECONDS) { paginator.render() }
         }
     }
     command("skip", "s") {
