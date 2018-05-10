@@ -19,7 +19,7 @@ fun createInfoModule() = module("Info") {
             }
         }
     }
-    command("about") {
+    command("about", "info") {
         action {
             messageAction(embed {
                 title("Astolfo Community Info")
@@ -27,7 +27,7 @@ fun createInfoModule() = module("Info") {
                 val guildCount = shardManager.guildCache.size()
                 val totalChannels = shardManager.textChannelCache.size() + shardManager.voiceChannelCache.size()
                 val userCount = shardManager.userCache.size()
-                description("Astolfo-Community is a open-sourced community version of Astolfo! If you want to contribute or take a look at the source code, visit our [Github](https://github.com/ThePrimedTNT/Astolfo-Community)")
+                description("Astolfo-Community is an open-sourced community version of Astolfo! If you want to contribute or take a look at the source code, visit our [Github](https://github.com/ThePrimedTNT/Astolfo-Community)!")
                 field("Stats", "*$guildCount* servers" +
                         "\n*$totalChannels* channels," +
                         "\n*$userCount* users" +
@@ -39,12 +39,10 @@ fun createInfoModule() = module("Info") {
             }).queue()
         }
     }
-    command("avatar") {
+    command("avatar", "pfp") {
         action {
             messageAction(embed {
                 val mentionedUser = event.message.mentionedUsers.getOrNull(0) ?: event.message.author
-
-                color(Color(173, 20, 87))
                 title("Astolfo Profile Pictures", mentionedUser.avatarUrl)
                 description("${mentionedUser.asMention} Profile Picture!")
                 image(mentionedUser.avatarUrl)
@@ -53,14 +51,15 @@ fun createInfoModule() = module("Info") {
     }
     command("help") {
         action {
+            messageAction(embed(":mailbox: I have private messaged you a list of commands!")).queue()
             event.author.openPrivateChannel().queue {
                 it.sendMessage(embed {
                     title("Astolfo Command Help")
                     description("If you're having  trouble with anything, you can always stop by our support server!" +
                             "\nInvite Link: https://discord.gg/23RB2Wc")
-                    for (module in modules) {
-                        val commandNames = module.commands.map { "`${it.name}` " }.fold("", { a, b -> "$a $b" })
-                        field("${module.name} Commands", commandNames, false)
+                    modules.forEach {
+                        val commandNames = it.commands.map { "`${it.name}` " }.fold("", { a, b -> "$a $b" })
+                        field("${it.name} Commands", commandNames, false)
                     }
                 }).queue()
             }

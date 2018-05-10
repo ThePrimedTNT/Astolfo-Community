@@ -4,65 +4,58 @@ import com.oopsjpeg.osu4j.backend.EndpointUsers
 import com.oopsjpeg.osu4j.backend.Osu
 import net.dv8tion.jda.core.MessageBuilder
 import org.jsoup.Jsoup
-import java.awt.Color
 import java.util.*
 import java.util.concurrent.TimeUnit
 
 fun createFunModule() = module("Fun") {
     command("osu") {
-        val purpleEmbedColor = Color(119, 60, 138)
         action {
             messageAction(embed {
                 val osuPicture = "https://upload.wikimedia.org/wikipedia/commons/d/d3/Osu%21Logo_%282015%29.png"
-                color(purpleEmbedColor)
                 title("Astolfo Osu Integration")
                 description("**sig**  -  generates an osu signature of the user" +
                         "\n**profile**  -  gets user data from the osu api")
                 thumbnail(osuPicture)
             }).queue()
         }
-        command("sig") {
+        command("sig", "s") {
             action {
                 val osuUsername = args
                 messageAction(embed {
                     val url = "http://lemmmy.pw/osusig/sig.php?colour=purple&uname=$osuUsername&pp=1"
-                    color(purpleEmbedColor)
                     title("Astolfo Osu Signature", url)
                     description("$osuUsername\'s Osu Signature!")
                     image(url)
                 }).queue()
             }
         }
-        command("profile") {
+        command("profile", "p", "user", "stats") {
             action {
                 messageAction(embed {
                     val osu = Osu.getAPI(application.properties.osu_api_token)
                     fun getUser(args: String) = osu.users.query(EndpointUsers.ArgumentsBuilder(args).build())
-                    val user = try {
-                        getUser(args)
+                    try {
+                        val user = getUser(args)
+                        val topPlayBeatmap = user.getTopScores(1).get()[0].beatmap.get()
+                        title("Osu stats for ${user.username}", user.url.toString())
+                        description("\nProfile url: ${user.url}" +
+                                "\nCountry: **${user.country}**" +
+                                "\nGlobal Rank: **#${user.rank} (${user.pp}pp)**" +
+                                "\nAccuracy: **${user.accuracy}%**" +
+                                "\nPlay Count: **${user.playCount} (Lv${user.level})**" +
+                                "\nTop play: **$topPlayBeatmap** ${topPlayBeatmap.url}")
+
                     } catch (e: Exception) {
                         messageAction(":mag: I looked for `$args`, but couldn't find them!" +
-                                "\n Try using the sig command instead. Here's `ThePrimedTNT`'s stats while you do that").queue()
-                        getUser("theprimedtnt")
+                                "\n Try using the sig command instead.").queue()
                     }
-                    val topPlayBeatmap = user.getTopScores(1).get()[0].beatmap.get()
-                    color(purpleEmbedColor)
-                    title("Osu stats for ${user.username}", user.url.toString())
-                    description("\nProfile url: ${user.url}" +
-                            "\nCountry: **${user.country}**" +
-                            "\nGlobal Rank: **#${user.rank} (${user.pp}pp)**" +
-                            "\nAccuracy: **${user.accuracy}%**" +
-                            "\nPlay Count: **${user.playCount} (Lv${user.level})**" +
-                            "\nTop play: **$topPlayBeatmap** ${topPlayBeatmap.url}")
                 }).queue()
             }
         }
     }
     command("advice") {
         action {
-            messageAction(embed {
-                description("\uD83D\uDCD6 ${webJson<Advice>("http://api.adviceslip.com/advice")!!.slip!!.advice}")
-            }).queue()
+            messageAction(embed("\uD83D\uDCD6 ${webJson<Advice>("http://api.adviceslip.com/advice")!!.slip!!.advice}")).queue()
         }
     }
     command("cat", "cats") {
@@ -83,13 +76,35 @@ fun createFunModule() = module("Fun") {
             }
         }
     }
+    command("roll", "die", "dice") {
+        val random = Random()
+        action {
+            messageAction("Rolling a dice for you...").queue {
+                it.editMessage(MessageBuilder().append("Dice landed on **${random.nextInt(6 - 1) + 1}**").build()).queueAfter(1, TimeUnit.SECONDS)
+            }
+        }
+    }
+    command("8ball") {
+        val random = Random()
+        val responses = arrayOf("It is certain", "You may rely on it", "Cannot predict now", "Yes", "Reply hazy try again", "Yes definitely", "My reply is no", "Better not tell yo now", "Don't count on it", "Most likely", "Without a doubt", "As I see it, yes", "Outlook not so good", "Outlook good", "My sources say no", "Signs point to yes", "Very doubtful", "It is decidedly so", "Concentrate and ask again")
+        action {
+            val question = args.takeIf { it.isNotBlank() }
+            if (question == null) {
+                messageAction(embed(":exclamation: Make sure to ask a question next time. :)")).queue()
+            } else {
+                messageAction(embed {
+                    title(":8ball: 8 Ball")
+                    field("Question", question.toString(), false)
+                    field("Answer", responses[random.nextInt(responses.size)], false)
+                }).queue()
+            }
+        }
+    }
     command("csshumor", "cssjoke", "cssh") {
         action {
-            messageAction(embed {
-                description("```css" +
+            messageAction(embed("```css" +
                         "\n${Jsoup.parse(web("https://csshumor.com/")).select(".crayon-code").text()}" +
-                        "\n```")
-            }).queue()
+                        "\n```")).queue()
         }
     }
     command("cyanideandhappiness", "cnh") {
@@ -107,7 +122,7 @@ fun createFunModule() = module("Fun") {
     }
     command("dadjoke", "djoke", "dadjokes", "djokes") {
         action {
-            messageAction(embed { description("\uD83D\uDCD6 **Dadjoke:** ${webJson<DadJoke>("https://icanhazdadjoke.com/")!!.joke!!}") }).queue()
+            messageAction(embed("\uD83D\uDCD6 **Dadjoke:** ${webJson<DadJoke>("https://icanhazdadjoke.com/")!!.joke!!}")).queue()
         }
     }
 }
