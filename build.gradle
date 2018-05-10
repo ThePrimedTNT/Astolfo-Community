@@ -34,7 +34,7 @@ dependencies {
     compile "com.github.salomonbrys.kotson:kotson:2.5.0"
 
 
-    //compile('org.springframework.boot:spring-boot-starter-data-jpa')
+    compile('org.springframework.boot:spring-boot-starter-data-jpa')
     //compile('org.springframework.boot:spring-boot-starter-data-redis')
     compile('org.springframework.boot:spring-boot-starter-web')
     compile('com.fasterxml.jackson.module:jackson-module-kotlin')
@@ -42,7 +42,7 @@ dependencies {
     compile("org.jetbrains.kotlin:kotlin-stdlib-jdk8")
     compile("org.jetbrains.kotlin:kotlin-reflect")
     runtime('com.h2database:h2')
-    runtime('org.postgresql:postgresql')
+    compile 'mysql:mysql-connector-java'
     compileOnly('org.springframework.boot:spring-boot-configuration-processor')
     testCompile('org.springframework.boot:spring-boot-starter-test')
 

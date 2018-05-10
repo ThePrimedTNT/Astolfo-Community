@@ -3,6 +3,7 @@ package xyz.astolfo.astolfocommunity
 import com.google.common.cache.CacheBuilder
 import kotlinx.coroutines.experimental.launch
 import kotlinx.coroutines.experimental.newFixedThreadPoolContext
+import net.dv8tion.jda.core.entities.TextChannel
 import net.dv8tion.jda.core.events.message.MessageReceivedEvent
 import net.dv8tion.jda.core.hooks.ListenerAdapter
 import java.util.concurrent.TimeUnit
@@ -13,11 +14,14 @@ class CommandHandler(val astolfoCommunityApplication: AstolfoCommunityApplicatio
     private val commandProcessorContext = newFixedThreadPoolContext(20, "Command Processor")
 
     override fun onMessageReceived(event: MessageReceivedEvent?) {
+        val timeIssued = System.nanoTime()
+        if (event!!.author.isBot) return
+        if ((event as? TextChannel)?.canTalk() == false) return
         launch(messageProcessorContext) {
-            val timeIssued = System.nanoTime()
 
-            val rawMessage = event!!.message.contentRaw!!
-            val prefix = "c?"
+            val rawMessage = event.message.contentRaw!!
+            val prefix = astolfoCommunityApplication.astolfoRepositories.getEffectiveGuildSetttings(event.guild.idLong).prefix.takeIf { it.isNotBlank() }
+                    ?: astolfoCommunityApplication.properties.default_prefix
 
             if (!rawMessage.startsWith(prefix, ignoreCase = true)) {
                 val sessionKey = SessionKey(event.guild.idLong, event.author.idLong, event.channel.idLong)
@@ -64,8 +68,11 @@ class CommandHandler(val astolfoCommunityApplication: AstolfoCommunityApplicatio
 
         val newCommandPath = "$commandPath ${command.name}"
 
+        val execution = CommandExecution(astolfoCommunityApplication, event, newCommandPath, commandContent, timeIssued)
+
+        if (!command.inheritedAction.invoke(execution)) return true
+
         if (!processCommand(event, timeIssued, command.subCommands, newCommandPath, commandContent)) {
-            val execution = CommandExecution(astolfoCommunityApplication, event, newCommandPath, commandContent, timeIssued)
             val sessionKey = SessionKey(event.guild.idLong, event.author.idLong, event.channel.idLong)
             val currentSession = commandSessionMap.getIfPresent(sessionKey)
             // Checks if command is the same as the previous, if so, check if its a follow up response

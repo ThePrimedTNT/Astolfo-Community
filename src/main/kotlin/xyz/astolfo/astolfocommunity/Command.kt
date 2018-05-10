@@ -9,12 +9,13 @@ import net.dv8tion.jda.core.entities.MessageEmbed
 import net.dv8tion.jda.core.events.message.MessageReceivedEvent
 import java.util.concurrent.TimeUnit
 
-class Command(val name: String, val alts: Array<out String>, val subCommands: List<Command>, val action: CommandExecution.() -> Unit)
+class Command(val name: String, val alts: Array<out String>, val subCommands: List<Command>, val inheritedAction: CommandExecution.() -> Boolean, val action: CommandExecution.() -> Unit)
 
 class CommandBuilder(private val name: String, private val alts: Array<out String>) {
     val subCommands = mutableListOf<Command>()
     var action: CommandExecution.() -> Unit = { messageAction("Hello! This is a default command!").queue() }
-    fun build() = Command(name, alts, subCommands, action)
+    var inheritedAction: CommandExecution.() -> Boolean = { true }
+    fun build() = Command(name, alts, subCommands, inheritedAction, action)
 }
 
 fun CommandBuilder.command(subName: String, vararg alts: String, builder: CommandBuilder.() -> Unit) {
@@ -25,6 +26,10 @@ fun CommandBuilder.command(subName: String, vararg alts: String, builder: Comman
 
 fun CommandBuilder.action(action: CommandExecution.() -> Unit) {
     this.action = action
+}
+
+fun CommandBuilder.inheritedAction(inheritedAction: CommandExecution.() -> Boolean) {
+    this.inheritedAction = inheritedAction
 }
 
 open class CommandExecution(val application: AstolfoCommunityApplication, val event: MessageReceivedEvent, val commandPath: String, val args: String, val timeIssued: Long)

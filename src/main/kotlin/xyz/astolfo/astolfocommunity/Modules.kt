@@ -11,8 +11,9 @@ fun initModules(): List<Module> {
     val infomodule = createInfoModule()
     val funModule = createFunModule()
     val musicModule = createMusicModule()
+    val adminModule = createAdminModule()
 
-    return listOf(infomodule, funModule, musicModule)
+    return listOf(infomodule, funModule, musicModule, adminModule)
 }
 
 class Module(val name: String, val commands: List<Command>)

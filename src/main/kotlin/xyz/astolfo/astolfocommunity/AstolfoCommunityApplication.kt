@@ -10,12 +10,13 @@ import org.springframework.boot.autoconfigure.SpringBootApplication
 import org.springframework.boot.context.properties.ConfigurationProperties
 import org.springframework.boot.context.properties.EnableConfigurationProperties
 import org.springframework.boot.runApplication
+import org.springframework.cache.annotation.EnableCaching
 
 @SpringBootApplication
+@EnableCaching
 @EnableConfigurationProperties(AstolfoProperties::class)
-class AstolfoCommunityApplication(properties: AstolfoProperties) {
+class AstolfoCommunityApplication(final val astolfoRepositories: AstolfoRepositories, final val properties: AstolfoProperties) {
 
-    final val properties = properties
     final val musicManager = MusicManager(this, properties)
     final val commandHandler = CommandHandler(this)
     final val shardManager: ShardManager
@@ -42,6 +43,7 @@ class AstolfoProperties {
     var token = ""
     var bot_user_id = ""
     var shard_count = 0
+    var default_prefix = ""
     var lavalink_nodes = ""
     var lavalink_password = ""
     var osu_api_token = ""
