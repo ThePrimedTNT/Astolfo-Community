@@ -13,6 +13,8 @@ class CommandHandler(val astolfoCommunityApplication: AstolfoCommunityApplicatio
     private val messageProcessorContext = newFixedThreadPoolContext(20, "Message Processor")
     private val commandProcessorContext = newFixedThreadPoolContext(20, "Command Processor")
 
+    private val rateLimiter = RateLimiter<Long>(4, 6)
+
     override fun onMessageReceived(event: MessageReceivedEvent?) {
         val timeIssued = System.nanoTime()
         if (event!!.author.isBot) return
@@ -27,7 +29,7 @@ class CommandHandler(val astolfoCommunityApplication: AstolfoCommunityApplicatio
                 val sessionKey = SessionKey(event.guild.idLong, event.author.idLong, event.channel.idLong)
                 val currentSession = commandSessionMap.getIfPresent(sessionKey)
                 // Checks if there is currently a session, if so, check if its a follow up response
-                if (currentSession != null && currentSession.hasResponseListeners()) {
+                if (currentSession != null && currentSession.hasResponseListeners() && processRateLimit(event)) {
                     val execution = CommandExecution(astolfoCommunityApplication, event, currentSession.commandPath, rawMessage, timeIssued)
                     if (currentSession.shouldRunCommand(execution) || !currentSession.hasResponseListeners()) {
                         // If the response listeners return true or all the response listeners removed themselves
@@ -37,12 +39,25 @@ class CommandHandler(val astolfoCommunityApplication: AstolfoCommunityApplicatio
                 return@launch
             }
 
-            launch(commandProcessorContext) {
-                val commandMessage = rawMessage.substring(prefix.length)
+            if (processRateLimit(event))
+                launch(commandProcessorContext) {
+                    val commandMessage = rawMessage.substring(prefix.length)
 
-                modules.find { processCommand(event, timeIssued, it.commands, "", commandMessage) }
-            }
+                    modules.find { processCommand(event, timeIssued, it.commands, "", commandMessage) }
+                }
         }
+    }
+
+    private fun processRateLimit(event: MessageReceivedEvent): Boolean {
+        val user = event.author.idLong
+        val wasLimited = rateLimiter.isLimited(user)
+        rateLimiter.add(user)
+        if (wasLimited) return false
+        if (rateLimiter.isLimited(user)) {
+            event.channel.sendMessage("${event.member.asMention} You have been ratelimited! Please wait a little and try again!").queue()
+            return false
+        }
+        return true
     }
 
     val commandSessionMap = CacheBuilder.newBuilder()
