@@ -12,7 +12,7 @@ import javax.persistence.Id
 
 @Component
 class AstolfoRepositories(val guildSettingsRepository: GuildSettingsRepository) {
-    fun getEffectiveGuildSetttings(id: Long): GuildSettings = guildSettingsRepository.findById(id).orElse(null)
+    fun getEffectiveGuildSettings(id: Long): GuildSettings = guildSettingsRepository.findById(id).orElse(null)
             ?: GuildSettings(guildId = id)
 }
 

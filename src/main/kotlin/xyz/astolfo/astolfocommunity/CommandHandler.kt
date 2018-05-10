@@ -20,7 +20,7 @@ class CommandHandler(val astolfoCommunityApplication: AstolfoCommunityApplicatio
         launch(messageProcessorContext) {
 
             val rawMessage = event.message.contentRaw!!
-            val prefix = astolfoCommunityApplication.astolfoRepositories.getEffectiveGuildSetttings(event.guild.idLong).prefix.takeIf { it.isNotBlank() }
+            val prefix = astolfoCommunityApplication.astolfoRepositories.getEffectiveGuildSettings(event.guild.idLong).prefix.takeIf { it.isNotBlank() }
                     ?: astolfoCommunityApplication.properties.default_prefix
 
             if (!rawMessage.startsWith(prefix, ignoreCase = true)) {

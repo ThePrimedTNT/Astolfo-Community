@@ -19,7 +19,7 @@ fun createAdminModule() = module("admin") {
         }
         command("prefix") {
             action {
-                val data = application.astolfoRepositories.getEffectiveGuildSetttings(event.guild.idLong)
+                val data = application.astolfoRepositories.getEffectiveGuildSettings(event.guild.idLong)
                 if (args.isBlank()) {
                     messageAction(embed {
                         title("Astolfo Guild Settings - Prefix")
