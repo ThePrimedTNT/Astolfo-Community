@@ -1,7 +1,6 @@
 package xyz.astolfo.astolfocommunity
 
 import net.dv8tion.jda.core.JDAInfo
-import java.awt.Color
 import java.text.DecimalFormat
 
 fun createInfoModule() = module("Info") {
@@ -46,6 +45,34 @@ fun createInfoModule() = module("Info") {
                 title("Astolfo Profile Pictures", mentionedUser.avatarUrl)
                 description("${mentionedUser.asMention} Profile Picture!")
                 image(mentionedUser.avatarUrl)
+            }).queue()
+        }
+    }
+    command("links", "invite") {
+        action {
+            messageAction(embed {
+                title("Useful links")
+                description("**Bot's Website**:   https://astolfo.xyz/" +
+                        "\n**GitHub**:                https://www.github.com/theprimedtnt/astolfo-community" +
+                        "\n**Commands**:        https://astolfo.xyz/commands" +
+                        "\n**Support Server**: https://discord.gg/23RB2Wc" +
+                        "\n**Donate**:                https://www.patreon.com/theprimedtnt" +
+                        "\n**Invite Astolfo**:    https://discordapp.com/oauth2/authorize?client_id=326750725084282881&scope=bot&permissions=37088334")
+            }).queue()
+        }
+    }
+    command("usercount") {
+        action {
+            messageAction(embed("There are **${event.message.guild.members.size}** members in this guild.")).queue()
+        }
+    }
+    command("donate") {
+        action {
+            messageAction(embed {
+                title("As Astolfo grows, it needs to upgrade its servers.")
+                field("PS: You get rewards and perks for donating!", "Donate here: https://www.patreon.com/theprimedtnt", false)
+                field("Did you know you can upvote 20 times per month and receive free \$5 supporter status for the next 30 days?",
+                        "Upvote here: https://discordbots.org/bot/astolfo/vote", false)
             }).queue()
         }
     }

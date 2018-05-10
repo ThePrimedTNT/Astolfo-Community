@@ -88,13 +88,13 @@ fun createFunModule() = module("Fun") {
         val random = Random()
         val responses = arrayOf("It is certain", "You may rely on it", "Cannot predict now", "Yes", "Reply hazy try again", "Yes definitely", "My reply is no", "Better not tell yo now", "Don't count on it", "Most likely", "Without a doubt", "As I see it, yes", "Outlook not so good", "Outlook good", "My sources say no", "Signs point to yes", "Very doubtful", "It is decidedly so", "Concentrate and ask again")
         action {
-            val question = args.takeIf { it.isNotBlank() }
-            if (question == null) {
+            if (args.isEmpty()) {
                 messageAction(embed(":exclamation: Make sure to ask a question next time. :)")).queue()
             } else {
+                val question = args
                 messageAction(embed {
                     title(":8ball: 8 Ball")
-                    field("Question", question.toString(), false)
+                    field("Question", question, false)
                     field("Answer", responses[random.nextInt(responses.size)], false)
                 }).queue()
             }
