@@ -2,11 +2,11 @@ package xyz.astolfo.astolfocommunity
 
 import net.dv8tion.jda.core.Permission
 
-fun createAdminModule() = module("admin") {
+fun createAdminModule() = module("Admin") {
     command("settings") {
         inheritedAction {
             if (!event.member.hasPermission(Permission.ADMINISTRATOR)) {
-                messageAction(embed("You are must be a server admin in order to change settings!")).queue()
+                messageAction(embed("You must be a server admin in order to change settings!")).queue()
                 return@inheritedAction false
             }
             true
@@ -36,9 +36,9 @@ fun createAdminModule() = module("admin") {
                     messageAction(embed {
                         title("Astolfo Guild Settings - Prefix")
                         description("Old Prefix: `${oldPrefix.takeIf { it.isNotBlank() }
-                                ?: application.properties.default_prefix}`")
-                        description("New Prefix: `${data.prefix.takeIf { it.isNotBlank() }
-                                ?: application.properties.default_prefix}`")
+                                ?: application.properties.default_prefix}`" +
+                                "\nNew Prefix: `${data.prefix.takeIf { it.isNotBlank() }
+                                        ?: application.properties.default_prefix}`")
                     }).queue()
                 }
             }
