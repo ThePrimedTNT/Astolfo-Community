@@ -74,7 +74,7 @@ fun createAdminModule() = module("Admin") {
                 description("${event.message.author.asMention} has pruned the chat! Here are the results:")
                 field("Total Messages Deleted:", "```$amountToDelete```", false)
                 field("Messages Deleted:", "```Prolog" +
-                        "\n${messageCounts.map { entry -> "${entry.key.name.padStart(nameLength)} : ${entry.value}" }.fold("", { a, b -> "$a\n$b" })}" +
+                        "\n${messageCounts.map { entry -> "${entry.key.name.padStart(nameLength)} : ${entry.value}" }.joinToString("\n")}" +
                         "\n```", false)
             }).queue()
         }

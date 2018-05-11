@@ -85,7 +85,7 @@ fun createInfoModule() = module("Info") {
                     description("If you're having  trouble with anything, you can always stop by our support server!" +
                             "\nInvite Link: https://discord.gg/23RB2Wc")
                     modules.forEach {
-                        val commandNames = it.commands.map { "`${it.name}` " }.fold("", { a, b -> "$a $b" })
+                        val commandNames = it.commands.joinToString(" ") { "`${it.name}` " }
                         field("${it.name} Commands", commandNames, false)
                     }
                 }).queue()
