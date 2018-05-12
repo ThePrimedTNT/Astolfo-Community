@@ -67,7 +67,12 @@ fun createAdminModule() = module("Admin") {
                 amountNum
             } ?: 2
             val messages = event.textChannel.history.retrievePast(amountToDelete).complete()
-            event.textChannel.deleteMessages(messages).queue()
+            try {
+                event.textChannel.deleteMessages(messages).queue()
+            } catch (e: Exception) {
+                messageAction("You cannot delete messages that are more than 2 weeks old!").queue()
+                return@action
+            }
 
             val authors = messages.map { it.author!! }.toSet()
             val nameLength = authors.map { it.name.length }.max()!!
