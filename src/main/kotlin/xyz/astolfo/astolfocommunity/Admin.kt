@@ -46,8 +46,12 @@ fun createAdminModule() = module("Admin") {
     }
     command("prune", "purge", "delete") {
         action {
+            if (!event.member.hasPermission(Permission.MESSAGE_MANAGE)) {
+                messageAction(embed("You need the `Manage Messages` permission in order to delete messages!")).queue()
+                return@action
+            }
             val amountToDelete = args.takeIf { it.isNotBlank() }?.let {
-                val amountNum = it.toBigIntegerOrNull()?.toInt()
+                val amountNum = it.toIntOrNull()
                 if (amountNum == null) {
                     messageAction("The amount to delete must be a whole number!").queue()
                     return@action

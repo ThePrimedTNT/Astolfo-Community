@@ -34,7 +34,10 @@ fun createInfoModule() = module("Info") {
                 field("Music", "*${application.musicManager.sessionCount}* sessions" +
                         "\n*${application.musicManager.queuedSongCount}* queued songs" +
                         "\n*${application.musicManager.listeningCount}* listening", true)
-                field("Library", JDAInfo.VERSION, false)
+                field("Version", "v1.0.26", true) // Number of commits? idk
+                field("Library", "JDA ${JDAInfo.VERSION}", true)
+                field("Our support server", "https://discord.gg/23RB2Wc", true)
+
             }).queue()
         }
     }

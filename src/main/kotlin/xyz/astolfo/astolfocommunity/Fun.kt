@@ -79,8 +79,17 @@ fun createFunModule() = module("Fun") {
     command("roll", "die", "dice") {
         val random = Random()
         action {
-            messageAction("Rolling a dice for you...").queue {
-                it.editMessage(MessageBuilder().append("Dice landed on **${random.nextInt(6 - 1) + 1}**").build()).queueAfter(1, TimeUnit.SECONDS)
+            val max = args.takeIf { it.isNotBlank() }?.let {
+                val int = it.toIntOrNull()
+                if (int == null) {
+                    messageAction("The die max value must be a whole number!").queue()
+                    return@action
+                }
+                int
+            } ?: 6
+
+            messageAction(":game_die: Rolling a dice for you...").queue {
+                it.editMessage(MessageBuilder().append("Dice landed on **${random.nextInt(max - 1) + 1}**").build()).queueAfter(1, TimeUnit.SECONDS)
             }
         }
     }
