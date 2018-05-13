@@ -1,9 +1,10 @@
-package xyz.astolfo.astolfocommunity
+package xyz.astolfo.astolfocommunity.modules
 
 import com.oopsjpeg.osu4j.backend.EndpointUsers
 import com.oopsjpeg.osu4j.backend.Osu
 import net.dv8tion.jda.core.MessageBuilder
 import org.jsoup.Jsoup
+import xyz.astolfo.astolfocommunity.*
 import java.util.*
 import java.util.concurrent.TimeUnit
 
@@ -112,8 +113,8 @@ fun createFunModule() = module("Fun") {
     command("csshumor", "cssjoke", "cssh") {
         action {
             messageAction(embed("```css" +
-                        "\n${Jsoup.parse(web("https://csshumor.com/")).select(".crayon-code").text()}" +
-                        "\n```")).queue()
+                    "\n${Jsoup.parse(web("https://csshumor.com/")).select(".crayon-code").text()}" +
+                    "\n```")).queue()
         }
     }
     command("cyanideandhappiness", "cnh") {

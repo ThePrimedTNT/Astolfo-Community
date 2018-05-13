@@ -1,6 +1,7 @@
-package xyz.astolfo.astolfocommunity
+package xyz.astolfo.astolfocommunity.modules
 
 import net.dv8tion.jda.core.Permission
+import xyz.astolfo.astolfocommunity.*
 
 fun createAdminModule() = module("Admin") {
     command("settings") {

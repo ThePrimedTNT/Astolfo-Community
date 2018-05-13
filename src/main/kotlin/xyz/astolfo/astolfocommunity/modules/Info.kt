@@ -1,6 +1,7 @@
-package xyz.astolfo.astolfocommunity
+package xyz.astolfo.astolfocommunity.modules
 
 import net.dv8tion.jda.core.JDAInfo
+import xyz.astolfo.astolfocommunity.*
 import java.text.DecimalFormat
 
 fun createInfoModule() = module("Info") {

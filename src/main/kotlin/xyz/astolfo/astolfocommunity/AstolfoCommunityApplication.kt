@@ -11,6 +11,7 @@ import org.springframework.boot.context.properties.ConfigurationProperties
 import org.springframework.boot.context.properties.EnableConfigurationProperties
 import org.springframework.boot.runApplication
 import org.springframework.cache.annotation.EnableCaching
+import xyz.astolfo.astolfocommunity.modules.MusicManager
 
 @SpringBootApplication
 @EnableCaching

@@ -1,4 +1,4 @@
-package xyz.astolfo.astolfocommunity
+package xyz.astolfo.astolfocommunity.modules
 
 import com.sedmelluq.discord.lavaplayer.player.AudioLoadResultHandler
 import com.sedmelluq.discord.lavaplayer.player.AudioPlayer
@@ -26,6 +26,7 @@ import net.dv8tion.jda.core.entities.Message
 import net.dv8tion.jda.core.entities.TextChannel
 import net.dv8tion.jda.core.entities.VoiceChannel
 import net.dv8tion.jda.core.utils.PermissionUtil
+import xyz.astolfo.astolfocommunity.*
 import java.net.URI
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.ConcurrentHashMap

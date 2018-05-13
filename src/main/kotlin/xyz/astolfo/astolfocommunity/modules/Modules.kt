@@ -1,4 +1,7 @@
-package xyz.astolfo.astolfocommunity
+package xyz.astolfo.astolfocommunity.modules
+
+import xyz.astolfo.astolfocommunity.Command
+import xyz.astolfo.astolfocommunity.CommandBuilder
 
 val modules = initModules()
 

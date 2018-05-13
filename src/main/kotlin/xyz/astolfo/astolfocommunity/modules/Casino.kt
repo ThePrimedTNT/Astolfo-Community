@@ -1,6 +1,7 @@
-package xyz.astolfo.astolfocommunity
+package xyz.astolfo.astolfocommunity.modules
 
 import net.dv8tion.jda.core.entities.Message
+import xyz.astolfo.astolfocommunity.*
 import java.awt.Color
 import java.util.*
 import java.util.concurrent.TimeUnit

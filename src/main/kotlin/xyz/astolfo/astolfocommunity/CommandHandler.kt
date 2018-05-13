@@ -6,6 +6,7 @@ import kotlinx.coroutines.experimental.newFixedThreadPoolContext
 import net.dv8tion.jda.core.entities.TextChannel
 import net.dv8tion.jda.core.events.message.MessageReceivedEvent
 import net.dv8tion.jda.core.hooks.ListenerAdapter
+import xyz.astolfo.astolfocommunity.modules.modules
 import java.util.concurrent.TimeUnit
 
 class CommandHandler(val astolfoCommunityApplication: AstolfoCommunityApplication) : ListenerAdapter() {
