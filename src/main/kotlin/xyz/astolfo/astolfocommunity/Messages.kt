@@ -33,3 +33,4 @@ fun EmbedBuilder.field(name: String, inline: Boolean, value: () -> String) = add
 fun EmbedBuilder.thumbnail(imageUrl: String) = setThumbnail(imageUrl)!!
 fun EmbedBuilder.image(imageUrl: String) = setImage(imageUrl)!!
 fun EmbedBuilder.author(name: String, uri: String? = null, icon: String? = null) = setAuthor(name, uri, icon)!!
+fun EmbedBuilder.footer(text: String, icon: String? = null) = setFooter(text, icon)!!

@@ -32,7 +32,7 @@ dependencies {
     compile "com.google.guava:guava:25.0-jre"
     compile "com.github.oopsjpeg:osu4j:2.0.0.1"
     compile "com.github.salomonbrys.kotson:kotson:2.5.0"
-
+    compile 'com.github.natanbc:weeb4j:3.3'
 
     compile('org.springframework.boot:spring-boot-starter-data-jpa')
     //compile('org.springframework.boot:spring-boot-starter-data-redis')

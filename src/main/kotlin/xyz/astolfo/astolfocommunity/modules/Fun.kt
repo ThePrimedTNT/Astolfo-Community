@@ -1,5 +1,7 @@
 package xyz.astolfo.astolfocommunity.modules
 
+import com.github.natanbc.weeb4j.image.HiddenMode
+import com.github.natanbc.weeb4j.image.NsfwFilter
 import com.oopsjpeg.osu4j.backend.EndpointUsers
 import com.oopsjpeg.osu4j.backend.Osu
 import net.dv8tion.jda.core.MessageBuilder
@@ -133,6 +135,28 @@ fun createFunModule() = module("Fun") {
     command("dadjoke", "djoke", "dadjokes", "djokes") {
         action {
             messageAction(embed("\uD83D\uDCD6 **Dadjoke:** ${webJson<DadJoke>("https://icanhazdadjoke.com/")!!.joke!!}")).queue()
+        }
+    }
+    command("hug") {
+        action {
+            val mentionedUser = event.message.mentionedUsers.getOrNull(0) ?: event.author
+            val image = application.weeb4J.imageProvider.getRandomImage("hug", HiddenMode.DEFAULT, NsfwFilter.NO_NSFW).execute()
+            messageAction(embed {
+                description("${event.author.asMention} has hugged ${mentionedUser.asMention}")
+                image(image.url)
+                footer("Powered by weeb.sh")
+            }).queue()
+        }
+    }
+    command("kiss") {
+        action {
+            val mentionedUser = event.message.mentionedUsers.getOrNull(0) ?: event.author
+            val image = application.weeb4J.imageProvider.getRandomImage("kiss", HiddenMode.DEFAULT, NsfwFilter.NO_NSFW).execute()
+            messageAction(embed {
+                description("${event.author.asMention} has kissed ${mentionedUser.asMention}")
+                image(image.url)
+                footer("Powered by weeb.sh")
+            }).queue()
         }
     }
 }

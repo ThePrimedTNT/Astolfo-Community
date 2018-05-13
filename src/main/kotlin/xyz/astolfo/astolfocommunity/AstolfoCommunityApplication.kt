@@ -1,5 +1,7 @@
 package xyz.astolfo.astolfocommunity
 
+import com.github.natanbc.weeb4j.TokenType
+import com.github.natanbc.weeb4j.Weeb4J
 import kotlinx.coroutines.experimental.delay
 import kotlinx.coroutines.experimental.launch
 import net.dv8tion.jda.bot.sharding.DefaultShardManagerBuilder
@@ -19,6 +21,7 @@ import xyz.astolfo.astolfocommunity.modules.MusicManager
 class AstolfoCommunityApplication(final val astolfoRepositories: AstolfoRepositories, final val properties: AstolfoProperties) {
 
     final val musicManager = MusicManager(this, properties)
+    final val weeb4J = Weeb4J.Builder().setToken(TokenType.WOLKE, properties.weeb_token).build()
     final val commandHandler = CommandHandler(this)
     final val shardManager: ShardManager
 
@@ -48,6 +51,7 @@ class AstolfoProperties {
     var lavalink_nodes = ""
     var lavalink_password = ""
     var osu_api_token = ""
+    var weeb_token = ""
 }
 
 fun main(args: Array<String>) {
