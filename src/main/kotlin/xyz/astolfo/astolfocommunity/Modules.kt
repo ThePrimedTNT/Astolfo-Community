@@ -1,9 +1,5 @@
 package xyz.astolfo.astolfocommunity
 
-import net.dv8tion.jda.core.JDAInfo
-import java.awt.Color
-import java.text.DecimalFormat
-
 
 val modules = initModules()
 
@@ -12,8 +8,9 @@ fun initModules(): List<Module> {
     val funModule = createFunModule()
     val musicModule = createMusicModule()
     val adminModule = createAdminModule()
+    val casinoModule = createCasinoModule()
 
-    return listOf(infomodule, funModule, musicModule, adminModule)
+    return listOf(infomodule, funModule, musicModule, adminModule, casinoModule)
 }
 
 class Module(val name: String, val commands: List<Command>)

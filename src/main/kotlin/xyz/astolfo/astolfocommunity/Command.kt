@@ -59,6 +59,8 @@ fun CommandExecution.updatableMessage(rate: Long, unit: TimeUnit = TimeUnit.SECO
 fun CommandExecution.responseListener(listener: ResponseListener.(CommandExecution) -> Boolean) = session().addReponseListener(listener)
 fun CommandExecution.destroyListener(listener: () -> Unit) = session().addDestroyListener(listener)
 
+fun CommandExecution.getProfile() = application.astolfoRepositories.getEffectiveUserProfile(event.author.idLong)
+
 class CommandSession(val commandPath: String) {
     private var responseListeners = mutableListOf<ResponseListener.(CommandExecution) -> Boolean>()
     private var destroyListener = mutableListOf<() -> Unit>()
