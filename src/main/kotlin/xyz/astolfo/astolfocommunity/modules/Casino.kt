@@ -72,7 +72,7 @@ fun createCasinoModule() = module("Casino") {
             val userProfile = getProfile()
 
             val bidAmount = args.takeIf { it.isNotBlank() }?.let {
-                val amountNum = it.toBigIntegerOrNull()?.toInt()
+                val amountNum = it.toBigIntegerOrNull()?.toLong()
                 if (amountNum == null) {
                     messageAction("The bid amount must be a whole number!").queue()
                     return@action
@@ -94,7 +94,7 @@ fun createCasinoModule() = module("Casino") {
             val result = when {
                 matches == 1 -> -bidAmount
                 matches == 2 -> 0
-                matches >= 3 -> ((matches - 2.0).pow(2.0) * (50.0 / 100.0) * bidAmount).toInt()
+                matches >= 3 -> ((matches - 2.0).pow(2.0) * (50.0 / 100.0) * bidAmount).toLong()
                 else -> TODO("Um what")
             }
 
@@ -115,7 +115,7 @@ fun createCasinoModule() = module("Casino") {
                                 color(Color.RED)
                                 "\n\n\u274C Sorry, you lost ***${result.absoluteValue} credits***... You now have **${userProfile.credits} credits**"
                             }
-                            result == 0 -> {
+                            result == 0L -> {
                                 color(Color.YELLOW)
                                 "\n\n Sorry, you didnt win anything this time!"
                             }
@@ -125,13 +125,13 @@ fun createCasinoModule() = module("Casino") {
                     }
                     description(description)
                 }
+                slotsToShow.addAndGet(3)
                 if (message == null) messageAction(newContent).queue(response)
                 else {
                     val action = message.editMessage(newContent)
                     if (finished) action.queueAfter(1, TimeUnit.SECONDS)
                     else action.queueAfter(1, TimeUnit.SECONDS, response)
                 }
-                slotsToShow.addAndGet(3)
             }
 
             response.invoke(null)
