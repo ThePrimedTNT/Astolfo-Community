@@ -5,8 +5,18 @@
          monitoring="autodetect"
          dynamicConfig="true">
 
-    <cache name="guildsettings"
+    <cache name="guildSettings"
            maxElementsInMemory="20000"
+           eternal="false"
+           overflowToDisk="false"
+           timeToLiveSeconds="3600"
+           timeToIdleSeconds="0"
+           memoryStoreEvictionPolicy="LFU"
+           transactionalMode="off">
+    </cache>
+
+    <cache name="userProfiles"
+           maxElementsInMemory="50000"
            eternal="false"
            overflowToDisk="false"
            timeToLiveSeconds="3600"

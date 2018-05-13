@@ -50,8 +50,24 @@ class RateLimiter<K>(
         }
     }
 
-    fun remainingTime(key: K) = map[key]?.last()?.let { (System.currentTimeMillis() - it) / 1000.0 }
+    fun remainingTime(key: K) = map[key]?.takeLast(threshold)?.firstOrNull()?.let { (timeout * 1000) - (System.currentTimeMillis() - it) }
 
-    fun isLimited(key: K) = (map[key]?.count() ?: 0) > threshold
+    fun isLimited(key: K) = (map[key]?.count() ?: 0) >= threshold
 
+}
+
+fun formatDuration(timeLeft: Long): String {
+    val hours = TimeUnit.MILLISECONDS.toHours(timeLeft)
+    val minutes = TimeUnit.MILLISECONDS.toMinutes(timeLeft) % TimeUnit.HOURS.toMinutes(1)
+    val seconds = TimeUnit.MILLISECONDS.toSeconds(timeLeft) % TimeUnit.MINUTES.toSeconds(1)
+
+    var timeStr = ""
+    if (hours > 0)
+        timeStr += " " + hours + "h"
+    if (minutes > 0)
+        timeStr += " " + minutes + "m"
+    if (seconds > 0)
+        timeStr += " " + seconds + "s"
+    timeStr = timeStr.trim { it <= ' ' }
+    return timeStr
 }
