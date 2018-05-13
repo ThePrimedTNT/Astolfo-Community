@@ -44,4 +44,48 @@ fun createAdminModule() = module("Admin") {
             }
         }
     }
+    command("prune", "purge", "delete") {
+        action {
+            if (!event.member.hasPermission(Permission.MESSAGE_MANAGE)) {
+                messageAction(embed("You need the `Manage Messages` permission in order to delete messages!")).queue()
+                return@action
+            }
+            val amountToDelete = args.takeIf { it.isNotBlank() }?.let {
+                val amountNum = it.toIntOrNull()
+                if (amountNum == null) {
+                    messageAction("The amount to delete must be a whole number!").queue()
+                    return@action
+                }
+                if (amountNum < 1) {
+                    messageAction("The amount to delete must be at least 1!").queue()
+                    return@action
+                }
+                if (amountNum > 100) {
+                    messageAction("The amount to delete must be no more than 100!").queue()
+                    return@action
+                }
+                amountNum
+            } ?: 2
+            val messages = event.textChannel.history.retrievePast(amountToDelete).complete()
+            try {
+                event.textChannel.deleteMessages(messages).queue()
+            } catch (e: Exception) {
+                messageAction("You cannot delete messages that are more than 2 weeks old!").queue()
+                return@action
+            }
+
+            val authors = messages.map { it.author!! }.toSet()
+            val nameLength = authors.map { it.name.length }.max()!!
+            val messageCounts = authors.map { author -> author to messages.filter { it.author.idLong == author.idLong }.count() }.toMap()
+
+            messageAction(embed {
+                title("Astolfo Bot Prune")
+                description("${event.message.author.asMention} has pruned the chat! Here are the results:")
+                field("Total Messages Deleted:", "```$amountToDelete```", false)
+                field("Messages Deleted:", "```Prolog" +
+                        "\n${messageCounts.map { entry -> "${entry.key.name.padStart(nameLength)} : ${entry.value}" }.joinToString("\n")}" +
+                        "\n```", false)
+            }).queue()
+        }
+    }
 }

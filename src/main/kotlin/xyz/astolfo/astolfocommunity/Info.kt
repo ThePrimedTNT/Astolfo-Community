@@ -1,7 +1,6 @@
 package xyz.astolfo.astolfocommunity
 
 import net.dv8tion.jda.core.JDAInfo
-import java.awt.Color
 import java.text.DecimalFormat
 
 fun createInfoModule() = module("Info") {
@@ -19,7 +18,7 @@ fun createInfoModule() = module("Info") {
             }
         }
     }
-    command("about") {
+    command("about", "info") {
         action {
             messageAction(embed {
                 title("Astolfo Community Info")
@@ -27,7 +26,7 @@ fun createInfoModule() = module("Info") {
                 val guildCount = shardManager.guildCache.size()
                 val totalChannels = shardManager.textChannelCache.size() + shardManager.voiceChannelCache.size()
                 val userCount = shardManager.userCache.size()
-                description("Astolfo-Community is a open-sourced community version of Astolfo! If you want to contribute or take a look at the source code, visit our [Github](https://github.com/ThePrimedTNT/Astolfo-Community)")
+                description("Astolfo-Community is an open-sourced community version of Astolfo! If you want to contribute or take a look at the source code, visit our [Github](https://github.com/ThePrimedTNT/Astolfo-Community)!")
                 field("Stats", "*$guildCount* servers" +
                         "\n*$totalChannels* channels," +
                         "\n*$userCount* users" +
@@ -35,32 +34,62 @@ fun createInfoModule() = module("Info") {
                 field("Music", "*${application.musicManager.sessionCount}* sessions" +
                         "\n*${application.musicManager.queuedSongCount}* queued songs" +
                         "\n*${application.musicManager.listeningCount}* listening", true)
-                field("Library", JDAInfo.VERSION, false)
+                field("Version", "v1.0.26", true) // Number of commits? idk
+                field("Library", "JDA ${JDAInfo.VERSION}", true)
+                field("Our support server", "https://discord.gg/23RB2Wc", true)
+
             }).queue()
         }
     }
-    command("avatar") {
+    command("avatar", "pfp") {
         action {
             messageAction(embed {
                 val mentionedUser = event.message.mentionedUsers.getOrNull(0) ?: event.message.author
-
-                color(Color(173, 20, 87))
                 title("Astolfo Profile Pictures", mentionedUser.avatarUrl)
                 description("${mentionedUser.asMention} Profile Picture!")
                 image(mentionedUser.avatarUrl)
             }).queue()
         }
     }
+    command("links", "invite") {
+        action {
+            messageAction(embed {
+                title("Useful links")
+                description("**Bot's Website**:   https://astolfo.xyz/" +
+                        "\n**GitHub**:                https://www.github.com/theprimedtnt/astolfo-community" +
+                        "\n**Commands**:        https://astolfo.xyz/commands" +
+                        "\n**Support Server**: https://discord.gg/23RB2Wc" +
+                        "\n**Donate**:                https://www.patreon.com/theprimedtnt" +
+                        "\n**Invite Astolfo**:    https://discordapp.com/oauth2/authorize?client_id=326750725084282881&scope=bot&permissions=37088334")
+            }).queue()
+        }
+    }
+    command("usercount") {
+        action {
+            messageAction(embed("There are **${event.message.guild.members.size}** members in this guild.")).queue()
+        }
+    }
+    command("donate") {
+        action {
+            messageAction(embed {
+                title("As Astolfo grows, it needs to upgrade its servers.")
+                field("PS: You get rewards and perks for donating!", "Donate here: https://www.patreon.com/theprimedtnt", false)
+                field("Did you know you can upvote 20 times per month and receive free \$5 supporter status for the next 30 days?",
+                        "Upvote here: https://discordbots.org/bot/astolfo/vote", false)
+            }).queue()
+        }
+    }
     command("help") {
         action {
+            messageAction(embed(":mailbox: I have private messaged you a list of commands!")).queue()
             event.author.openPrivateChannel().queue {
                 it.sendMessage(embed {
                     title("Astolfo Command Help")
                     description("If you're having  trouble with anything, you can always stop by our support server!" +
                             "\nInvite Link: https://discord.gg/23RB2Wc")
-                    for (module in modules) {
-                        val commandNames = module.commands.map { "`${it.name}` " }.fold("", { a, b -> "$a $b" })
-                        field("${module.name} Commands", commandNames, false)
+                    modules.forEach {
+                        val commandNames = it.commands.joinToString(" ") { "`${it.name}` " }
+                        field("${it.name} Commands", commandNames, false)
                     }
                 }).queue()
             }

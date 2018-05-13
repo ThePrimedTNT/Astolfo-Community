@@ -1,16 +1,15 @@
 package xyz.astolfo.astolfocommunity
 
-
 val modules = initModules()
 
 fun initModules(): List<Module> {
-    val infomodule = createInfoModule()
+    val infoModule = createInfoModule()
     val funModule = createFunModule()
     val musicModule = createMusicModule()
     val adminModule = createAdminModule()
     val casinoModule = createCasinoModule()
 
-    return listOf(infomodule, funModule, musicModule, adminModule, casinoModule)
+    return listOf(infoModule, funModule, musicModule, adminModule, casinoModule)
 }
 
 class Module(val name: String, val commands: List<Command>)
