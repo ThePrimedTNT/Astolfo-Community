@@ -27,7 +27,9 @@ import net.dv8tion.jda.core.entities.TextChannel
 import net.dv8tion.jda.core.entities.VoiceChannel
 import net.dv8tion.jda.core.utils.PermissionUtil
 import xyz.astolfo.astolfocommunity.*
+import java.net.MalformedURLException
 import java.net.URI
+import java.net.URL
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.LinkedBlockingDeque
@@ -178,13 +180,26 @@ fun createMusicModule() = module("Music") {
         musicAction { joinAction(true) }
     }
     command("play", "p", "search", "yt", "q", "queue") {
+        val allowedHosts = listOf("youtube.com", "youtu.be", "music.youtube.com", "soundcloud.com", "bandcamp.com", "beam.pro", "mixer.com", "vimeo.com")
+
         musicAction {
             // Make the play command work like the join command as well
             if (!joinAction()) return@musicAction
             val guild = event.guild
+            val searchQuery = try {
+                val url = URL(args)
+                val host = url.host.let { if (it.startsWith("www")) it.substring(4) else it }
+                if (!allowedHosts.any { it.equals(host, true) }) {
+                    messageAction("Either im not allowed to play music from that website or I do not support it!").queue()
+                    return@musicAction
+                }
+                args
+            } catch (e: MalformedURLException) {
+                "ytsearch: $args"
+            }
             val trackResponse = tempMessage(message { embed("\uD83D\uDD0E Searching for **$args**...") }) {
                 val future = CompletableFuture<Pair<AudioItem?, FriendlyException?>>()
-                application.musicManager.audioPlayerManager.loadItem(args, object : AudioLoadResultHandler {
+                application.musicManager.audioPlayerManager.loadItem(searchQuery, object : AudioLoadResultHandler {
                     override fun trackLoaded(track: AudioTrack?) {
                         future.complete(track to null)
                     }
@@ -218,22 +233,24 @@ fun createMusicModule() = module("Music") {
                 val audioPlaylist: AudioPlaylist = audioItem
                 if (audioPlaylist.isSearchResult) {
                     // If the tracks returned are from a ytsearch: or scsearch:
-                    val searchMenu = async {
-                        messageAction(embed {
-                            title("\uD83D\uDD0E Music Search Results:")
-                            description {
-                                val desc = "Type the number of the song you want.\n"
-                                desc + audioPlaylist.tracks.take(8).mapIndexed { index, audioTrack ->
-                                    "`${index + 1}` - **${audioTrack.info.title}** *by ${audioTrack.info.author}*"
-                                }.fold("", { a, b -> "$a\n$b" })
+                    val menu = paginator("\uD83D\uDD0E Music Search Results:") {
+                        provider(8, audioPlaylist.tracks.map { audioTrack -> "**${audioTrack.info.title}** *by ${audioTrack.info.author}*" })
+                        renderer {
+                            message {
+                                embed {
+                                    titleProvider.invoke()?.let { title(it) }
+                                    description("Type the number of the song you want.\n$providedString")
+                                    footer("Page ${currentPage + 1}/${provider.pageCount}")
+                                }
                             }
-                        }).complete()
+                        }
                     }
-                    // Clean up search after the command has ended
-                    destroyListener { launch { searchMenu.await().delete().queue() } }
                     // Waits for a follow up response for song selection
                     responseListener {
-                        if (it.args.matches("\\d+".toRegex())) {
+                        if (menu.isDestroyed) {
+                            removeListener()
+                            true
+                        } else if (it.args.matches("\\d+".toRegex())) {
                             val numSelection = it.args.toBigInteger().toInt()
                             if (numSelection < 1 || numSelection > audioPlaylist.tracks.size) {
                                 messageAction("Unknown Selection").queue()
@@ -246,6 +263,7 @@ fun createMusicModule() = module("Music") {
                             }
                             messageAction(embed { description("[${selectedTrack.info.title}](${selectedTrack.info.uri}) has been added to the queue") }).queue()
                             removeListener()
+                            menu.destroy()
                             false // Don't run the command since song was added
                         } else {
                             messageAction(embed { description("Please type the # of the song you want") }).queue()
@@ -297,6 +315,7 @@ fun createMusicModule() = module("Music") {
                                 }
                             }
                             field("\uD83C\uDFBC Queue", false) { providedString }
+                            footer("Page ${currentPage + 1}/${provider.pageCount}")
                         }
                     }
                 }

@@ -17,6 +17,7 @@ fun CommandExecution.paginator(titleProvider: () -> String? = { null }, builder:
             embed {
                 titleProvider.invoke()?.let { title(it) }
                 description(providedString)
+                footer("Page ${currentPage + 1}/${provider.pageCount}")
             }
         }
     })
@@ -95,6 +96,9 @@ class Paginator(private val commandExecution: CommandExecution, val titleProvide
 
     val destroyListener = { destroy() }
 
+    var isDestroyed = false
+    private set
+
     init {
         commandExecution.event.jda.addEventListener(listener)
         render()
@@ -103,6 +107,7 @@ class Paginator(private val commandExecution: CommandExecution, val titleProvide
 
     fun destroy() {
         // Clean Up
+        isDestroyed = true
         commandExecution.session().removeDestroyListener(destroyListener)
         commandExecution.event.jda.removeEventListener(listener)
         launch { message?.await()?.delete()?.queue() }
