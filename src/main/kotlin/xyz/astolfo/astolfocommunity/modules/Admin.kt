@@ -1,9 +1,7 @@
 package xyz.astolfo.astolfocommunity.modules
 
-import com.google.common.collect.Lists
 import net.dv8tion.jda.core.Permission
 import xyz.astolfo.astolfocommunity.*
-import java.util.stream.Stream
 
 fun createAdminModule() = module("Admin") {
     command("settings") {
@@ -89,6 +87,78 @@ fun createAdminModule() = module("Admin") {
                         "\n${messageCounts.map { entry -> "${entry.key.name.padStart(nameLength)} : ${entry.value}" }.joinToString("\n")}" +
                         "\n```", false)
             }).queue()
+        }
+    }
+    command("kick") {
+        action {
+            if (!event.guild.selfMember.hasPermission(Permission.KICK_MEMBERS)) {
+                messageAction(embed("I need the `Kick Members` permission in order to kick people!")).queue()
+                return@action
+            }
+            if (!event.member.hasPermission(Permission.KICK_MEMBERS)) {
+                messageAction(embed("You need the `Kick Members` permission in order to kick people!")).queue()
+                return@action
+            }
+            val query: String
+            val reason: String
+            if (args.contains(" ")) {
+                query = args.substringBefore(" ").trim()
+                reason = args.substringAfter(" ").trim()
+            } else {
+                query = args
+                reason = ""
+            }
+            selectMember("Kick Selection", query) { selectedMember ->
+                if (!event.guild.selfMember.canInteract(selectedMember)) {
+                    messageAction("I cannot kick that member!").queue()
+                    return@selectMember
+                }
+                val guildController = event.guild.controller
+                val userString = "**${selectedMember.effectiveName}** (**${selectedMember.user.name}#${selectedMember.user.discriminator} ${selectedMember.user.id}**)"
+                if (reason.isBlank()) {
+                    guildController.kick(selectedMember).queue()
+                    messageAction(embed("User $userString has been kicked!")).queue()
+                } else {
+                    guildController.kick(selectedMember, reason).queue()
+                    messageAction(embed("User $userString has been kicked with reason **$reason**!")).queue()
+                }
+            }
+        }
+    }
+    command("ban") {
+        action {
+            if (!event.guild.selfMember.hasPermission(Permission.BAN_MEMBERS)) {
+                messageAction(embed("I need the `Ban Members` permission in order to ban people!")).queue()
+                return@action
+            }
+            if (!event.member.hasPermission(Permission.BAN_MEMBERS)) {
+                messageAction(embed("You need the `Ban Members` permission in order to ban people!")).queue()
+                return@action
+            }
+            val query: String
+            val reason: String
+            if (args.contains(" ")) {
+                query = args.substringBefore(" ").trim()
+                reason = args.substringAfter(" ").trim()
+            } else {
+                query = args
+                reason = ""
+            }
+            selectMember("Ban Selection", query) { selectedMember ->
+                if (!event.guild.selfMember.canInteract(selectedMember)) {
+                    messageAction("I cannot ban that member!").queue()
+                    return@selectMember
+                }
+                val guildController = event.guild.controller
+                val userString = "**${selectedMember.effectiveName}** (**${selectedMember.user.name}#${selectedMember.user.discriminator} ${selectedMember.user.id}**)"
+                if (reason.isBlank()) {
+                    guildController.ban(selectedMember, 0).queue()
+                    messageAction(embed("User $userString has been banned!")).queue()
+                } else {
+                    guildController.ban(selectedMember, 0, reason).queue()
+                    messageAction(embed("User $userString has been banned with reason **$reason**!")).queue()
+                }
+            }
         }
     }
 }

@@ -1,9 +1,11 @@
 package xyz.astolfo.astolfocommunity
 
+import com.jagrosh.jdautilities.commons.utils.FinderUtil
 import kotlinx.coroutines.experimental.Job
 import kotlinx.coroutines.experimental.async
 import kotlinx.coroutines.experimental.delay
 import kotlinx.coroutines.experimental.launch
+import net.dv8tion.jda.core.entities.Member
 import net.dv8tion.jda.core.entities.Message
 import net.dv8tion.jda.core.entities.MessageEmbed
 import net.dv8tion.jda.core.events.message.MessageReceivedEvent
@@ -60,6 +62,54 @@ fun CommandExecution.responseListener(listener: ResponseListener.(CommandExecuti
 fun CommandExecution.destroyListener(listener: () -> Unit) = session().addDestroyListener(listener)
 
 fun CommandExecution.getProfile() = application.astolfoRepositories.getEffectiveUserProfile(event.author.idLong)
+
+fun CommandExecution.selectMember(title: String, query: String, response: CommandExecution.(Member) -> Unit) {
+    val results = FinderUtil.findMembers(query, event.guild)
+
+    if(results.isEmpty()){
+        messageAction("Unknown Member!").queue()
+        return
+    }
+
+    if(results.size == 1){
+        response.invoke(this, results.first())
+        return
+    }
+
+    val menu = paginator(title) {
+        provider(8, results.map { "**${it.effectiveName} (${it.user.name}#${it.user.discriminator})**" })
+        renderer {
+            message {
+                embed {
+                    titleProvider.invoke()?.let { title(it) }
+                    description("Type the number of the member you want.\n$providedString")
+                    footer("Page ${currentPage + 1}/${provider.pageCount}")
+                }
+            }
+        }
+    }
+    // Waits for a follow up response for user selection
+    responseListener {
+        if (menu.isDestroyed) {
+            removeListener()
+            true
+        } else if (it.args.matches("\\d+".toRegex())) {
+            val numSelection = it.args.toBigInteger().toInt()
+            if (numSelection < 1 || numSelection > results.size) {
+                messageAction("Unknown Selection").queue()
+                return@responseListener false
+            }
+            val selectedMember = results[numSelection - 1]
+            response.invoke(this@selectMember, selectedMember)
+            removeListener()
+            menu.destroy()
+            false // Don't run the command since member was selected
+        } else {
+            messageAction(embed { description("Please type the # of the member you want") }).queue()
+            false // Still waiting for valid response
+        }
+    }
+}
 
 class CommandSession(val commandPath: String) {
     private var responseListeners = mutableListOf<ResponseListener.(CommandExecution) -> Boolean>()

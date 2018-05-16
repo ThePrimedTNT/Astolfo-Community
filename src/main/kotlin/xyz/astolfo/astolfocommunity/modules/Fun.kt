@@ -139,24 +139,26 @@ fun createFunModule() = module("Fun") {
     }
     command("hug") {
         action {
-            val mentionedUser = event.message.mentionedUsers.getOrNull(0) ?: event.author
-            val image = application.weeb4J.imageProvider.getRandomImage("hug", HiddenMode.DEFAULT, NsfwFilter.NO_NSFW).execute()
-            messageAction(embed {
-                description("${event.author.asMention} has hugged ${mentionedUser.asMention}")
-                image(image.url)
-                footer("Powered by weeb.sh")
-            }).queue()
+            selectMember("Hug Selection", args) { selectedMember ->
+                val image = application.weeb4J.imageProvider.getRandomImage("hug", HiddenMode.DEFAULT, NsfwFilter.NO_NSFW).execute()
+                messageAction(embed {
+                    description("${event.author.asMention} has hugged ${selectedMember.asMention}")
+                    image(image.url)
+                    footer("Powered by weeb.sh")
+                }).queue()
+            }
         }
     }
     command("kiss") {
         action {
-            val mentionedUser = event.message.mentionedUsers.getOrNull(0) ?: event.author
-            val image = application.weeb4J.imageProvider.getRandomImage("kiss", HiddenMode.DEFAULT, NsfwFilter.NO_NSFW).execute()
-            messageAction(embed {
-                description("${event.author.asMention} has kissed ${mentionedUser.asMention}")
-                image(image.url)
-                footer("Powered by weeb.sh")
-            }).queue()
+            selectMember("Kiss Selection", args) { selectedMember ->
+                val image = application.weeb4J.imageProvider.getRandomImage("kiss", HiddenMode.DEFAULT, NsfwFilter.NO_NSFW).execute()
+                messageAction(embed {
+                    description("${event.author.asMention} has kissed ${selectedMember.asMention}")
+                    image(image.url)
+                    footer("Powered by weeb.sh")
+                }).queue()
+            }
         }
     }
 }

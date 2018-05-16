@@ -8,6 +8,7 @@ import okhttp3.OkHttpClient
 import okhttp3.Request
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.TimeUnit
+import kotlin.math.min
 
 val ASTOLFO_GSON = Gson()
 val ASTOLFO_HTTP_CLIENT = OkHttpClient()

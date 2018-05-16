@@ -33,6 +33,7 @@ dependencies {
     compile "com.github.salomonbrys.kotson:kotson:2.5.0"
     compile 'com.github.natanbc:weeb4j:3.3' // weeb
     compile 'ai.api:libai:1.6.12' // dialogflow chat bot
+    compile 'com.jagrosh:jda-utilities:2.1'
 
     compile('org.springframework.boot:spring-boot-starter-data-jpa')
     //compile('org.springframework.boot:spring-boot-starter-data-redis')
