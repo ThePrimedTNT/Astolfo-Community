@@ -109,9 +109,9 @@ class TetrisGame(gameHandler: GameHandler, member: Member, channel: TextChannel)
 
             score += normalLines * 100
 
-            if(amountOfTetris == 1){
+            if (amountOfTetris == 1) {
                 score += 800
-            }else if(amountOfTetris > 1){
+            } else if (amountOfTetris > 1) {
                 score += amountOfTetris * 1200
             }
 
@@ -137,7 +137,7 @@ class TetrisGame(gameHandler: GameHandler, member: Member, channel: TextChannel)
                 }
             }.filter { it.second.isNotEmpty() }
 
-            if(pieces.isEmpty()){
+            if (pieces.isEmpty()) {
                 currentMessage!!.editMessage(embed { render(true) }).queue()
                 endGame()
                 return
@@ -207,7 +207,7 @@ class TetrisGame(gameHandler: GameHandler, member: Member, channel: TextChannel)
                 val shouldBreak = (-1..1).none { x ->
                     (-1..1).none { y ->
                         val atPoint = Point(toCheck.x + x, toCheck.y + y)
-                        if ((x == 0 && y == 0)) false
+                        if ((x == 0 && y == 0) || (x == 1 && y == 1) || (x == -1 && y == 1) || (x == 1 && y == -1) || (x == -1 && y == -1)) false
                         else tetromino.blocks.any { it == atPoint }
                     }
                 }
