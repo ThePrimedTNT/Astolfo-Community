@@ -8,6 +8,7 @@ import net.dv8tion.jda.core.MessageBuilder
 import org.jsoup.Jsoup
 import xyz.astolfo.astolfocommunity.*
 import xyz.astolfo.astolfocommunity.games.SnakeGame
+import xyz.astolfo.astolfocommunity.games.TetrisGame
 import java.util.*
 import java.util.concurrent.TimeUnit
 
@@ -181,11 +182,18 @@ fun createFunModule() = module("Fun") {
                 description("**snakegame**  -  starts a game of snake!")
             }).queue()
         }
-        command("snakegame") {
+        command("snake") {
             action {
                 val gameHandler = application.gameHandler
                 messageAction("Starting the game of snake...").queue()
                 gameHandler.startGame(event.channel.idLong, event.author.idLong, SnakeGame(gameHandler, event.member, event.textChannel))
+            }
+        }
+        command("tetris") {
+            action {
+                val gameHandler = application.gameHandler
+                messageAction("Starting the game of tetris...").queue()
+                gameHandler.startGame(event.channel.idLong, event.author.idLong, TetrisGame(gameHandler, event.member, event.textChannel))
             }
         }
     }
