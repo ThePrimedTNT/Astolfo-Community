@@ -7,6 +7,7 @@ import com.oopsjpeg.osu4j.backend.Osu
 import net.dv8tion.jda.core.MessageBuilder
 import org.jsoup.Jsoup
 import xyz.astolfo.astolfocommunity.*
+import xyz.astolfo.astolfocommunity.games.SnakeGame
 import java.util.*
 import java.util.concurrent.TimeUnit
 
@@ -158,6 +159,33 @@ fun createFunModule() = module("Fun") {
                     image(image.url)
                     footer("Powered by weeb.sh")
                 }).queue()
+            }
+        }
+    }
+    command("game") {
+        inheritedAction {
+            val currentGame = application.gameHandler.getGame(event.channel.idLong, event.author.idLong)
+            if (currentGame != null) {
+                if (args.equals("stop", true)) {
+                    currentGame.endGame()
+                    messageAction("Current game has stopped!").queue()
+                } else {
+                    messageAction("To stop the current game you're in, type `?game stop`").queue()
+                }
+                false
+            } else true
+        }
+        action {
+            messageAction(embed {
+                title("Astolfo Game Help")
+                description("**snakegame**  -  starts a game of snake!")
+            }).queue()
+        }
+        command("snakegame") {
+            action {
+                val gameHandler = application.gameHandler
+                messageAction("Starting the game of snake...").queue()
+                gameHandler.startGame(event.channel.idLong, event.author.idLong, SnakeGame(gameHandler, event.member, event.textChannel))
             }
         }
     }
