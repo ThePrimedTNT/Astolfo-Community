@@ -34,6 +34,7 @@ import java.util.concurrent.CompletableFuture
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.LinkedBlockingDeque
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicInteger
 
 class MusicManager(astolfoCommunityApplication: AstolfoCommunityApplication, properties: AstolfoProperties) {
     val lavaLink = Lavalink(
@@ -72,15 +73,23 @@ class MusicManager(astolfoCommunityApplication: AstolfoCommunityApplication, pro
 
         launch {
             while (isActive) {
-                val currentTime = System.currentTimeMillis()
-                musicSessionMap.toMap().forEach { guild, session ->
-                    val currentVoiceChannel = session.player.link.channel
-                    if (currentVoiceChannel != null && currentVoiceChannel.members.any { !it.user.isBot }) session.lastSeenMember = currentTime
-                    // Auto Leave if no one is in voice channel for more then 5 minutes
-                    if (currentTime - session.lastSeenMember > 5 * 60 * 1000) {
-                        stopMusicSession(guild)
-                        session.boundChannel.sendMessage(embed { description("Disconnected due to being all alone...") }).queue()
+                try {
+                    println("Starting Music Clean Up...")
+                    val currentTime = System.currentTimeMillis()
+                    val amountCleanedUp = AtomicInteger()
+                    musicSessionMap.toMap().forEach { guild, session ->
+                        val currentVoiceChannel = session.player.link.channel
+                        if (currentVoiceChannel != null && currentVoiceChannel.members.any { !it.user.isBot }) session.lastSeenMember = currentTime
+                        // Auto Leave if no one is in voice channel for more then 5 minutes
+                        if (currentTime - session.lastSeenMember > 5 * 60 * 1000) {
+                            stopMusicSession(guild)
+                            amountCleanedUp.incrementAndGet()
+                            session.boundChannel.sendMessage(embed { description("Disconnected due to being all alone...") }).queue()
+                        }
                     }
+                    println("Cleaned up ${amountCleanedUp.get()} music sessions in ${System.currentTimeMillis() - currentTime}ms")
+                } catch (e: Exception) {
+                    e.printStackTrace()
                 }
                 delay(2, TimeUnit.MINUTES)
             }

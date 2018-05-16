@@ -2,6 +2,7 @@
 /build/
 !gradle/wrapper/gradle-wrapper.jar
 src/main/resources/dev.properties
+src/main/resources/astolfo.properties
 
 ### STS ###
 .apt_generated

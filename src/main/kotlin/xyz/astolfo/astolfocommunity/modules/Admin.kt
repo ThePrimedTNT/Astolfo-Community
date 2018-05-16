@@ -1,7 +1,9 @@
 package xyz.astolfo.astolfocommunity.modules
 
+import com.google.common.collect.Lists
 import net.dv8tion.jda.core.Permission
 import xyz.astolfo.astolfocommunity.*
+import java.util.stream.Stream
 
 fun createAdminModule() = module("Admin") {
     command("settings") {

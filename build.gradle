@@ -43,6 +43,7 @@ dependencies {
     compile("org.jetbrains.kotlin:kotlin-reflect")
     runtime('com.h2database:h2')
     compile 'mysql:mysql-connector-java'
+    compile 'org.mariadb.jdbc:mariadb-java-client'
     compileOnly('org.springframework.boot:spring-boot-configuration-processor')
     testCompile('org.springframework.boot:spring-boot-starter-test')
 
@@ -51,8 +52,12 @@ dependencies {
 
 
 group = 'xyz.astolfo'
-version = '0.0.1-SNAPSHOT'
+version = '2.0.0'
 sourceCompatibility = 1.8
+
+bootJar {
+    baseName = 'Astolfo'
+}
 
 compileKotlin {
     kotlinOptions {

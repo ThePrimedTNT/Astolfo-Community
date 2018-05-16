@@ -97,7 +97,7 @@ class Paginator(private val commandExecution: CommandExecution, val titleProvide
     val destroyListener = { destroy() }
 
     var isDestroyed = false
-    private set
+        private set
 
     init {
         commandExecution.event.jda.addEventListener(listener)
@@ -110,7 +110,10 @@ class Paginator(private val commandExecution: CommandExecution, val titleProvide
         isDestroyed = true
         commandExecution.session().removeDestroyListener(destroyListener)
         commandExecution.event.jda.removeEventListener(listener)
-        launch { message?.await()?.delete()?.queue() }
+        launch {
+            message?.await()?.delete()?.queue()
+            message = null
+        }
     }
 
     companion object {

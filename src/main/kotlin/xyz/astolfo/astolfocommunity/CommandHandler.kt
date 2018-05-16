@@ -19,7 +19,7 @@ class CommandHandler(val astolfoCommunityApplication: AstolfoCommunityApplicatio
     override fun onMessageReceived(event: MessageReceivedEvent?) {
         val timeIssued = System.nanoTime()
         if (event!!.author.isBot) return
-        if ((event as? TextChannel)?.canTalk() == false) return
+        if (event.textChannel?.canTalk() != true) return
         launch(messageProcessorContext) {
 
             val rawMessage = event.message.contentRaw!!
