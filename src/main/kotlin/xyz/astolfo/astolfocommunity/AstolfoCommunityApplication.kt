@@ -52,6 +52,7 @@ class AstolfoProperties {
     var lavalink_password = ""
     var osu_api_token = ""
     var weeb_token = ""
+    var dialogflow_token = ""
 }
 
 fun main(args: Array<String>) {
