@@ -15,6 +15,11 @@ import org.springframework.boot.runApplication
 import org.springframework.cache.annotation.EnableCaching
 import xyz.astolfo.astolfocommunity.games.GameHandler
 import xyz.astolfo.astolfocommunity.modules.MusicManager
+import org.springframework.boot.web.client.RestTemplateBuilder
+import org.springframework.context.annotation.Bean
+import org.springframework.web.client.RestTemplate
+
+
 
 @SpringBootApplication
 @EnableCaching
@@ -26,6 +31,8 @@ class AstolfoCommunityApplication(final val astolfoRepositories: AstolfoReposito
     final val gameHandler = GameHandler()
     final val commandHandler = CommandHandler(this)
     final val shardManager: ShardManager
+    // TODO: Move this to a better location
+    final val staffMemberIds = properties.staffMemberIds.split(",").map { it.toLong() }
 
     init {
         shardManager = DefaultShardManagerBuilder()
@@ -48,6 +55,7 @@ class AstolfoCommunityApplication(final val astolfoRepositories: AstolfoReposito
 class AstolfoProperties {
     var token = ""
     var bot_user_id = ""
+    var staffMemberIds = ""
     var shard_count = 0
     var default_prefix = ""
     var lavalink_nodes = ""

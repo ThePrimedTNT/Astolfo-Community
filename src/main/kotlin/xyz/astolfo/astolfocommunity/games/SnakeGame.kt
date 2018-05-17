@@ -7,6 +7,7 @@ import net.dv8tion.jda.core.EmbedBuilder
 import net.dv8tion.jda.core.entities.Member
 import net.dv8tion.jda.core.entities.Message
 import net.dv8tion.jda.core.entities.TextChannel
+import net.dv8tion.jda.core.events.message.MessageDeleteEvent
 import net.dv8tion.jda.core.events.message.guild.react.GuildMessageReactionAddEvent
 import net.dv8tion.jda.core.hooks.ListenerAdapter
 import xyz.astolfo.astolfocommunity.description
@@ -47,6 +48,12 @@ class SnakeGame(gameHandler: GameHandler, member: Member, channel: TextChannel) 
                 else -> snakeDirection
             }
 
+        }
+
+        override fun onMessageDelete(event: MessageDeleteEvent?) {
+            if(currentMessage?.idLong == event!!.messageIdLong){
+                endGame()
+            }
         }
     }
 

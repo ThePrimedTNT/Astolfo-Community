@@ -5,6 +5,7 @@ import com.sedmelluq.discord.lavaplayer.player.AudioPlayer
 import com.sedmelluq.discord.lavaplayer.player.DefaultAudioPlayerManager
 import com.sedmelluq.discord.lavaplayer.source.bandcamp.BandcampAudioSourceManager
 import com.sedmelluq.discord.lavaplayer.source.beam.BeamAudioSourceManager
+import com.sedmelluq.discord.lavaplayer.source.http.HttpAudioSourceManager
 import com.sedmelluq.discord.lavaplayer.source.soundcloud.SoundCloudAudioSourceManager
 import com.sedmelluq.discord.lavaplayer.source.twitch.TwitchStreamAudioSourceManager
 import com.sedmelluq.discord.lavaplayer.source.vimeo.VimeoAudioSourceManager
@@ -70,6 +71,7 @@ class MusicManager(astolfoCommunityApplication: AstolfoCommunityApplication, pro
         audioPlayerManager.registerSourceManager(VimeoAudioSourceManager())
         audioPlayerManager.registerSourceManager(TwitchStreamAudioSourceManager())
         audioPlayerManager.registerSourceManager(BeamAudioSourceManager())
+        audioPlayerManager.registerSourceManager(HttpAudioSourceManager())
 
         launch {
             while (isActive) {
@@ -291,6 +293,87 @@ fun createMusicModule() = module("Music") {
                 messageAction("Failed due to an error: **${exception.message}**").queue()
             } else {
                 messageAction("No matches found for **$args**").queue()
+            }
+        }
+    }
+    command("radio") {
+        musicAction {
+            // Make the radio command work like the join command as well
+            if (!joinAction()) return@musicAction
+            val guild = event.guild
+            val results = tempMessage(message("Searching radio stations for $args...")) {
+                application.astolfoRepositories.findRadioStation(args)
+            }
+
+            if (results.isEmpty()) {
+                messageAction("No results!").queue()
+                return@musicAction
+            }
+
+            val menu = paginator("\uD83D\uDD0E Music Search Results:") {
+                provider(8, results.map { radio -> "`${radio.id}` **${radio.name}**" })
+                renderer {
+                    message {
+                        embed {
+                            titleProvider.invoke()?.let { title(it) }
+                            val string = providedContent.joinToString(separator = "\n")
+                            description("Type the number of the song you want.\n$string")
+                            footer("Page ${currentPage + 1}/${provider.pageCount}")
+                        }
+                    }
+                }
+            }
+            // Waits for a follow up response for radio selection
+            responseListener {
+                if (menu.isDestroyed) {
+                    removeListener()
+                    true
+                } else if (it.args.matches("\\d+".toRegex())) {
+                    val numSelection = it.args.toBigInteger().toLong()
+                    val selectedRadio = results.find { it.id == numSelection }
+                    if (selectedRadio == null) {
+                        messageAction("Unknown Selection").queue()
+                        return@responseListener false
+                    }
+                    val (audioItem, audioException) = tempMessage(message { embed("\uD83D\uDD0E Loading radio **${selectedRadio.name}**...") }) {
+                        val future = CompletableFuture<Pair<AudioItem?, FriendlyException?>>()
+                        application.musicManager.audioPlayerManager.loadItem(selectedRadio.url, object : AudioLoadResultHandler {
+                            override fun trackLoaded(track: AudioTrack?) {
+                                future.complete(track to null)
+                            }
+
+                            override fun loadFailed(exception: FriendlyException?) {
+                                future.complete(null to exception)
+                            }
+
+                            override fun noMatches() {
+                                future.complete(null to null)
+                            }
+
+                            override fun playlistLoaded(playlist: AudioPlaylist?) {
+                                future.complete(playlist to null)
+                            }
+                        })
+                        future.get(1, TimeUnit.MINUTES)!!
+                    }
+                    if (audioItem != null && audioItem is AudioTrack) {
+                        application.musicManager.getMusicSession(guild)?.let {
+                            it.boundChannel = event.message.textChannel
+                            it.queue(audioItem)
+                        }
+                        messageAction(embed { description("**${selectedRadio.name}** has been added to the queue") }).queue()
+                    } else if (audioException != null) {
+                        messageAction("Failed due to an error: **${audioException.message}**").queue()
+                    } else {
+                        messageAction("Unknown error occurred while loading **${selectedRadio.name}** radio station").queue()
+                    }
+                    removeListener()
+                    menu.destroy()
+                    false // Don't run the command since song was added
+                } else {
+                    messageAction(embed { description("Please type the # of the radio station you want") }).queue()
+                    false // Still waiting for valid response
+                }
             }
         }
     }

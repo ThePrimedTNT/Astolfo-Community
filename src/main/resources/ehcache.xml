@@ -25,4 +25,14 @@
            transactionalMode="off">
     </cache>
 
+    <cache name="radios"
+           maxElementsInMemory="50000"
+           eternal="false"
+           overflowToDisk="false"
+           timeToLiveSeconds="3600"
+           timeToIdleSeconds="0"
+           memoryStoreEvictionPolicy="LFU"
+           transactionalMode="off">
+    </cache>
+
 </ehcache>

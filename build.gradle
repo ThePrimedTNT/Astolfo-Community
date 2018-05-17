@@ -57,6 +57,7 @@ sourceCompatibility = 1.8
 
 bootJar {
     baseName = 'Astolfo'
+    version = ""
 }
 
 compileKotlin {

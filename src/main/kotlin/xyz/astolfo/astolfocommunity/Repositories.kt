@@ -6,18 +6,24 @@ import org.springframework.cache.annotation.Cacheable
 import org.springframework.data.repository.CrudRepository
 import org.springframework.stereotype.Component
 import java.util.*
-import javax.persistence.Embeddable
-import javax.persistence.Entity
-import javax.persistence.Id
+import javax.persistence.*
 
 @Component
 class AstolfoRepositories(val guildSettingsRepository: GuildSettingsRepository,
-                          val userProfileRepository: UserProfileRepository) {
+                          val userProfileRepository: UserProfileRepository,
+                          val radioRepository: RadioRepository) {
     fun getEffectiveGuildSettings(id: Long): GuildSettings = guildSettingsRepository.findById(id).orElse(null)
             ?: GuildSettings(guildId = id)
 
     fun getEffectiveUserProfile(id: Long): UserProfile = userProfileRepository.findById(id).orElse(null)
             ?: UserProfile(userId = id)
+
+    fun findRadioStation(query: String): List<RadioEntry> {
+        query.toLongOrNull()?.let { id ->
+            radioRepository.findById(id).orElse(null).let { return listOf(it) }
+        }
+        return radioRepository.findByNameLike("%${query.toCharArray().joinToString(separator = "%")}%")
+    }
 }
 
 @CacheConfig(cacheNames = ["guildSettings"])
@@ -39,6 +45,25 @@ interface UserProfileRepository : CrudRepository<UserProfile, Long> {
 
     fun findTop50ByOrderByCreditsDesc(): List<UserProfile>
 }
+
+@CacheConfig(cacheNames = ["radios"])
+interface RadioRepository : CrudRepository<RadioEntry, Long> {
+    @CacheEvict("radios", key = "#entity.id")
+    override fun <S : RadioEntry?> save(entity: S): S
+
+    @Cacheable("radios", key = "#id")
+    override fun findById(id: Long): Optional<RadioEntry>
+
+    fun findByNameLike(name: String): List<RadioEntry>
+}
+
+@Entity
+data class RadioEntry(@Id @GeneratedValue(strategy = GenerationType.AUTO)
+                      val id: Long? = null,
+                      var name: String = "",
+                      val url: String = "",
+                      val category: String = "",
+                      val genre: String = "")
 
 @Entity
 data class UserProfile(@Id val userId: Long = 0L,
