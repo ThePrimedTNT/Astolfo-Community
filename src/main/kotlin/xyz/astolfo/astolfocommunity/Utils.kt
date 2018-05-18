@@ -8,7 +8,6 @@ import okhttp3.OkHttpClient
 import okhttp3.Request
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.TimeUnit
-import kotlin.math.min
 
 val ASTOLFO_GSON = Gson()
 val ASTOLFO_HTTP_CLIENT = OkHttpClient()
@@ -57,18 +56,53 @@ class RateLimiter<K>(
 
 }
 
-fun formatDuration(timeLeft: Long): String {
-    val hours = TimeUnit.MILLISECONDS.toHours(timeLeft)
-    val minutes = TimeUnit.MILLISECONDS.toMinutes(timeLeft) % TimeUnit.HOURS.toMinutes(1)
-    val seconds = TimeUnit.MILLISECONDS.toSeconds(timeLeft) % TimeUnit.MINUTES.toSeconds(1)
+object Utils {
 
-    var timeStr = ""
-    if (hours > 0)
-        timeStr += " " + hours + "h"
-    if (minutes > 0)
-        timeStr += " " + minutes + "m"
-    if (seconds > 0)
-        timeStr += " " + seconds + "s"
-    timeStr = timeStr.trim { it <= ' ' }
-    return timeStr
+    private val TIMESTAMP_PATTERN = Regex("^(?:(?:(?<hours>\\d+):)?(?:(?<minutes>\\d+):))?(?<seconds>\\d+)$")
+    private val WORD_PATTERN = Regex("^((?:(?<hours>\\d+)(?:h))|(?:(?<minutes>\\d+)(?:m))|(?:(?<seconds>\\d+)(?:s)))+$", RegexOption.IGNORE_CASE)
+
+    fun parseTimeString(input: String): Long? {
+        val inputNoSpaces = input.replace(Regex("\\s+"), "")
+        return parse(TIMESTAMP_PATTERN, inputNoSpaces) ?: parse(WORD_PATTERN, inputNoSpaces)
+    }
+
+    private fun parse(pattern: Regex, input: String): Long? {
+        val groupCollection = pattern.matchEntire(input)?.groups ?: return null
+        return TimeUnit.HOURS.toMillis(groupCollection["hours"]?.value?.toLongOrNull() ?: 0) +
+                TimeUnit.MINUTES.toMillis(groupCollection["minutes"]?.value?.toLongOrNull() ?: 0) +
+                TimeUnit.SECONDS.toMillis(groupCollection["seconds"]?.value?.toLongOrNull() ?: 0)
+    }
+
+    fun formatSongDuration(duration: Long, isStream: Boolean = false): String {
+        if (isStream) return "LIVE"
+
+        val hours = TimeUnit.MILLISECONDS.toHours(duration)
+        val minutes = TimeUnit.MILLISECONDS.toMinutes(duration) % TimeUnit.HOURS.toMinutes(1)
+        val seconds = TimeUnit.MILLISECONDS.toSeconds(duration) % TimeUnit.MINUTES.toSeconds(1)
+
+        val list = hours.takeIf { it > 0 }?.let { arrayOf(hours, minutes, seconds) }
+                ?: arrayOf(minutes, seconds)
+
+        return list.mapIndexed { index, time ->
+            if (index == 0) String.format("%d", time)
+            else String.format("%02d", time)
+        }.joinToString(separator = ":")
+    }
+
+    fun formatDuration(timeLeft: Long): String {
+        val hours = TimeUnit.MILLISECONDS.toHours(timeLeft)
+        val minutes = TimeUnit.MILLISECONDS.toMinutes(timeLeft) % TimeUnit.HOURS.toMinutes(1)
+        val seconds = TimeUnit.MILLISECONDS.toSeconds(timeLeft) % TimeUnit.MINUTES.toSeconds(1)
+
+        var timeStr = ""
+        if (hours > 0)
+            timeStr += " " + hours + "h"
+        if (minutes > 0)
+            timeStr += " " + minutes + "m"
+        if (seconds > 0)
+            timeStr += " " + seconds + "s"
+        timeStr = timeStr.trim { it <= ' ' }
+        return timeStr
+    }
+
 }

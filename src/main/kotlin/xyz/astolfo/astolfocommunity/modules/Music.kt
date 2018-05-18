@@ -391,7 +391,7 @@ fun createMusicModule() = module("Music") {
                     val songs = musicSession.songQueue
                     if (songs.isEmpty()) listOf("No songs in queue")
                     else songs.map { audioTrack ->
-                        "[${audioTrack.info.title}](${audioTrack.info.uri}) **${formatSongDurationMS(audioTrack.info.length, audioTrack.info.isStream)}**"
+                        "[${audioTrack.info.title}](${audioTrack.info.uri}) **${Utils.formatSongDuration(audioTrack.info.length, audioTrack.info.isStream)}**"
                     }
                 })
                 renderer {
@@ -399,7 +399,7 @@ fun createMusicModule() = module("Music") {
                         embed {
                             titleProvider.invoke()?.let { title(it) }
                             val currentTrack = musicSession.player.playingTrack
-                            field("\uD83C\uDFB6 Now Playing" + if (currentTrack != null) " - ${formatSongDurationMS(musicSession.player.trackPosition)}/${formatSongDurationMS(currentTrack.info.length, currentTrack.info.isStream)}" else "", false) {
+                            field("\uD83C\uDFB6 Now Playing" + if (currentTrack != null) " - ${Utils.formatSongDuration(musicSession.player.trackPosition)}/${Utils.formatSongDuration(currentTrack.info.length, currentTrack.info.isStream)}" else "", false) {
                                 if (currentTrack == null) {
                                     "No song currently playing"
                                 } else {
@@ -472,6 +472,110 @@ fun createMusicModule() = module("Music") {
             }
         }
     }
+    command("seek") {
+        musicAction(activeSession = true) {
+            val musicSession = application.musicManager.getMusicSession(event.guild)!!
+            val currentTrack = musicSession.player.playingTrack
+            if (currentTrack == null) {
+                messageAction("There are no tracks currently playing!").queue()
+                return@musicAction
+            }
+            if (!currentTrack.isSeekable) {
+                messageAction("You cannot seek this track!").queue()
+                return@musicAction
+            }
+            if (args.isBlank()) {
+                messageAction("Please specify a time to go to!").queue()
+                return@musicAction
+            }
+            val time = Utils.parseTimeString(args)
+            if (time == null) {
+                messageAction("Unknown time format!\n" +
+                        "Examples: `1:25:22`, `1h 25m 22s`").queue()
+                return@musicAction
+            }
+            if (time < 0) {
+                messageAction("Please give a time that's greater than 0!").queue()
+                return@musicAction
+            }
+            if (time > currentTrack.info.length) {
+                messageAction("I cannot seek that far into the song!").queue()
+                return@musicAction
+            }
+            musicSession.player.seekTo(time)
+            messageAction("I have seeked to the time **${Utils.formatSongDuration(time)}**").queue()
+        }
+    }
+    command("forward", "fwd") {
+        musicAction(activeSession = true) {
+            val musicSession = application.musicManager.getMusicSession(event.guild)!!
+            val currentTrack = musicSession.player.playingTrack
+            if (currentTrack == null) {
+                messageAction("There are no tracks currently playing!").queue()
+                return@musicAction
+            }
+            if (!currentTrack.isSeekable) {
+                messageAction("You cannot forward this track!").queue()
+                return@musicAction
+            }
+            if (args.isBlank()) {
+                messageAction("Please specify a amount to forward by!").queue()
+                return@musicAction
+            }
+            val time = Utils.parseTimeString(args)
+            if (time == null) {
+                messageAction("Unknown time format!\n" +
+                        "Examples: `1:25:22`, `1h 25m 22s`").queue()
+                return@musicAction
+            }
+            if (time < 0) {
+                messageAction("Please give a time that's greater than 0!").queue()
+                return@musicAction
+            }
+            val effectiveTime = time + musicSession.player.trackPosition
+            if (effectiveTime > currentTrack.info.length) {
+                messageAction("You cannot forward into the song by that much!").queue()
+                return@musicAction
+            }
+            musicSession.player.seekTo(effectiveTime)
+            messageAction("I have forwarded the song to the time **${Utils.formatSongDuration(effectiveTime)}**").queue()
+        }
+    }
+    command("rewind", "rwd") {
+        musicAction(activeSession = true) {
+            val musicSession = application.musicManager.getMusicSession(event.guild)!!
+            val currentTrack = musicSession.player.playingTrack
+            if (currentTrack == null) {
+                messageAction("There are no tracks currently playing!").queue()
+                return@musicAction
+            }
+            if (!currentTrack.isSeekable) {
+                messageAction("You cannot rewind this track!").queue()
+                return@musicAction
+            }
+            if (args.isBlank()) {
+                messageAction("Please specify a amount to rewind by!").queue()
+                return@musicAction
+            }
+            val time = Utils.parseTimeString(args)
+            if (time == null) {
+                messageAction("Unknown time format!\n" +
+                        "Examples: `1:25:22`, `1h 25m 22s`").queue()
+                return@musicAction
+            }
+            if (time < 0) {
+                messageAction("Please give a time that's greater than 0!").queue()
+                return@musicAction
+            }
+            val effectiveTime = musicSession.player.trackPosition - time
+            if (effectiveTime < 0) {
+                messageAction("You cannot rewind back in the song by that much!").queue()
+                return@musicAction
+            }
+            musicSession.player.seekTo(effectiveTime)
+            messageAction("I have rewound the song to the time **${Utils.formatSongDuration(effectiveTime)}**").queue()
+        }
+    }
 }
 
 fun volumeIcon(volume: Int) = when {
@@ -479,24 +583,6 @@ fun volumeIcon(volume: Int) = when {
     volume < 30 -> Emotes.SPEAKER
     volume < 70 -> Emotes.SPEAKER_1
     else -> Emotes.SPEAKER_2
-}
-
-// TODO: Make this in its own class and make it more universal
-fun formatSongDurationMS(duration: Long, isStream: Boolean = false): String {
-
-    if (isStream) return "LIVE"
-
-    val hours = TimeUnit.MILLISECONDS.toHours(duration)
-    val minutes = TimeUnit.MILLISECONDS.toMinutes(duration) % TimeUnit.HOURS.toMinutes(1)
-    val seconds = TimeUnit.MILLISECONDS.toSeconds(duration) % TimeUnit.MINUTES.toSeconds(1)
-
-    val list = hours.takeIf { it > 0 }?.let { arrayOf(hours, minutes, seconds) }
-            ?: arrayOf(minutes, seconds)
-
-    val stringBuilder = StringBuilder()
-    list.forEachIndexed { index, time -> stringBuilder.append(if (index == 0) String.format("%d", time) else ":" + String.format("%02d", time)) }
-
-    return stringBuilder.toString()
 }
 
 fun Lavalink.connect(voiceChannel: VoiceChannel) = getLink(voiceChannel.guild).connect(voiceChannel)

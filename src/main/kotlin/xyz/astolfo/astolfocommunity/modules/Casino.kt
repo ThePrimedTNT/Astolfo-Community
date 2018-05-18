@@ -32,7 +32,7 @@ fun createCasinoModule() = module("Casino") {
             val currentTime = System.currentTimeMillis()
             val timeLeft = day1 - (currentTime - userDaily.lastDaily)
             if (timeLeft > minute30) {
-                messageAction(embed("You can receive your next daily in **${formatDuration(timeLeft)}**.")).queue()
+                messageAction(embed("You can receive your next daily in **${Utils.formatDuration(timeLeft)}**.")).queue()
                 return@action
             }
 
@@ -64,7 +64,7 @@ fun createCasinoModule() = module("Casino") {
 
         action {
             if (slotsRateLimiter.isLimited(event.author.idLong)) {
-                event.channel.sendMessage("Please cool down! (**${formatDuration(slotsRateLimiter.remainingTime(event.author.idLong)!!)}** seconds left)").queue()
+                event.channel.sendMessage("Please cool down! (**${Utils.formatDuration(slotsRateLimiter.remainingTime(event.author.idLong)!!)}** seconds left)").queue()
                 return@action
             }
             slotsRateLimiter.add(event.author.idLong)
