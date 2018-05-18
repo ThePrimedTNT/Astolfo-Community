@@ -179,7 +179,9 @@ fun createFunModule() = module("Fun") {
         action {
             messageAction(embed {
                 title("Astolfo Game Help")
-                description("**snakegame**  -  starts a game of snake!")
+                description("**game**  -  starts a game of snake!\n" +
+                        "**tetris** - starts a game of tetris!\n\n" +
+                        "**stop** - stops the current game your playing")
             }).queue()
         }
         command("snake") {
