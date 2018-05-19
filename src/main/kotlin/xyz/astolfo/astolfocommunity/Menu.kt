@@ -125,6 +125,7 @@ class Paginator(private val commandExecution: CommandExecution, val titleProvide
     }
 
     fun render() {
+        if (isDestroyed) return
         val lastMessage = message
         message = async {
             val currentMessage = lastMessage?.await()

@@ -2,6 +2,7 @@ package xyz.astolfo.astolfocommunity.modules
 
 import xyz.astolfo.astolfocommunity.Command
 import xyz.astolfo.astolfocommunity.CommandBuilder
+import xyz.astolfo.astolfocommunity.modules.music.createMusicModule
 
 val modules = initModules()
 

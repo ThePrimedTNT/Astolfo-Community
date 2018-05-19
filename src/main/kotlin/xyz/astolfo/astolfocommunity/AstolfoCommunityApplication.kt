@@ -14,11 +14,7 @@ import org.springframework.boot.context.properties.EnableConfigurationProperties
 import org.springframework.boot.runApplication
 import org.springframework.cache.annotation.EnableCaching
 import xyz.astolfo.astolfocommunity.games.GameHandler
-import xyz.astolfo.astolfocommunity.modules.MusicManager
-import org.springframework.boot.web.client.RestTemplateBuilder
-import org.springframework.context.annotation.Bean
-import org.springframework.web.client.RestTemplate
-
+import xyz.astolfo.astolfocommunity.modules.music.MusicManager
 
 
 @SpringBootApplication
