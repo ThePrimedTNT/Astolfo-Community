@@ -16,8 +16,6 @@ import com.sedmelluq.discord.lavaplayer.track.AudioItem
 import com.sedmelluq.discord.lavaplayer.track.AudioPlaylist
 import com.sedmelluq.discord.lavaplayer.track.AudioTrack
 import com.sedmelluq.discord.lavaplayer.track.AudioTrackEndReason
-import kotlinx.coroutines.experimental.Deferred
-import kotlinx.coroutines.experimental.async
 import kotlinx.coroutines.experimental.delay
 import kotlinx.coroutines.experimental.launch
 import lavalink.client.io.Lavalink
@@ -115,7 +113,7 @@ class MusicSession(musicManager: MusicManager, guild: Guild, var boundChannel: T
 
     var lastSeenMember = System.currentTimeMillis()
 
-    private var nowPlayingMessage: Deferred<Message>? = null
+    private var nowPlayingMessage: Message? = null
 
     init {
         player.addListener(this)
@@ -162,14 +160,11 @@ class MusicSession(musicManager: MusicManager, guild: Guild, var boundChannel: T
         }
 
         val lastMessage = nowPlayingMessage
-        nowPlayingMessage = async {
-            val message = lastMessage?.await()
-            if (message != null && boundChannel.latestMessageIdLong == message.idLong) {
-                message.editMessage(newMessage).complete()
-            } else {
-                message?.delete()?.queue()
-                boundChannel.sendMessage(newMessage).complete()
-            }
+        nowPlayingMessage = if (lastMessage != null && boundChannel.hasLatestMessage() && boundChannel.latestMessageIdLong == lastMessage.idLong) {
+            lastMessage.editMessage(newMessage).complete()
+        } else {
+            lastMessage?.delete()?.queue()
+            boundChannel.sendMessage(newMessage).complete()
         }
     }
 
@@ -180,7 +175,7 @@ class MusicSession(musicManager: MusicManager, guild: Guild, var boundChannel: T
     fun destroy() {
         player.removeListener(this)
         player.link.resetPlayer()
-        nowPlayingMessage?.let { launch { it.await().delete().queue() } }
+        nowPlayingMessage?.delete()?.queue()
     }
 
 }
