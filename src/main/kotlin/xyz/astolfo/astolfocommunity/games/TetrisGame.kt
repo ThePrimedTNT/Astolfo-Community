@@ -202,6 +202,8 @@ class TetrisGame(gameHandler: GameHandler, member: Member, channel: TextChannel)
         return false
     }
 
+    private val checkLocations = listOf(Point(0, 1), Point(0, -1), Point(1, 0), Point(-1, 0))
+
     private fun checkIncompleteTetromino() {
         tetrominos.toList().forEach { tetromino ->
             if (tetromino == fallingTetromino) return@forEach
@@ -211,12 +213,9 @@ class TetrisGame(gameHandler: GameHandler, member: Member, channel: TextChannel)
             }
             if (tetromino.blocks.size == 1) return@forEach
             tetromino.blocks.toList().forEach { toCheck ->
-                val shouldBreak = (-1..1).none { x ->
-                    (-1..1).none { y ->
-                        val atPoint = Point(toCheck.x + x, toCheck.y + y)
-                        if ((x == 0 && y == 0) || (x == 1 && y == 1) || (x == -1 && y == 1) || (x == 1 && y == -1) || (x == -1 && y == -1)) false
-                        else tetromino.blocks.any { it == atPoint }
-                    }
+                val shouldBreak = checkLocations.none { relativePoint ->
+                    val atPoint = Point(toCheck.x + relativePoint.x, toCheck.y + relativePoint.y)
+                    tetromino.blocks.any { it == atPoint }
                 }
                 if (shouldBreak) {
                     tetrominos.add(Tetromino(mutableListOf(toCheck), tetromino.emote))
