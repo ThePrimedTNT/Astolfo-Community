@@ -149,6 +149,12 @@ class MusicSession(musicManager: MusicManager, guild: Guild, var boundChannel: T
         return skippedSongs
     }
 
+    fun stop() {
+        repeatMode = RepeatMode.NOTHING
+        songQueue.clear()
+        player.stopTrack()
+    }
+
     private fun pollNextTrack() {
         synchronized(queueLock) {
             if (player.playingTrack != null) return

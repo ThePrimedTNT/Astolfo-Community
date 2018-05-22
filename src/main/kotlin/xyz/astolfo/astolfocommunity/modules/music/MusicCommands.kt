@@ -391,6 +391,27 @@ fun createMusicModule() = module("Music") {
             }
         }
     }
+    command("pause") {
+        musicAction(activeSession = true) {
+            val musicSession = application.musicManager.getMusicSession(event.guild)!!
+            musicSession.player.isPaused = true
+            messageAction("Music has paused!").queue()
+        }
+    }
+    command("resume") {
+        musicAction(activeSession = true) {
+            val musicSession = application.musicManager.getMusicSession(event.guild)!!
+            musicSession.player.isPaused = false
+            messageAction("Music has resumed playing!").queue()
+        }
+    }
+    command("stop") {
+        musicAction(activeSession = true) {
+            val musicSession = application.musicManager.getMusicSession(event.guild)!!
+            musicSession.stop()
+            messageAction("Music has stopped!").queue()
+        }
+    }
 }
 
 fun volumeIcon(volume: Int) = when {
