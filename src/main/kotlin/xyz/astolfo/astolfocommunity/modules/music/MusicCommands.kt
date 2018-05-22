@@ -21,7 +21,7 @@ fun createMusicModule() = module("Music") {
             if (!joinAction()) return@musicAction
             val guild = event.guild
             val searchQuery = MusicUtils.getEffectiveSearchQuery(args)
-            if(searchQuery == null){
+            if (searchQuery == null) {
                 messageAction("Either im not allowed to play music from that website or I do not support it!").queue()
                 return@musicAction
             }
@@ -170,9 +170,10 @@ fun createMusicModule() = module("Music") {
             val paginator = paginator("Astolfo-Community Music Queue") {
                 provider(8, {
                     val songs = musicSession.songQueue
-                    if (songs.isEmpty()) listOf("No songs in queue")
-                    else songs.map { audioTrack ->
-                        "[${audioTrack.info.title}](${audioTrack.info.uri}) **${Utils.formatSongDuration(audioTrack.info.length, audioTrack.info.isStream)}**"
+                    val repeatedSongs = musicSession.repeatSongQueue
+                    if (songs.isEmpty() && repeatedSongs.isEmpty()) listOf("No songs in queue")
+                    else listOf(songs, repeatedSongs).flatten().map { audioTrack ->
+                        "${if (repeatedSongs.contains(audioTrack)) "\uD83D\uDD04 " else ""}[${audioTrack.info.title}](${audioTrack.info.uri}) **${Utils.formatSongDuration(audioTrack.info.length, audioTrack.info.isStream)}**"
                     }
                 })
                 renderer {
@@ -355,6 +356,39 @@ fun createMusicModule() = module("Music") {
             }
             musicSession.player.seekTo(effectiveTime)
             messageAction("I have rewound the song to the time **${Utils.formatSongDuration(effectiveTime)}**").queue()
+        }
+    }
+    command("repeat") {
+        musicAction(activeSession = true) {
+            val musicSession = application.musicManager.getMusicSession(event.guild)!!
+            val currentTrack = musicSession.player.playingTrack
+            if (currentTrack == null) {
+                messageAction("There are no tracks currently playing!").queue()
+                return@musicAction
+            }
+            val repeatType = when (args.toLowerCase()) {
+                "current", "single", "" -> MusicSession.RepeatMode.SINGLE
+                "queue", "all" -> MusicSession.RepeatMode.QUEUE
+                else -> {
+                    messageAction("Unknown repeat mode! Valid Modes: **current/single**, **queue/all**").queue()
+                    return@musicAction
+                }
+            }
+            if (musicSession.repeatMode == repeatType) {
+                when (repeatType) {
+                    MusicSession.RepeatMode.QUEUE -> messageAction("The queue is no longer repeating!").queue()
+                    MusicSession.RepeatMode.SINGLE -> messageAction("The song is no longer repeating!").queue()
+                    else -> TODO("This shouldn't be called")
+                }
+                musicSession.repeatMode = MusicSession.RepeatMode.NOTHING
+            } else {
+                when (repeatType) {
+                    MusicSession.RepeatMode.QUEUE -> messageAction("The queue is now repeating!").queue()
+                    MusicSession.RepeatMode.SINGLE -> messageAction("The song is now repeating!").queue()
+                    else -> TODO("This shouldn't be called")
+                }
+                musicSession.repeatMode = repeatType
+            }
         }
     }
 }

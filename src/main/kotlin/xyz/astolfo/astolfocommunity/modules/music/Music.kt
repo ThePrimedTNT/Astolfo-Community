@@ -110,10 +110,23 @@ class MusicSession(musicManager: MusicManager, guild: Guild, var boundChannel: T
 
     private val queueLock = Any()
     val songQueue = LinkedBlockingDeque<AudioTrack>()
+    val repeatSongQueue = LinkedBlockingDeque<AudioTrack>()
 
     var lastSeenMember = System.currentTimeMillis()
 
     private var nowPlayingMessage: Message? = null
+
+    var repeatMode = RepeatMode.NOTHING
+        set(value) {
+            if (value != RepeatMode.QUEUE) repeatSongQueue.clear()
+            field = value
+        }
+
+    enum class RepeatMode {
+        NOTHING,
+        SINGLE,
+        QUEUE
+    }
 
     init {
         player.addListener(this)
@@ -126,6 +139,7 @@ class MusicSession(musicManager: MusicManager, guild: Guild, var boundChannel: T
     }
 
     fun skip(amountToSkip: Int): List<AudioTrack> {
+        repeatMode = RepeatMode.NOTHING
         val skippedSongs = (0 until (amountToSkip - 1)).mapNotNull { songQueue.poll() }.toMutableList()
         val skippedPlayingSong = player.playingTrack
         if (skippedPlayingSong != null) {
@@ -139,14 +153,14 @@ class MusicSession(musicManager: MusicManager, guild: Guild, var boundChannel: T
         synchronized(queueLock) {
             if (player.playingTrack != null) return
 
-            if (songQueue.isEmpty()) {
+            if (songQueue.isEmpty() && repeatSongQueue.isEmpty()) {
                 boundChannel.sendMessage(embed {
                     description("\uD83C\uDFC1 Song Queue Finished!")
                 }).queue()
                 return
             }
 
-            val track = songQueue.poll() ?: return
+            val track = songQueue.poll() ?: repeatSongQueue.poll() ?: return
 
             player.playTrack(track)
         }
@@ -169,6 +183,14 @@ class MusicSession(musicManager: MusicManager, guild: Guild, var boundChannel: T
     }
 
     override fun onTrackEnd(player: AudioPlayer?, track: AudioTrack?, endReason: AudioTrackEndReason?) {
+        if (endReason == AudioTrackEndReason.FINISHED) {
+            if (repeatMode == RepeatMode.QUEUE) repeatSongQueue.add(track!!)
+            if (repeatMode == RepeatMode.SINGLE) {
+                synchronized(queueLock) {
+                    this.player.playTrack(track)
+                }
+            }
+        }
         pollNextTrack()
     }
 

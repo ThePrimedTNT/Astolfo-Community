@@ -26,7 +26,7 @@ repositories {
 }
 
 dependencies {
-    compile "net.dv8tion:JDA:3.6.0_362"
+    compile "net.dv8tion:JDA:3.6.0_367"
     compile "com.github.Frederikam:Lavalink:2bb46dcd4ed93387805724cc9aba6afcc5a85355"
     compile "com.google.guava:guava:25.0-jre"
     compile "com.github.oopsjpeg:osu4j:2.0.0.1" // osu
