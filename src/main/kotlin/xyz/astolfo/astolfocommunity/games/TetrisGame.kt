@@ -13,8 +13,9 @@ import xyz.astolfo.astolfocommunity.title
 import java.awt.Point
 import java.util.*
 import java.util.concurrent.TimeUnit
+import kotlin.math.roundToInt
 
-class TetrisGame(gameHandler: GameHandler, member: Member, channel: TextChannel) : ReactionGame(gameHandler, member, channel, listOf(ROTATE_ANTICLOCKWISE_EMOTE, LEFT_EMOTE, RIGHT_EMOTE, ROTATE_CLOCKWISE_EMOTE)) {
+class TetrisGame(gameHandler: GameHandler, member: Member, channel: TextChannel) : ReactionGame(gameHandler, member, channel, listOf(ROTATE_ANTICLOCKWISE_EMOTE, LEFT_EMOTE, RIGHT_EMOTE, ROTATE_CLOCKWISE_EMOTE, QUICK_FALL_EMOTE)) {
 
     companion object {
         const val MAP_WIDTH = 7
@@ -26,6 +27,7 @@ class TetrisGame(gameHandler: GameHandler, member: Member, channel: TextChannel)
         const val ROTATE_CLOCKWISE_EMOTE = "↩"
         const val LEFT_EMOTE = "⬅"
         const val RIGHT_EMOTE = "➡"
+        const val QUICK_FALL_EMOTE = "⬇"
     }
 
     private val tetrominos = mutableListOf<Tetromino>()
@@ -41,6 +43,7 @@ class TetrisGame(gameHandler: GameHandler, member: Member, channel: TextChannel)
             ROTATE_CLOCKWISE_EMOTE -> rotate(true)
             LEFT_EMOTE -> move(-1)
             RIGHT_EMOTE -> move(1)
+            QUICK_FALL_EMOTE -> while (checkGravity(fallingTetromino!!, false));
         }
     }
 
@@ -55,8 +58,8 @@ class TetrisGame(gameHandler: GameHandler, member: Member, channel: TextChannel)
 
     private fun rotate(clockwise: Boolean) {
         val blocks = fallingTetromino?.blocks?.map { Point(it.x, it.y) } ?: return
-        val rotateAroundWidth = blocks.map { it.x }.average().toInt()
-        val rotateAroundHeight = blocks.map { it.y }.average().toInt()
+        val rotateAroundWidth = blocks.map { it.x }.average()
+        val rotateAroundHeight = blocks.map { it.y }.average()
         blocks.forEach {
             var x = it.x - rotateAroundWidth
             var y = it.y - rotateAroundHeight
@@ -68,8 +71,8 @@ class TetrisGame(gameHandler: GameHandler, member: Member, channel: TextChannel)
                 x = y
                 y = -x2
             }
-            it.x = x + rotateAroundWidth
-            it.y = y + rotateAroundHeight
+            it.x = (x + rotateAroundWidth).roundToInt()
+            it.y = (y + rotateAroundHeight).roundToInt()
         }
         while (blocks.map { it.x }.max() ?: 0 >= MAP_WIDTH) blocks.forEach { it.x-- }
         while (blocks.map { it.x }.min() ?: 0 < 0) blocks.forEach { it.x++ }
@@ -151,11 +154,16 @@ class TetrisGame(gameHandler: GameHandler, member: Member, channel: TextChannel)
     }
 
     private fun EmbedBuilder.render(dead: Boolean = false) {
+        val quickFallTetromino = fallingTetromino?.let {
+            val newTetromino = Tetromino(it.blocks.map { Point(it.x, it.y) }.toMutableList(), "❌")
+            while (checkGravity(newTetromino, true));
+            newTetromino
+        }
         title("${member.effectiveName}'s Tetris Game - Score: $score" + if (dead) " - Topped out!" else "")
         description((0 until MAP_HEIGHT).joinToString(separator = "\n") { y ->
             (0 until MAP_WIDTH).joinToString(separator = "") { x ->
                 val point = Point(x, y)
-                val tetromino = tetrominos.find { it.blocks.any { it == point } }
+                val tetromino = tetrominos.find { it.blocks.any { it == point } } ?: quickFallTetromino?.takeIf { it.blocks.any { it == point } }
                 tetromino?.emote ?: "\u2B1B"
             }
         } + if (dead) "\n**You have topped out!**" else "")
@@ -205,17 +213,25 @@ class TetrisGame(gameHandler: GameHandler, member: Member, channel: TextChannel)
     private fun checkGravity(checkFalling: Boolean): Boolean {
         tetrominos.forEach { tetromino ->
             if (!checkFalling && tetromino == fallingTetromino) return@forEach
-            val canFall = tetromino.blocks.none { fallingBlock ->
-                val newLocation = Point(fallingBlock.x, fallingBlock.y + 1)
-                if (newLocation.y >= MAP_HEIGHT) true
-                else tetrominos.any { it != tetromino && it.blocks.any { it == newLocation } }
+            if (checkGravity(tetromino, false)) return true
+        }
+        return false
+    }
+
+    private fun checkGravity(tetromino: Tetromino, ignoreFalling: Boolean): Boolean {
+        val canFall = tetromino.blocks.none { fallingBlock ->
+            val newLocation = Point(fallingBlock.x, fallingBlock.y + 1)
+            if (newLocation.y >= MAP_HEIGHT) true
+            else tetrominos.any {
+                if (ignoreFalling && it == fallingTetromino) false
+                else it != tetromino && it.blocks.any { it == newLocation }
             }
-            if (canFall) {
-                tetromino.blocks.forEach { it.y++ }
-                return true
-            } else if (tetromino == fallingTetromino) {
-                fallingTetromino = null
-            }
+        }
+        if (canFall) {
+            tetromino.blocks.forEach { it.y++ }
+            return true
+        } else if (tetromino == fallingTetromino) {
+            fallingTetromino = null
         }
         return false
     }
