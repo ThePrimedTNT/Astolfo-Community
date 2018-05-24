@@ -5,11 +5,8 @@ import kotlinx.coroutines.experimental.delay
 import kotlinx.coroutines.experimental.launch
 import net.dv8tion.jda.core.EmbedBuilder
 import net.dv8tion.jda.core.entities.Member
-import net.dv8tion.jda.core.entities.Message
 import net.dv8tion.jda.core.entities.TextChannel
-import net.dv8tion.jda.core.events.message.MessageDeleteEvent
-import net.dv8tion.jda.core.events.message.guild.react.GuildMessageReactionAddEvent
-import net.dv8tion.jda.core.hooks.ListenerAdapter
+import net.dv8tion.jda.core.events.message.react.GenericMessageReactionEvent
 import xyz.astolfo.astolfocommunity.description
 import xyz.astolfo.astolfocommunity.embed
 import xyz.astolfo.astolfocommunity.title
@@ -17,12 +14,17 @@ import java.awt.Point
 import java.util.*
 import java.util.concurrent.TimeUnit
 
-class SnakeGame(gameHandler: GameHandler, member: Member, channel: TextChannel) : Game(gameHandler, member, channel) {
+class SnakeGame(gameHandler: GameHandler, member: Member, channel: TextChannel) : ReactionGame(gameHandler, member, channel, listOf(LEFT_EMOTE, UP_EMOTE, DOWN_EMOTE, RIGHT_EMOTE)) {
 
     companion object {
         const val MAP_SIZE = 10
         const val UPDATE_SPEED = 2L
         private val random = Random()
+
+        const val UP_EMOTE = "\uD83D\uDD3C"
+        const val DOWN_EMOTE = "\uD83D\uDD3D"
+        const val LEFT_EMOTE = "\u2B05"
+        const val RIGHT_EMOTE = "\u27A1"
     }
 
     private var appleLocation = randomPoint()
@@ -30,30 +32,14 @@ class SnakeGame(gameHandler: GameHandler, member: Member, channel: TextChannel) 
     private var snakeDirection = SnakeDirection.UP
 
     private lateinit var updateJob: Job
-    private var currentMessage: Message? = null
 
-    private val listener = object : ListenerAdapter() {
-        override fun onGuildMessageReactionAdd(event: GuildMessageReactionAddEvent?) {
-            if (currentMessage?.idLong == event!!.messageIdLong && event.user.idLong != event.jda.selfUser.idLong) {
-                event.reaction.removeReaction(event.user).queue()
-            } else return
-
-            if (event.channel.idLong != channel.idLong || event.user.idLong != member.user.idLong) return
-
-            snakeDirection = when (event.reactionEmote.name) {
-                "\uD83D\uDD3C" -> SnakeDirection.UP
-                "\uD83D\uDD3D" -> SnakeDirection.DOWN
-                "\u2B05" -> SnakeDirection.LEFT
-                "\u27A1" -> SnakeDirection.RIGHT
-                else -> snakeDirection
-            }
-
-        }
-
-        override fun onMessageDelete(event: MessageDeleteEvent?) {
-            if(currentMessage?.idLong == event!!.messageIdLong){
-                endGame()
-            }
+    override fun onGenericMessageReaction(event: GenericMessageReactionEvent) {
+        snakeDirection = when (event.reactionEmote.name) {
+            UP_EMOTE -> SnakeDirection.UP
+            DOWN_EMOTE -> SnakeDirection.DOWN
+            LEFT_EMOTE -> SnakeDirection.LEFT
+            RIGHT_EMOTE -> SnakeDirection.RIGHT
+            else -> snakeDirection
         }
     }
 
@@ -62,11 +48,11 @@ class SnakeGame(gameHandler: GameHandler, member: Member, channel: TextChannel) 
     }
 
     override fun start() {
+        super.start()
+
         var startLocation = randomPoint()
         while (startLocation == appleLocation) startLocation = randomPoint()
         snake.add(startLocation)
-
-        channel.jda.addEventListener(listener)
 
         updateJob = launch {
             while (isActive) {
@@ -92,13 +78,13 @@ class SnakeGame(gameHandler: GameHandler, member: Member, channel: TextChannel) 
             snake.add(0, newPoint)
 
             if (snake.map { c1 -> snake.filter { c1 == it }.count() }.any { it > 1 }) {
-                currentMessage!!.editMessage(embed { render("Oof you ran into yourself!") }).queue()
+                setContent(embed { render("Oof you ran into yourself!") })
                 endGame()
                 return
             }
             if (snake.any { it.x < 0 || it.x >= MAP_SIZE || it.y < 0 || it.y >= MAP_SIZE }) {
                 snake.removeAt(0)
-                currentMessage!!.editMessage(embed { render("Oof your snake went outside its cage!") }).queue()
+                setContent(embed { render("Oof your snake went outside its cage!") })
                 endGame()
                 return
             }
@@ -112,17 +98,7 @@ class SnakeGame(gameHandler: GameHandler, member: Member, channel: TextChannel) 
             }
         }
 
-        val messageContent = embed { render() }
-
-        if (currentMessage == null) {
-            currentMessage = channel.sendMessage(messageContent).complete()
-            currentMessage!!.addReaction("\uD83D\uDD3C").complete()
-            currentMessage!!.addReaction("\uD83D\uDD3D").complete()
-            currentMessage!!.addReaction("⬅").complete()
-            currentMessage!!.addReaction("➡").complete()
-        } else {
-            currentMessage!!.editMessage(messageContent).complete()
-        }
+        setContent(embed { render() })
     }
 
     private fun EmbedBuilder.render(deadReason: String? = null) {
@@ -153,8 +129,7 @@ class SnakeGame(gameHandler: GameHandler, member: Member, channel: TextChannel) 
 
     override fun destroy() {
         updateJob.cancel()
-        channel.jda.removeEventListener(listener)
-        currentMessage?.clearReactions()?.queue()
+        super.destroy()
     }
 
 }

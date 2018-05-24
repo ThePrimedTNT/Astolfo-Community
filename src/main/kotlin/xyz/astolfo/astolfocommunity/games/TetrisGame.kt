@@ -5,11 +5,8 @@ import kotlinx.coroutines.experimental.delay
 import kotlinx.coroutines.experimental.launch
 import net.dv8tion.jda.core.EmbedBuilder
 import net.dv8tion.jda.core.entities.Member
-import net.dv8tion.jda.core.entities.Message
 import net.dv8tion.jda.core.entities.TextChannel
-import net.dv8tion.jda.core.events.message.MessageDeleteEvent
-import net.dv8tion.jda.core.events.message.guild.react.GuildMessageReactionAddEvent
-import net.dv8tion.jda.core.hooks.ListenerAdapter
+import net.dv8tion.jda.core.events.message.react.GenericMessageReactionEvent
 import xyz.astolfo.astolfocommunity.description
 import xyz.astolfo.astolfocommunity.embed
 import xyz.astolfo.astolfocommunity.title
@@ -17,13 +14,18 @@ import java.awt.Point
 import java.util.*
 import java.util.concurrent.TimeUnit
 
-class TetrisGame(gameHandler: GameHandler, member: Member, channel: TextChannel) : Game(gameHandler, member, channel) {
+class TetrisGame(gameHandler: GameHandler, member: Member, channel: TextChannel) : ReactionGame(gameHandler, member, channel, listOf(ROTATE_ANTICLOCKWISE_EMOTE, LEFT_EMOTE, RIGHT_EMOTE, ROTATE_CLOCKWISE_EMOTE)) {
 
     companion object {
         const val MAP_WIDTH = 7
         const val MAP_HEIGHT = 14
         const val UPDATE_SPEED = 2L
         private val random = Random()
+
+        const val ROTATE_ANTICLOCKWISE_EMOTE = "↪"
+        const val ROTATE_CLOCKWISE_EMOTE = "↩"
+        const val LEFT_EMOTE = "⬅"
+        const val RIGHT_EMOTE = "➡"
     }
 
     private val tetrominos = mutableListOf<Tetromino>()
@@ -32,28 +34,13 @@ class TetrisGame(gameHandler: GameHandler, member: Member, channel: TextChannel)
     private var fallingTetromino: Tetromino? = null
 
     private lateinit var updateJob: Job
-    private var currentMessage: Message? = null
 
-    private val listener = object : ListenerAdapter() {
-        override fun onGuildMessageReactionAdd(event: GuildMessageReactionAddEvent?) {
-            if (currentMessage?.idLong == event!!.messageIdLong && event.user.idLong != event.jda.selfUser.idLong) {
-                event.reaction.removeReaction(event.user).queue()
-            } else return
-
-            if (event.channel.idLong != channel.idLong || event.user.idLong != member.user.idLong) return
-
-            when (event.reactionEmote.name) {
-                "↪" -> rotate(false)
-                "↩" -> rotate(true)
-                "⬅" -> move(-1)
-                "➡" -> move(1)
-            }
-        }
-
-        override fun onMessageDelete(event: MessageDeleteEvent?) {
-            if (currentMessage?.idLong == event!!.messageIdLong) {
-                endGame()
-            }
+    override fun onGenericMessageReaction(event: GenericMessageReactionEvent) {
+        when (event.reactionEmote.name) {
+            ROTATE_ANTICLOCKWISE_EMOTE -> rotate(false)
+            ROTATE_CLOCKWISE_EMOTE -> rotate(true)
+            LEFT_EMOTE -> move(-1)
+            RIGHT_EMOTE -> move(1)
         }
     }
 
@@ -95,7 +82,7 @@ class TetrisGame(gameHandler: GameHandler, member: Member, channel: TextChannel)
     }
 
     override fun start() {
-        channel.jda.addEventListener(listener)
+        super.start()
 
         updateJob = launch {
             while (isActive) {
@@ -145,7 +132,7 @@ class TetrisGame(gameHandler: GameHandler, member: Member, channel: TextChannel)
             }.filter { it.second.isNotEmpty() }
 
             if (pieces.isEmpty()) {
-                currentMessage!!.editMessage(embed { render(true) }).queue()
+                setContent(embed { render(true) })
                 endGame()
                 return
             }
@@ -160,17 +147,7 @@ class TetrisGame(gameHandler: GameHandler, member: Member, channel: TextChannel)
             tetrominos.add(fallingTetromino!!)
         }
 
-        val messageContent = embed { render() }
-
-        if (currentMessage == null) {
-            currentMessage = channel.sendMessage(messageContent).complete()
-            currentMessage!!.addReaction("↪").complete()
-            currentMessage!!.addReaction("⬅").complete()
-            currentMessage!!.addReaction("➡").complete()
-            currentMessage!!.addReaction("↩").complete()
-        } else {
-            currentMessage!!.editMessage(messageContent).complete()
-        }
+        setContent(embed { render() })
     }
 
     private fun EmbedBuilder.render(dead: Boolean = false) {
@@ -179,8 +156,7 @@ class TetrisGame(gameHandler: GameHandler, member: Member, channel: TextChannel)
             (0 until MAP_WIDTH).joinToString(separator = "") { x ->
                 val point = Point(x, y)
                 val tetromino = tetrominos.find { it.blocks.any { it == point } }
-                if (tetromino != null) tetromino.emote
-                else "\u2B1B"
+                tetromino?.emote ?: "\u2B1B"
             }
         } + if (dead) "\n**You have topped out!**" else "")
     }
@@ -246,8 +222,7 @@ class TetrisGame(gameHandler: GameHandler, member: Member, channel: TextChannel)
 
     override fun destroy() {
         updateJob.cancel()
-        channel.jda.removeEventListener(listener)
-        currentMessage?.clearReactions()?.queue()
+        super.destroy()
     }
 
     class Tetromino(var blocks: MutableList<Point>, val emote: String)
