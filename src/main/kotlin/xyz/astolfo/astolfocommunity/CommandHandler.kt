@@ -112,7 +112,7 @@ class CommandHandler(val astolfoCommunityApplication: AstolfoCommunityApplicatio
         val command = commands.find { it.name.equals(commandName, ignoreCase = true) || it.alts.any { it.equals(commandName, ignoreCase = true) } }
                 ?: return false
 
-        val newCommandPath = "$commandPath ${command.name}"
+        val newCommandPath = "$commandPath ${command.name}".trim()
 
         val execution = CommandExecution(astolfoCommunityApplication, event, newCommandPath, commandContent, timeIssued)
 

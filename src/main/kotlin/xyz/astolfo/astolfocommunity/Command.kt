@@ -2,7 +2,6 @@ package xyz.astolfo.astolfocommunity
 
 import com.jagrosh.jdautilities.commons.utils.FinderUtil
 import kotlinx.coroutines.experimental.Job
-import kotlinx.coroutines.experimental.async
 import kotlinx.coroutines.experimental.delay
 import kotlinx.coroutines.experimental.launch
 import net.dv8tion.jda.core.entities.Member
@@ -15,9 +14,28 @@ class Command(val name: String, val alts: Array<out String>, val subCommands: Li
 
 class CommandBuilder(private val name: String, private val alts: Array<out String>) {
     val subCommands = mutableListOf<Command>()
-    var action: CommandExecution.() -> Unit = { messageAction("Hello! This is a default command!").queue() }
+    var action: CommandExecution.() -> Unit = {
+        val guildSettings = application.astolfoRepositories.getEffectiveGuildSettings(event.guild.idLong)
+        messageAction("Unknown command! Type **${guildSettings.prefix.takeIf { it.isNotBlank() }
+                ?: application.properties.default_prefix}$commandPath help** for a list of commands.").queue()
+    }
     var inheritedAction: CommandExecution.() -> Boolean = { true }
-    fun build() = Command(name, alts, subCommands, inheritedAction, action)
+    fun build(): Command {
+        if (subCommands.isNotEmpty()) {
+            command("help") {
+                action {
+                    val guildSettings = application.astolfoRepositories.getEffectiveGuildSettings(event.guild.idLong)
+                    messageAction(embed {
+                        title("Astolfo ${this@CommandBuilder.name.capitalize()} Help")
+                        description(this@CommandBuilder.subCommands.joinToString(separator = "\n") { subCommand ->
+                            "${guildSettings.prefix.takeIf { it.isNotBlank() } ?: application.properties.default_prefix}${commandPath.substringBeforeLast(" ").trim()} **${subCommand.name}**"
+                        })
+                    }).queue()
+                }
+            }
+        }
+        return Command(name, alts, subCommands, inheritedAction, action)
+    }
 }
 
 fun CommandBuilder.command(subName: String, vararg alts: String, builder: CommandBuilder.() -> Unit) {
@@ -41,20 +59,20 @@ fun CommandExecution.messageAction(embed: MessageEmbed) = event.channel.sendMess
 fun CommandExecution.messageAction(msg: Message) = event.channel.sendMessage(msg)!!
 
 fun <T> CommandExecution.tempMessage(msg: Message, temp: () -> T): T {
-    val messageAsync = async { messageAction(msg).complete() }
+    val messageAsync = messageAction(msg).submit()
     val toReturn = temp.invoke()
-    launch { messageAsync.await().delete().queue() }
+    messageAsync.thenAcceptAsync { it.delete().queue() }
     return toReturn
 }
 
 fun CommandExecution.session() = application.commandHandler.commandSessionMap.get(CommandHandler.SessionKey(event.guild.idLong, event.author.idLong, event.channel.idLong), { CommandSession(commandPath) })!!
 fun CommandExecution.updatable(rate: Long, unit: TimeUnit = TimeUnit.SECONDS, updater: (CommandSession) -> Unit) = session().updatable(rate, unit, updater)
 fun CommandExecution.updatableMessage(rate: Long, unit: TimeUnit = TimeUnit.SECONDS, messageUpdater: () -> MessageEmbed) {
-    var messageAsync = async { messageAction(messageUpdater.invoke()).complete() }
+    var messageAsync = messageAction(messageUpdater.invoke()).submit()
     updatable(rate, unit) {
-        if (!messageAsync.isCompleted) return@updatable
-        val message = messageAsync.getCompleted()!!
-        messageAsync = async { message.editMessage(messageUpdater.invoke()).complete() }
+        if (!messageAsync.isDone) return@updatable
+        val message = messageAsync.get()!!
+        messageAsync = message.editMessage(messageUpdater.invoke()).submit()
     }
 }
 
@@ -66,12 +84,12 @@ fun CommandExecution.getProfile() = application.astolfoRepositories.getEffective
 fun CommandExecution.selectMember(title: String, query: String, response: CommandExecution.(Member) -> Unit) {
     val results = FinderUtil.findMembers(query, event.guild)
 
-    if(results.isEmpty()){
+    if (results.isEmpty()) {
         messageAction("Unknown Member!").queue()
         return
     }
 
-    if(results.size == 1){
+    if (results.size == 1) {
         response.invoke(this, results.first())
         return
     }

@@ -24,6 +24,7 @@ import net.dv8tion.jda.core.entities.Guild
 import net.dv8tion.jda.core.entities.Message
 import net.dv8tion.jda.core.entities.TextChannel
 import net.dv8tion.jda.core.entities.VoiceChannel
+import net.dv8tion.jda.core.requests.RequestFuture
 import xyz.astolfo.astolfocommunity.*
 import java.net.MalformedURLException
 import java.net.URI
@@ -114,7 +115,7 @@ class MusicSession(musicManager: MusicManager, guild: Guild, var boundChannel: T
 
     var lastSeenMember = System.currentTimeMillis()
 
-    private var nowPlayingMessage: Message? = null
+    private var nowPlayingMessage: RequestFuture<Message>? = null
 
     var repeatMode = RepeatMode.NOTHING
         set(value) {
@@ -179,12 +180,15 @@ class MusicSession(musicManager: MusicManager, guild: Guild, var boundChannel: T
             }
         }
 
-        val lastMessage = nowPlayingMessage
-        nowPlayingMessage = if (lastMessage != null && boundChannel.hasLatestMessage() && boundChannel.latestMessageIdLong == lastMessage.idLong) {
-            lastMessage.editMessage(newMessage).complete()
+        nowPlayingMessage = if (nowPlayingMessage == null) {
+            boundChannel.sendMessage(newMessage).submit()
         } else {
-            lastMessage?.delete()?.queue()
-            boundChannel.sendMessage(newMessage).complete()
+            val oldMessage = nowPlayingMessage!!.get()
+            if (boundChannel.hasLatestMessage() && boundChannel.latestMessageIdLong == oldMessage.idLong) {
+                oldMessage.editMessage(newMessage).submit()
+            } else {
+                boundChannel.sendMessage(newMessage).submit()
+            }
         }
     }
 
@@ -203,7 +207,7 @@ class MusicSession(musicManager: MusicManager, guild: Guild, var boundChannel: T
     fun destroy() {
         player.removeListener(this)
         player.link.resetPlayer()
-        nowPlayingMessage?.delete()?.queue()
+        nowPlayingMessage?.thenAccept { it.delete().queue() }
     }
 
 }

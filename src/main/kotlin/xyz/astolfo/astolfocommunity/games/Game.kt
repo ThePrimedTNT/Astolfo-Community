@@ -7,6 +7,7 @@ import net.dv8tion.jda.core.entities.TextChannel
 import net.dv8tion.jda.core.events.message.MessageDeleteEvent
 import net.dv8tion.jda.core.events.message.react.GenericMessageReactionEvent
 import net.dv8tion.jda.core.hooks.ListenerAdapter
+import net.dv8tion.jda.core.requests.RequestFuture
 import java.util.concurrent.ConcurrentHashMap
 
 class GameHandler {
@@ -40,13 +41,13 @@ abstract class Game(val gameHandler: GameHandler, val member: Member, val channe
 
 abstract class ReactionGame(gameHandler: GameHandler, member: Member, channel: TextChannel, private val reactions: List<String>) : Game(gameHandler, member, channel) {
 
-    protected var currentMessage: Message? = null
+    protected var currentMessage: RequestFuture<Message>? = null
 
     private val listener = object : ListenerAdapter() {
         override fun onGenericMessageReaction(event: GenericMessageReactionEvent?) {
-            if (event!!.user.idLong == event.jda.selfUser.idLong) return
+            if (currentMessage == null || event!!.user.idLong == event.jda.selfUser.idLong) return
 
-            if (currentMessage?.idLong != event.messageIdLong || event.user.isBot) return
+            if (!currentMessage!!.isDone || currentMessage!!.get().idLong != event.messageIdLong || event.user.isBot) return
 
             if (event.user.idLong != member.user.idLong) {
                 event.reaction.removeReaction(event.user).queue()
@@ -57,16 +58,18 @@ abstract class ReactionGame(gameHandler: GameHandler, member: Member, channel: T
         }
 
         override fun onMessageDelete(event: MessageDeleteEvent?) {
-            if (currentMessage?.idLong == event!!.messageIdLong) endGame()
+            if (currentMessage?.get()?.idLong == event!!.messageIdLong) endGame()
         }
     }
 
     protected fun setContent(messageEmbed: MessageEmbed) {
         if (currentMessage == null) {
-            currentMessage = channel.sendMessage(messageEmbed).complete()
-            reactions.forEach { currentMessage!!.addReaction(it).complete() }
+            currentMessage = channel.sendMessage(messageEmbed).submit()
+            currentMessage!!.thenAccept { message ->
+                reactions.forEach { message.addReaction(it).queue() }
+            }
         } else {
-            currentMessage!!.editMessage(messageEmbed).complete()
+            currentMessage = currentMessage!!.get().editMessage(messageEmbed).submit()
         }
     }
 
@@ -78,7 +81,7 @@ abstract class ReactionGame(gameHandler: GameHandler, member: Member, channel: T
 
     override fun destroy() {
         channel.jda.removeEventListener(listener)
-        currentMessage?.clearReactions()?.queue()
+        currentMessage?.thenAccept { it.clearReactions().queue() }
     }
 
 }
