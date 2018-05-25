@@ -77,11 +77,6 @@ class SnakeGame(gameHandler: GameHandler, member: Member, channel: TextChannel) 
 
             snake.add(0, newPoint)
 
-            if (snake.map { c1 -> snake.filter { c1 == it }.count() }.any { it > 1 }) {
-                setContent(embed { render("Oof you ran into yourself!") })
-                endGame()
-                return
-            }
             if (snake.any { it.x < 0 || it.x >= MAP_SIZE || it.y < 0 || it.y >= MAP_SIZE }) {
                 snake.removeAt(0)
                 setContent(embed { render("Oof your snake went outside its cage!") })
@@ -95,6 +90,12 @@ class SnakeGame(gameHandler: GameHandler, member: Member, channel: TextChannel) 
                 appleLocation = startLocation
             } else {
                 snake.removeAt(snake.size - 1)
+            }
+
+            if (snake.map { c1 -> snake.filter { c1 == it }.count() }.any { it > 1 }) {
+                setContent(embed { render("Oof you ran into yourself!") })
+                endGame()
+                return
             }
         }
 

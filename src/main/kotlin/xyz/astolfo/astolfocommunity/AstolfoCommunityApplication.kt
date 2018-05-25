@@ -36,7 +36,7 @@ class AstolfoCommunityApplication(final val astolfoRepositories: AstolfoReposito
                 .setToken(properties.token)
                 .setStatus(OnlineStatus.DO_NOT_DISTURB)
                 .setGame(Game.watching("myself boot"))
-                .addEventListeners(commandHandler, musicManager.lavaLink)
+                .addEventListeners(commandHandler, musicManager.lavaLink, musicManager.musicManagerListener)
                 .setShardsTotal(properties.shard_count)
                 .build()
         launch {

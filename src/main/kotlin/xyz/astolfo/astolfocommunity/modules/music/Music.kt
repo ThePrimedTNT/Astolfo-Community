@@ -24,6 +24,8 @@ import net.dv8tion.jda.core.entities.Guild
 import net.dv8tion.jda.core.entities.Message
 import net.dv8tion.jda.core.entities.TextChannel
 import net.dv8tion.jda.core.entities.VoiceChannel
+import net.dv8tion.jda.core.events.guild.GuildLeaveEvent
+import net.dv8tion.jda.core.hooks.ListenerAdapter
 import net.dv8tion.jda.core.requests.RequestFuture
 import xyz.astolfo.astolfocommunity.*
 import java.net.MalformedURLException
@@ -41,6 +43,12 @@ class MusicManager(astolfoCommunityApplication: AstolfoCommunityApplication, pro
             properties.shard_count,
             { shardId -> astolfoCommunityApplication.shardManager.getShardById(shardId) }
     )
+
+    val musicManagerListener = object : ListenerAdapter() {
+        override fun onGuildLeave(event: GuildLeaveEvent?) {
+            stopMusicSession(event!!.guild)
+        }
+    }
 
     val audioPlayerManager = DefaultAudioPlayerManager()
 

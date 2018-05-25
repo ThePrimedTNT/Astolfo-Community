@@ -15,7 +15,7 @@ import java.util.*
 import java.util.concurrent.TimeUnit
 import kotlin.math.roundToInt
 
-class TetrisGame(gameHandler: GameHandler, member: Member, channel: TextChannel) : ReactionGame(gameHandler, member, channel, listOf(ROTATE_ANTICLOCKWISE_EMOTE, LEFT_EMOTE, RIGHT_EMOTE, ROTATE_CLOCKWISE_EMOTE, QUICK_FALL_EMOTE)) {
+class TetrisGame(gameHandler: GameHandler, member: Member, channel: TextChannel) : ReactionGame(gameHandler, member, channel, listOf(ROTATE_ANTICLOCKWISE_EMOTE, LEFT_EMOTE, QUICK_FALL_EMOTE, RIGHT_EMOTE, ROTATE_CLOCKWISE_EMOTE)) {
 
     companion object {
         const val MAP_WIDTH = 7
