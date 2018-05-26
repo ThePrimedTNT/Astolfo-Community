@@ -4,7 +4,6 @@ import kotlinx.coroutines.experimental.launch
 import net.dv8tion.jda.core.entities.Message
 import net.dv8tion.jda.core.events.message.react.GenericMessageReactionEvent
 import net.dv8tion.jda.core.hooks.ListenerAdapter
-import net.dv8tion.jda.core.requests.RequestFuture
 import kotlin.math.max
 import kotlin.math.min
 
@@ -71,12 +70,12 @@ class Paginator(private val commandExecution: CommandExecution, val titleProvide
             return providedContent.mapIndexed { index, s -> "`${index + 1 + indexOffset}` $s" }.fold("", { a, b -> "$a\n$b" })
         }
 
-    private var message: RequestFuture<Message>? = null
+    private var message: AsyncMessage? = null
 
     private val listener = object : ListenerAdapter() {
         override fun onGenericMessageReaction(event: GenericMessageReactionEvent?) {
             if (event!!.user.idLong != commandExecution.event.author.idLong) return
-            if (!message!!.isDone || message!!.get().idLong != event.messageIdLong) return
+            if (message?.getIdLong() != event.messageIdLong) return
             val name = event.reactionEmote.name
             if (name == SELECT) {
                 destroy()
@@ -110,7 +109,7 @@ class Paginator(private val commandExecution: CommandExecution, val titleProvide
         commandExecution.session().removeDestroyListener(destroyListener)
         commandExecution.event.jda.removeEventListener(listener)
         launch {
-            message?.thenAcceptAsync { it.delete().queue() }
+            message?.delete()
             message = null
         }
     }
@@ -126,20 +125,21 @@ class Paginator(private val commandExecution: CommandExecution, val titleProvide
     fun render() {
         if (isDestroyed) return
         val newMessage = renderer.invoke(this@Paginator)
-        message = if (message == null) commandExecution.messageAction(newMessage).submit().apply {
-            thenAccept { newMessage ->
-                val pageCount = provider.pageCount
-                val emotes = mutableListOf<String>()
-                if (pageCount > 2) emotes.add(START_ARROW)
-                if (pageCount > 1) emotes.add(BACK_ARROW)
-                emotes.add(SELECT)
-                if (pageCount > 1) emotes.add(FORWARD_ARROW)
-                if (pageCount > 2) emotes.add(END_ARROW)
+        if (message == null) {
+            message = commandExecution.messageAction(newMessage).sendAsync()
 
-                emotes.forEach { newMessage.addReaction(it).queue() }
-            }
+            val pageCount = provider.pageCount
+            val emotes = mutableListOf<String>()
+            if (pageCount > 2) emotes.add(START_ARROW)
+            if (pageCount > 1) emotes.add(BACK_ARROW)
+            emotes.add(SELECT)
+            if (pageCount > 1) emotes.add(FORWARD_ARROW)
+            if (pageCount > 2) emotes.add(END_ARROW)
+
+            emotes.forEach { message!!.addReaction(it) }
+        } else {
+            message!!.editMessage(newMessage)
         }
-        else message!!.get().editMessage(newMessage).submit()
     }
 
 }

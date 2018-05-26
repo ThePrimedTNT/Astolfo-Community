@@ -59,24 +59,22 @@ fun CommandExecution.messageAction(embed: MessageEmbed) = event.channel.sendMess
 fun CommandExecution.messageAction(msg: Message) = event.channel.sendMessage(msg)!!
 
 fun <T> CommandExecution.tempMessage(msg: Message, temp: () -> T): T {
-    val messageAsync = messageAction(msg).submit()
+    val messageAsync = messageAction(msg).sendAsync()
     val toReturn = temp.invoke()
-    messageAsync.thenAcceptAsync { it.delete().queue() }
+    messageAsync.delete()
     return toReturn
 }
 
 fun CommandExecution.session() = application.commandHandler.commandSessionMap.get(CommandHandler.SessionKey(event.guild.idLong, event.author.idLong, event.channel.idLong), { CommandSession(commandPath) })!!
 fun CommandExecution.updatable(rate: Long, unit: TimeUnit = TimeUnit.SECONDS, updater: (CommandSession) -> Unit) = session().updatable(rate, unit, updater)
 fun CommandExecution.updatableMessage(rate: Long, unit: TimeUnit = TimeUnit.SECONDS, messageUpdater: () -> MessageEmbed) {
-    var messageAsync = messageAction(messageUpdater.invoke()).submit()
+    val messageAsync = messageAction(messageUpdater.invoke()).sendAsync()
     updatable(rate, unit) {
-        if (!messageAsync.isDone) return@updatable
-        val message = messageAsync.get()!!
-        messageAsync = message.editMessage(messageUpdater.invoke()).submit()
+        messageAsync.editMessage(messageUpdater.invoke())
     }
 }
 
-fun CommandExecution.responseListener(listener: ResponseListener.(CommandExecution) -> Boolean) = session().addReponseListener(listener)
+fun CommandExecution.responseListener(listener: ResponseListener.(CommandExecution) -> Boolean) = session().addResponseListener(listener)
 fun CommandExecution.destroyListener(listener: () -> Unit) = session().addDestroyListener(listener)
 
 fun CommandExecution.getProfile() = application.astolfoRepositories.getEffectiveUserProfile(event.author.idLong)
@@ -146,8 +144,8 @@ class CommandSession(val commandPath: String) {
 
     fun addDestroyListener(listener: () -> Unit) = destroyListener.add(listener)
     fun removeDestroyListener(listener: () -> Unit) = destroyListener.remove(listener)
-    fun addReponseListener(listener: ResponseListener.(CommandExecution) -> Boolean) = responseListeners.add(listener)
-    fun removeReponseListener(listener: ResponseListener.(CommandExecution) -> Boolean) = responseListeners.remove(listener)
+    fun addResponseListener(listener: ResponseListener.(CommandExecution) -> Boolean) = responseListeners.add(listener)
+    fun removeResponseListener(listener: ResponseListener.(CommandExecution) -> Boolean) = responseListeners.remove(listener)
     fun hasResponseListeners() = responseListeners.isNotEmpty()
 
     fun shouldRunCommand(execution: CommandExecution): Boolean {
@@ -165,5 +163,5 @@ class CommandSession(val commandPath: String) {
 }
 
 class ResponseListener(val session: CommandSession, val listener: ResponseListener.(CommandExecution) -> Boolean) {
-    fun removeListener() = session.removeReponseListener(listener)
+    fun removeListener() = session.removeResponseListener(listener)
 }

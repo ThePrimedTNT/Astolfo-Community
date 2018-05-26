@@ -1,13 +1,13 @@
 package xyz.astolfo.astolfocommunity.games
 
 import net.dv8tion.jda.core.entities.Member
-import net.dv8tion.jda.core.entities.Message
 import net.dv8tion.jda.core.entities.MessageEmbed
 import net.dv8tion.jda.core.entities.TextChannel
 import net.dv8tion.jda.core.events.message.MessageDeleteEvent
 import net.dv8tion.jda.core.events.message.react.GenericMessageReactionEvent
 import net.dv8tion.jda.core.hooks.ListenerAdapter
-import net.dv8tion.jda.core.requests.RequestFuture
+import xyz.astolfo.astolfocommunity.AsyncMessage
+import xyz.astolfo.astolfocommunity.sendAsync
 import java.util.concurrent.ConcurrentHashMap
 
 class GameHandler {
@@ -29,7 +29,7 @@ class GameHandler {
 
 }
 
-abstract class Game(val gameHandler: GameHandler, val member: Member, val channel: TextChannel) {
+abstract class Game(protected val gameHandler: GameHandler, val member: Member, val channel: TextChannel) {
 
     abstract fun start()
 
@@ -41,13 +41,13 @@ abstract class Game(val gameHandler: GameHandler, val member: Member, val channe
 
 abstract class ReactionGame(gameHandler: GameHandler, member: Member, channel: TextChannel, private val reactions: List<String>) : Game(gameHandler, member, channel) {
 
-    protected var currentMessage: RequestFuture<Message>? = null
+    protected var currentMessage: AsyncMessage? = null
 
     private val listener = object : ListenerAdapter() {
         override fun onGenericMessageReaction(event: GenericMessageReactionEvent?) {
             if (currentMessage == null || event!!.user.idLong == event.jda.selfUser.idLong) return
 
-            if (!currentMessage!!.isDone || currentMessage!!.get().idLong != event.messageIdLong || event.user.isBot) return
+            if (currentMessage!!.getIdLong() != event.messageIdLong || event.user.isBot) return
 
             if (event.user.idLong != member.user.idLong) {
                 event.reaction.removeReaction(event.user).queue()
@@ -58,18 +58,16 @@ abstract class ReactionGame(gameHandler: GameHandler, member: Member, channel: T
         }
 
         override fun onMessageDelete(event: MessageDeleteEvent?) {
-            if (currentMessage?.get()?.idLong == event!!.messageIdLong) endGame()
+            if (currentMessage?.getIdLong() == event!!.messageIdLong) endGame()
         }
     }
 
     protected fun setContent(messageEmbed: MessageEmbed) {
         if (currentMessage == null) {
-            currentMessage = channel.sendMessage(messageEmbed).submit()
-            currentMessage!!.thenAccept { message ->
-                reactions.forEach { message.addReaction(it).queue() }
-            }
+            currentMessage = channel.sendMessage(messageEmbed).sendAsync()
+            reactions.forEach { currentMessage!!.addReaction(it) }
         } else {
-            currentMessage = currentMessage!!.get().editMessage(messageEmbed).submit()
+            currentMessage!!.editMessage(messageEmbed)
         }
     }
 
@@ -81,7 +79,7 @@ abstract class ReactionGame(gameHandler: GameHandler, member: Member, channel: T
 
     override fun destroy() {
         channel.jda.removeEventListener(listener)
-        currentMessage?.thenAccept { it.clearReactions().queue() }
+        currentMessage?.clearReactions()
     }
 
 }

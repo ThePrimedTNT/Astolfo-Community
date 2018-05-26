@@ -21,20 +21,15 @@ import kotlinx.coroutines.experimental.launch
 import lavalink.client.io.Lavalink
 import lavalink.client.player.event.AudioEventAdapterWrapped
 import net.dv8tion.jda.core.entities.Guild
-import net.dv8tion.jda.core.entities.Message
 import net.dv8tion.jda.core.entities.TextChannel
 import net.dv8tion.jda.core.entities.VoiceChannel
 import net.dv8tion.jda.core.events.guild.GuildLeaveEvent
 import net.dv8tion.jda.core.hooks.ListenerAdapter
-import net.dv8tion.jda.core.requests.RequestFuture
 import xyz.astolfo.astolfocommunity.*
 import java.net.MalformedURLException
 import java.net.URI
 import java.net.URL
-import java.util.concurrent.CompletableFuture
-import java.util.concurrent.ConcurrentHashMap
-import java.util.concurrent.LinkedBlockingDeque
-import java.util.concurrent.TimeUnit
+import java.util.concurrent.*
 import java.util.concurrent.atomic.AtomicInteger
 
 class MusicManager(astolfoCommunityApplication: AstolfoCommunityApplication, properties: AstolfoProperties) {
@@ -123,7 +118,7 @@ class MusicSession(musicManager: MusicManager, guild: Guild, var boundChannel: T
 
     var lastSeenMember = System.currentTimeMillis()
 
-    private var nowPlayingMessage: RequestFuture<Message>? = null
+    private var nowPlayingMessage: AsyncMessage? = null
 
     var repeatMode = RepeatMode.NOTHING
         set(value) {
@@ -188,14 +183,15 @@ class MusicSession(musicManager: MusicManager, guild: Guild, var boundChannel: T
             }
         }
 
-        nowPlayingMessage = if (nowPlayingMessage == null) {
-            boundChannel.sendMessage(newMessage).submit()
-        } else {
-            val oldMessage = nowPlayingMessage!!.get()
-            if (boundChannel.hasLatestMessage() && boundChannel.latestMessageIdLong == oldMessage.idLong) {
-                oldMessage.editMessage(newMessage).submit()
-            } else {
-                boundChannel.sendMessage(newMessage).submit()
+        if (nowPlayingMessage == null) {
+            nowPlayingMessage = boundChannel.sendMessage(newMessage).sendAsync()
+        }else{
+            val messageId = nowPlayingMessage?.getIdLong()
+            if(messageId != null && boundChannel.hasLatestMessage() && boundChannel.latestMessageIdLong == messageId){
+                nowPlayingMessage!!.editMessage(newMessage)
+            }else{
+                nowPlayingMessage!!.delete()
+                nowPlayingMessage = boundChannel.sendMessage(newMessage).sendAsync()
             }
         }
     }
@@ -215,7 +211,7 @@ class MusicSession(musicManager: MusicManager, guild: Guild, var boundChannel: T
     fun destroy() {
         player.removeListener(this)
         player.link.resetPlayer()
-        nowPlayingMessage?.thenAccept { it.delete().queue() }
+        nowPlayingMessage?.delete()
     }
 
 }
