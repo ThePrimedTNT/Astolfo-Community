@@ -25,6 +25,8 @@ class GameHandler {
         game.start()
     }
 
+    fun getGames(channelId: Long): List<Game> = gameSessionMap.values.filter { it.channel.idLong == channelId }
+
     data class GameSessionKey(val channelId: Long, val userId: Long)
 
 }

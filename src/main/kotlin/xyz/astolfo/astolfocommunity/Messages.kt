@@ -46,6 +46,7 @@ fun Message.toAsync() = AsyncMessage(Promise(this))
 class AsyncMessage(asyncMessage: RequestFuture<Message>) {
 
     private var cachedMessage: Message? = null
+    private var deleted = false
 
     private val waitingActions = mutableListOf<(Message) -> Unit>()
 
@@ -63,7 +64,7 @@ class AsyncMessage(asyncMessage: RequestFuture<Message>) {
         synchronized(waitingActions) {
             if (cachedMessage != null) {
                 action.invoke(cachedMessage!!)
-            } else {
+            } else if (!deleted) {
                 waitingActions.add(action)
             }
         }
@@ -79,40 +80,55 @@ class AsyncMessage(asyncMessage: RequestFuture<Message>) {
         if (newEditTime < cachedEditTime) cachedMessage = newMessage
     }
 
-    fun addReaction(emote: Emote?) {
-        thenApply { it.addReaction(emote).queue() }
+    fun addReaction(emote: Emote?, response: () -> Unit = {}) {
+        thenApply { it.addReaction(emote).queue({ response.invoke() }) }
     }
 
-    fun addReaction(unicode: String?) {
-        thenApply { it.addReaction(unicode).queue() }
+    fun addReaction(unicode: String?, response: () -> Unit = {}) {
+        thenApply { it.addReaction(unicode).queue({ response.invoke() }) }
     }
 
-    fun clearReactions() {
-        thenApply { it.clearReactions().queue() }
+    fun clearReactions(response: () -> Unit = {}) {
+        thenApply { it.clearReactions().queue({ response.invoke() }) }
     }
 
     fun getIdLong(): Long? = cachedMessage?.idLong
 
-    fun editMessage(newContent: CharSequence?) {
+    fun editMessage(newContent: CharSequence?, response: (Message) -> Unit = {}) {
         thenApply { oldMessage ->
-            oldMessage.editMessage(newContent).queue { newMessage -> updateCachedWithNew(newMessage) }
+            oldMessage.editMessage(newContent).queue { newMessage ->
+                updateCachedWithNew(newMessage)
+                response.invoke(newMessage)
+            }
         }
     }
 
-    fun editMessage(newContent: MessageEmbed?) {
+    fun editMessage(newContent: MessageEmbed?, response: (Message) -> Unit = {}) {
         thenApply { oldMessage ->
-            oldMessage.editMessage(newContent).queue { newMessage -> updateCachedWithNew(newMessage) }
+            oldMessage.editMessage(newContent).queue { newMessage ->
+                updateCachedWithNew(newMessage)
+                response.invoke(newMessage)
+            }
         }
     }
 
-    fun editMessage(newContent: Message?) {
+    fun editMessage(newContent: Message?, response: (Message) -> Unit = {}) {
         thenApply { oldMessage ->
-            oldMessage.editMessage(newContent).queue { newMessage -> updateCachedWithNew(newMessage) }
+            oldMessage.editMessage(newContent).queue { newMessage ->
+                updateCachedWithNew(newMessage)
+                response.invoke(newMessage)
+            }
         }
     }
 
-    fun delete() {
-        thenApply { it.delete().queue { cachedMessage = null } }
+    fun delete(response: () -> Unit = {}) {
+        thenApply {
+            it.delete().queue {
+                deleted = true
+                cachedMessage = null
+                response.invoke()
+            }
+        }
     }
 
 }

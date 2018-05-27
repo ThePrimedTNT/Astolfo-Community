@@ -7,6 +7,7 @@ import com.oopsjpeg.osu4j.backend.Osu
 import net.dv8tion.jda.core.MessageBuilder
 import org.jsoup.Jsoup
 import xyz.astolfo.astolfocommunity.*
+import xyz.astolfo.astolfocommunity.games.ShiritoriGame
 import xyz.astolfo.astolfocommunity.games.SnakeGame
 import xyz.astolfo.astolfocommunity.games.TetrisGame
 import java.util.*
@@ -179,8 +180,9 @@ fun createFunModule() = module("Fun") {
         action {
             messageAction(embed {
                 title("Astolfo Game Help")
-                description("**game**  -  starts a game of snake!\n" +
-                        "**tetris** - starts a game of tetris!\n\n" +
+                description("**snake**  -  starts a game of snake!\n" +
+                        "**tetris** - starts a game of tetris!\n" +
+                        "**shiritori [easy/normal/hard/impossible]** - starts a game of shiritori!\n\n" +
                         "**stop** - stops the current game your playing")
             }).queue()
         }
@@ -196,6 +198,25 @@ fun createFunModule() = module("Fun") {
                 val gameHandler = application.gameHandler
                 messageAction("Starting the game of tetris...").queue()
                 gameHandler.startGame(event.channel.idLong, event.author.idLong, TetrisGame(gameHandler, event.member, event.textChannel))
+            }
+        }
+        command("shiritori") {
+            action {
+                val gameHandler = application.gameHandler
+                if (gameHandler.getGames(event.channel.idLong).any { it is ShiritoriGame }) {
+                    messageAction("Only one game of Shiritori is allowed per channel!").queue()
+                    return@action
+                }
+                val difficulty = args.takeIf { it.isNotBlank() }?.let { string ->
+                    val choosen = ShiritoriGame.Difficulty.values().find { string.equals(it.name, true) }
+                    if (choosen == null) {
+                        messageAction("Unknown difficulty! Valid difficulties: **Easy**, **Normal**, **Hard**, **Impossible**").queue()
+                        return@action
+                    }
+                    choosen
+                } ?: ShiritoriGame.Difficulty.NORMAL
+                messageAction("Starting the game of Shiritori with difficulty **${difficulty.name.toLowerCase().capitalize()}**...").queue()
+                gameHandler.startGame(event.channel.idLong, event.author.idLong, ShiritoriGame(gameHandler, event.member, event.textChannel, difficulty))
             }
         }
     }
