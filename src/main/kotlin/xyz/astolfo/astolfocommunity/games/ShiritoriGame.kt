@@ -46,20 +46,23 @@ class ShiritoriGame(gameHandler: GameHandler, member: Member, channel: TextChann
     }
 
     private val usedWords = mutableListOf<String>()
-    private var turn = Turn.PLAYER_1
-    private val scoreMap = mutableMapOf<Turn, Double>()
     private var startLetter = ('a'..'z').toList().let { it[random.nextInt(it.size)] }
     private var lastWordTime = 0L
     private var infoMessage: AsyncMessage? = null
     private var lastWarning: AsyncMessage? = null
+    private var thinkingMessage: AsyncMessage? = null
     private var scoreboardMessage: AsyncMessage? = null
 
     private var computerDelay: Job? = null
 
-    // TODO change to a list or something to add group shiritori support
-    enum class Turn {
-        PLAYER_1,
-        COMPUTER
+    private var turnId = 0
+    private val players = listOf(Player(member, 100.0), Player(channel.guild.selfMember, 100.0))
+    private val currentTurn
+        get() = players[turnId]
+
+    class Player(val member: Member, var score: Double) {
+        val name: String
+            get() = member.effectiveName
     }
 
     private val listener = object : ListenerAdapter() {
@@ -69,7 +72,9 @@ class ShiritoriGame(gameHandler: GameHandler, member: Member, channel: TextChann
             lastWarning?.delete()
             lastWarning = null
 
-            if (turn != Turn.PLAYER_1) {
+            val currentTurn = this@ShiritoriGame.currentTurn
+
+            if (currentTurn.member.user.idLong != event.author.idLong) {
                 lastWarning = channel.sendMessage(embed("It is not your turn yet!")).sendAsync()
                 return
             }
@@ -107,9 +112,9 @@ class ShiritoriGame(gameHandler: GameHandler, member: Member, channel: TextChann
         val lengthBonus = max(0, wordInput.length - 4)
         val timeBonus = timeLeft / 1000.0
         val moveScore = lengthBonus + timeBonus
-        scoreMap[turn] = scoreMap[turn]!! - moveScore
+        currentTurn.score -= moveScore
 
-        val score = scoreMap[turn]!!
+        val score = currentTurn.score
         if (score <= 0) {
             processWin()
             return
@@ -124,28 +129,28 @@ class ShiritoriGame(gameHandler: GameHandler, member: Member, channel: TextChann
             field("Breakdown", "*Time:* **${Math.ceil(timeBonus).toInt()}** (*${Math.ceil(timeLeft / 1000.0).toInt()}s left*)" +
                     "\n*Length:* **$lengthBonus** (*${wordInput.length} letters*)" +
                     "\n*Total:* **${Math.ceil(moveScore).toInt()}**", true)
-            field("Scores", scoreMap.map { entry -> "*${entry.key.name.replace("_", " ").toLowerCase().capitalize()}:* **${Math.ceil(entry.value).toInt()}**" }.joinToString(separator = "\n"), true)
+            field("Scores", players.joinToString(separator = "\n") { "*${it.name}:* **${Math.ceil(it.score).toInt()}**" }, true)
         }).sendAsync()
 
-        turn = if (turn == Turn.PLAYER_1) Turn.COMPUTER
-        else Turn.PLAYER_1
+        if (turnId + 1 >= players.size) turnId = 0
+        else turnId++
 
-        if (turn == Turn.COMPUTER) {
-            val thinkingMessage = channel.sendMessage("Thinking...").sendAsync()
-            var choosenWord: String? = null
-            while (choosenWord == null || usedWords.contains(choosenWord)) choosenWord = wordPool[(random.nextDouble().pow(2) * wordPool.size).toInt()]
+        if (currentTurn.member.user.idLong == channel.guild.selfMember.user.idLong) {
+            thinkingMessage = channel.sendMessage("Thinking...").sendAsync()
+            val chosenWord = wordPool.filter { it.startsWith(startLetter) && !usedWords.contains(it) }.let { it[(random.nextDouble().pow(2) * it.size).toInt()] }
             computerDelay = launch {
                 delay(((1 - random.nextDouble().pow(2)) * difficulty.responseTime).toLong(), TimeUnit.SECONDS)
-                thinkingMessage.delete()
-                channel.sendMessage(choosenWord).queue()
-                processMove(choosenWord)
+                thinkingMessage?.delete()
+                thinkingMessage = null
+                channel.sendMessage(chosenWord).queue()
+                processMove(chosenWord)
                 computerDelay = null
             }
         }
     }
 
     private fun processWin() {
-        channel.sendMessage(embed("${turn.name.replace("_", " ").toLowerCase().capitalize()} has won!")).queue()
+        channel.sendMessage(embed("${currentTurn.name} has won!")).queue()
         endGame()
     }
 
@@ -168,9 +173,6 @@ class ShiritoriGame(gameHandler: GameHandler, member: Member, channel: TextChann
         }).sendAsync()
         scoreboardMessage = channel.sendMessage("You may go first, can be any word that is 4 letters or longer and starting with the letter **$startLetter**!").sendAsync()
         lastWordTime = System.currentTimeMillis()
-        turn = Turn.PLAYER_1
-
-        Turn.values().forEach { scoreMap[it] = 100.0 }
 
         channel.jda.addEventListener(listener)
     }
@@ -180,7 +182,9 @@ class ShiritoriGame(gameHandler: GameHandler, member: Member, channel: TextChann
         infoMessage?.delete()
         lastWarning?.delete()
         scoreboardMessage?.delete()
+        thinkingMessage?.delete()
         computerDelay?.cancel()
+        thinkingMessage = null
         scoreboardMessage = null
         infoMessage = null
         lastWarning = null
