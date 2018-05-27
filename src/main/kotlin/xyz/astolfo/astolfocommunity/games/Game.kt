@@ -1,5 +1,6 @@
 package xyz.astolfo.astolfocommunity.games
 
+import net.dv8tion.jda.core.Permission
 import net.dv8tion.jda.core.entities.Member
 import net.dv8tion.jda.core.entities.MessageEmbed
 import net.dv8tion.jda.core.entities.TextChannel
@@ -52,7 +53,7 @@ abstract class ReactionGame(gameHandler: GameHandler, member: Member, channel: T
             if (currentMessage!!.getIdLong() != event.messageIdLong || event.user.isBot) return
 
             if (event.user.idLong != member.user.idLong) {
-                event.reaction.removeReaction(event.user).queue()
+                if (event.guild.selfMember.hasPermission(event.textChannel, Permission.MESSAGE_MANAGE)) event.reaction.removeReaction(event.user).queue()
                 return
             }
 

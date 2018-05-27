@@ -11,6 +11,7 @@ import com.google.common.cache.CacheBuilder
 import com.google.common.cache.CacheLoader
 import kotlinx.coroutines.experimental.launch
 import kotlinx.coroutines.experimental.newFixedThreadPoolContext
+import net.dv8tion.jda.core.Permission
 import net.dv8tion.jda.core.entities.Member
 import net.dv8tion.jda.core.events.message.MessageReceivedEvent
 import net.dv8tion.jda.core.hooks.ListenerAdapter
@@ -111,6 +112,11 @@ class CommandHandler(val astolfoCommunityApplication: AstolfoCommunityApplicatio
 
         val command = commands.find { it.name.equals(commandName, ignoreCase = true) || it.alts.any { it.equals(commandName, ignoreCase = true) } }
                 ?: return false
+
+        if (!event.guild.selfMember.hasPermission(event.textChannel, Permission.MESSAGE_EMBED_LINKS)) {
+            event.channel.sendMessage("Please enable **embed links** to use Astolfo commands.").queue()
+            return true
+        }
 
         val newCommandPath = "$commandPath ${command.name}".trim()
 

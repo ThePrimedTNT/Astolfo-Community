@@ -18,6 +18,11 @@ fun createStaffModule() = module("Staff") {
                         "removeRadio [id] - Removes a radio from the database")
             }).queue()
         }
+        command("stop") {
+            action {
+                System.exit(0)
+            }
+        }
         command("addRadio") {
             action {
                 val urlString: String

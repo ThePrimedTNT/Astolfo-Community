@@ -3,6 +3,7 @@
 !gradle/wrapper/gradle-wrapper.jar
 src/main/resources/dev.properties
 src/main/resources/astolfo.properties
+tempMusic/
 
 ### STS ###
 .apt_generated

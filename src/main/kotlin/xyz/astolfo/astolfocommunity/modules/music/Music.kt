@@ -1,5 +1,6 @@
 package xyz.astolfo.astolfocommunity.modules.music
 
+import com.github.salomonbrys.kotson.fromJson
 import com.sedmelluq.discord.lavaplayer.player.AudioLoadResultHandler
 import com.sedmelluq.discord.lavaplayer.player.AudioPlayer
 import com.sedmelluq.discord.lavaplayer.player.AudioPlayerManager
@@ -18,28 +19,69 @@ import com.sedmelluq.discord.lavaplayer.track.AudioTrack
 import com.sedmelluq.discord.lavaplayer.track.AudioTrackEndReason
 import kotlinx.coroutines.experimental.delay
 import kotlinx.coroutines.experimental.launch
+import lavalink.client.LavalinkUtil
 import lavalink.client.io.Lavalink
 import lavalink.client.player.event.AudioEventAdapterWrapped
 import net.dv8tion.jda.core.entities.Guild
 import net.dv8tion.jda.core.entities.TextChannel
 import net.dv8tion.jda.core.entities.VoiceChannel
+import net.dv8tion.jda.core.events.ReadyEvent
 import net.dv8tion.jda.core.events.guild.GuildLeaveEvent
 import net.dv8tion.jda.core.hooks.ListenerAdapter
+import org.apache.commons.io.FileUtils
 import xyz.astolfo.astolfocommunity.*
+import java.io.File
 import java.net.MalformedURLException
 import java.net.URI
 import java.net.URL
-import java.util.concurrent.*
+import java.util.concurrent.CompletableFuture
+import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.LinkedBlockingDeque
+import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicInteger
 
 class MusicManager(astolfoCommunityApplication: AstolfoCommunityApplication, properties: AstolfoProperties) {
+
     val lavaLink = Lavalink(
             properties.bot_user_id,
             properties.shard_count,
             { shardId -> astolfoCommunityApplication.shardManager.getShardById(shardId) }
     )
 
+    private val saveFolder = File("./tempMusic/sessions/")
+
+    class MusicSessionSave(var voiceChannel: Long, var boundChannel: Long, val currentSong: String?, val currentSongPosition: Long, val songQueue: List<String>, val repeatSongQueue: List<String>, val repeatMode: MusicSession.RepeatMode)
+
     val musicManagerListener = object : ListenerAdapter() {
+        override fun onReady(event: ReadyEvent?) {
+            val shardFile = File(saveFolder, "${event!!.jda.shardInfo.shardId}.json")
+            if (!shardFile.exists()) return
+            val data = ASTOLFO_GSON.fromJson<MutableMap<Long, MusicSessionSave>>(shardFile.readText())
+            for (guild in event.jda.guilds) {
+                try {
+                    val musicSessionSave = data[guild.idLong] ?: continue
+                    val voiceChannel = guild.getVoiceChannelById(musicSessionSave.voiceChannel) ?: continue
+                    val boundChannel = guild.getTextChannelById(musicSessionSave.boundChannel) ?: continue
+
+                    val musicSession = getMusicSession(guild, boundChannel)
+                    musicSession.player.link.connect(voiceChannel)
+                    musicSession.songQueue.addAll(musicSessionSave.songQueue.map { LavalinkUtil.toAudioTrack(it) })
+                    musicSession.repeatSongQueue.addAll(musicSessionSave.repeatSongQueue.map { LavalinkUtil.toAudioTrack(it) })
+                    musicSession.repeatMode = musicSessionSave.repeatMode
+
+                    val currentSong = musicSessionSave.currentSong?.let { LavalinkUtil.toAudioTrack(it) }
+                    if (currentSong != null) {
+                        if (currentSong.isSeekable) currentSong.position = musicSessionSave.currentSongPosition
+                        musicSession.player.playTrack(currentSong)
+                    }
+
+                    musicSession.pollNextTrack()
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                }
+            }
+        }
+
         override fun onGuildLeave(event: GuildLeaveEvent?) {
             stopMusicSession(event!!.guild)
         }
@@ -97,6 +139,26 @@ class MusicManager(astolfoCommunityApplication: AstolfoCommunityApplication, pro
                 delay(2, TimeUnit.MINUTES)
             }
         }
+
+        Runtime.getRuntime().addShutdownHook(Thread {
+            val musicMap = mutableMapOf<Int, MutableMap<Long, MusicSessionSave>>()
+            musicSessionMap.toMap().forEach { guild, musicSession ->
+                musicMap.computeIfAbsent(guild.jda.shardInfo.shardId, { mutableMapOf() })[guild.idLong] = MusicSessionSave(musicSession.player.link.channel?.idLong ?: 0,
+                        musicSession.boundChannel.idLong,
+                        musicSession.player.playingTrack?.let { LavalinkUtil.toMessage(it) },
+                        musicSession.player.playingTrack?.let { musicSession.player.trackPosition } ?: 0,
+                        musicSession.songQueue.map { LavalinkUtil.toMessage(it) },
+                        musicSession.repeatSongQueue.map { LavalinkUtil.toMessage(it) },
+                        musicSession.repeatMode)
+                stopMusicSession(guild)
+            }
+            if (saveFolder.exists()) FileUtils.cleanDirectory(saveFolder)
+            musicMap.forEach { shardId, sessions ->
+                val shardFile = File(saveFolder, "$shardId.json")
+                println(shardFile.absolutePath)
+                FileUtils.writeStringToFile(shardFile, ASTOLFO_GSON.toJson(sessions), Charsets.UTF_8)
+            }
+        })
     }
 
     fun getMusicSession(guild: Guild) = musicSessionMap[guild]
@@ -159,7 +221,7 @@ class MusicSession(musicManager: MusicManager, guild: Guild, var boundChannel: T
         player.stopTrack()
     }
 
-    private fun pollNextTrack() {
+    internal fun pollNextTrack() {
         synchronized(queueLock) {
             if (player.playingTrack != null) return
 
@@ -185,11 +247,11 @@ class MusicSession(musicManager: MusicManager, guild: Guild, var boundChannel: T
 
         if (nowPlayingMessage == null) {
             nowPlayingMessage = boundChannel.sendMessage(newMessage).sendAsync()
-        }else{
+        } else {
             val messageId = nowPlayingMessage?.getIdLong()
-            if(messageId != null && boundChannel.hasLatestMessage() && boundChannel.latestMessageIdLong == messageId){
+            if (messageId != null && boundChannel.hasLatestMessage() && boundChannel.latestMessageIdLong == messageId) {
                 nowPlayingMessage!!.editMessage(newMessage)
-            }else{
+            } else {
                 nowPlayingMessage!!.delete()
                 nowPlayingMessage = boundChannel.sendMessage(newMessage).sendAsync()
             }
