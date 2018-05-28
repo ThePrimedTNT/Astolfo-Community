@@ -80,6 +80,7 @@ class MusicManager(astolfoCommunityApplication: AstolfoCommunityApplication, pro
                     e.printStackTrace()
                 }
             }
+            FileUtils.deleteQuietly(shardFile)
         }
 
         override fun onGuildLeave(event: GuildLeaveEvent?) {
@@ -155,7 +156,6 @@ class MusicManager(astolfoCommunityApplication: AstolfoCommunityApplication, pro
             if (saveFolder.exists()) FileUtils.cleanDirectory(saveFolder)
             musicMap.forEach { shardId, sessions ->
                 val shardFile = File(saveFolder, "$shardId.json")
-                println(shardFile.absolutePath)
                 FileUtils.writeStringToFile(shardFile, ASTOLFO_GSON.toJson(sessions), Charsets.UTF_8)
             }
         })

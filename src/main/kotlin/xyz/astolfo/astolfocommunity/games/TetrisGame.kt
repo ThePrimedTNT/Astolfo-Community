@@ -43,7 +43,7 @@ class TetrisGame(gameHandler: GameHandler, member: Member, channel: TextChannel)
             ROTATE_CLOCKWISE_EMOTE -> rotate(true)
             LEFT_EMOTE -> move(-1)
             RIGHT_EMOTE -> move(1)
-            QUICK_FALL_EMOTE -> while (checkGravity(fallingTetromino!!, false));
+            QUICK_FALL_EMOTE -> while (fallingTetromino != null && checkGravity(fallingTetromino!!, false));
         }
     }
 
