@@ -10,6 +10,7 @@ import org.hibernate.id.IdentifierGenerator
 import org.springframework.cache.annotation.CacheConfig
 import org.springframework.cache.annotation.CacheEvict
 import org.springframework.cache.annotation.Cacheable
+import org.springframework.data.jpa.repository.Query
 import org.springframework.data.repository.CrudRepository
 import org.springframework.stereotype.Component
 import java.io.Serializable
@@ -55,6 +56,9 @@ interface UserProfileRepository : CrudRepository<UserProfile, Long> {
     override fun findById(id: Long): Optional<UserProfile>
 
     fun findTop50ByOrderByCreditsDesc(): List<UserProfile>
+
+    @Query("select p from UserProfile p where p.userUpvote.lastUpvote > 0 AND NOW() - p.userUpvote.lastUpvote > 17280000 AND p.userUpvote.remindedUpvote = false")
+    fun findUpvoteReminder(): List<UserProfile>
 }
 
 @CacheConfig(cacheNames = ["radios"])
@@ -139,10 +143,17 @@ data class RadioEntry(@Id @GeneratedValue(strategy = GenerationType.AUTO)
 @Entity
 data class UserProfile(@Id val userId: Long = 0L,
                        var credits: Long = 0L,
-                       val daily: UserDaily = UserDaily())
+                       val daily: UserDaily = UserDaily(),
+                       val userUpvote: UserUpvote = UserUpvote())
 
 @Embeddable
 data class UserDaily(var lastDaily: Long = -1L)
+
+@Embeddable
+data class UserUpvote(var lastUpvote: Long = -1L, var remindedUpvote: Boolean = false) {
+    val timeSinceLastUpvote
+        get() = System.currentTimeMillis() - lastUpvote
+}
 
 @Entity
 data class GuildSettings(@Id val guildId: Long = 0L,
