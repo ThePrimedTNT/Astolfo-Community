@@ -100,15 +100,7 @@ class CommandHandler(val astolfoCommunityApplication: AstolfoCommunityApplicatio
     data class SessionKey(val guildId: Long, val memberId: Long, val channelId: Long)
 
     private fun processCommand(event: MessageReceivedEvent, timeIssued: Long, commands: List<Command>, commandPath: String, commandMessage: String): Boolean {
-        val commandName: String
-        val commandContent: String
-        if (commandMessage.contains(" ")) {
-            commandName = commandMessage.substringBefore(" ").trim()
-            commandContent = commandMessage.substringAfter(" ").trim()
-        } else {
-            commandName = commandMessage
-            commandContent = ""
-        }
+        val (commandName, commandContent) = commandMessage.splitFirst(" ")
 
         val command = commands.find { it.name.equals(commandName, ignoreCase = true) || it.alts.any { it.equals(commandName, ignoreCase = true) } }
                 ?: return false
@@ -121,6 +113,23 @@ class CommandHandler(val astolfoCommunityApplication: AstolfoCommunityApplicatio
         val newCommandPath = "$commandPath ${command.name}".trim()
 
         val execution = CommandExecution(astolfoCommunityApplication, event, newCommandPath, commandContent, timeIssued)
+
+        val permission = command.permission
+
+        var hasPermission: Boolean? = if(event.member.hasPermission(Permission.ADMINISTRATOR)) true else null
+        // Check discord permission if the member isn't a admin already
+        if(hasPermission != true && permission.permissionDefaults.isNotEmpty())
+            hasPermission = !event.member.hasPermission(event.textChannel, *permission.permissionDefaults)
+        // Check Astolfo permission if discord permission didn't already grant permissions
+        if (hasPermission != true)
+            AstolfoPermissionUtils.hasPermission(event.member, event.textChannel, astolfoCommunityApplication.astolfoRepositories.getEffectiveGuildSettings(event.guild.idLong).permissions, permission)?.let { hasPermission = it }
+
+        if (hasPermission == false) {
+            event.channel.sendMessage("You are missing the astolfo **${permission.path}**${if (permission.permissionDefaults.isNotEmpty())
+                " or discord ${permission.permissionDefaults.joinToString(", ") { "**${it.getName()}**" }}" else ""} permission(s)")
+                    .queue()
+            return true
+        }
 
         if (!command.inheritedAction.invoke(execution)) return true
 

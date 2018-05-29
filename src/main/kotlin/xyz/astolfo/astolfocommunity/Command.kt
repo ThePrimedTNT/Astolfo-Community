@@ -4,15 +4,25 @@ import com.jagrosh.jdautilities.commons.utils.FinderUtil
 import kotlinx.coroutines.experimental.Job
 import kotlinx.coroutines.experimental.delay
 import kotlinx.coroutines.experimental.launch
+import net.dv8tion.jda.core.Permission
 import net.dv8tion.jda.core.entities.Member
 import net.dv8tion.jda.core.entities.Message
 import net.dv8tion.jda.core.entities.MessageEmbed
 import net.dv8tion.jda.core.events.message.MessageReceivedEvent
 import java.util.concurrent.TimeUnit
 
-class Command(val name: String, val alts: Array<out String>, val subCommands: List<Command>, val inheritedAction: CommandExecution.() -> Boolean, val action: CommandExecution.() -> Unit)
+class Command(
+        val name: String,
+        val alts: Array<out String>,
+        val usage: List<String>,
+        val description: String,
+        val subCommands: List<Command>,
+        val permission: AstolfoPermission,
+        val inheritedAction: CommandExecution.() -> Boolean,
+        val action: CommandExecution.() -> Unit
+)
 
-class CommandBuilder(private val name: String, private val alts: Array<out String>) {
+class CommandBuilder(val path: String, val name: String, private val alts: Array<out String>) {
     val subCommands = mutableListOf<Command>()
     var action: CommandExecution.() -> Unit = {
         val guildSettings = application.astolfoRepositories.getEffectiveGuildSettings(event.guild.idLong)
@@ -20,6 +30,9 @@ class CommandBuilder(private val name: String, private val alts: Array<out Strin
                 ?: application.properties.default_prefix}$commandPath help** for a list of commands.").queue()
     }
     var inheritedAction: CommandExecution.() -> Boolean = { true }
+    var permission = AstolfoPermission(path, name)
+    var usage = listOf<String>()
+    var description = ""
     fun build(): Command {
         if (subCommands.isNotEmpty()) {
             command("help") {
@@ -27,19 +40,24 @@ class CommandBuilder(private val name: String, private val alts: Array<out Strin
                     val guildSettings = application.astolfoRepositories.getEffectiveGuildSettings(event.guild.idLong)
                     messageAction(embed {
                         title("Astolfo ${this@CommandBuilder.name.capitalize()} Help")
+                        val baseCommand = guildSettings.prefix.takeIf { it.isNotBlank() } ?: application.properties.default_prefix+commandPath.substringBeforeLast(" ").trim()
                         description(this@CommandBuilder.subCommands.joinToString(separator = "\n") { subCommand ->
-                            "${guildSettings.prefix.takeIf { it.isNotBlank() } ?: application.properties.default_prefix}${commandPath.substringBeforeLast(" ").trim()} **${subCommand.name}**"
+                            val base = "$baseCommand **${subCommand.name}**${if (subCommand.description.isNotBlank()) " - ${subCommand.description}" else ""}"
+                            if (subCommand.usage.isNotEmpty()) {
+                                "$base\n" +
+                                        "*Usages:*\n" + subCommand.usage.joinToString(separator = "\n") { usage -> "- *$usage*" } + "\n"
+                            } else base
                         })
                     }).queue()
                 }
             }
         }
-        return Command(name, alts, subCommands, inheritedAction, action)
+        return Command(name, alts, usage, description, subCommands, permission, inheritedAction, action)
     }
 }
 
 fun CommandBuilder.command(subName: String, vararg alts: String, builder: CommandBuilder.() -> Unit) {
-    val commandBuilder = CommandBuilder(subName, alts)
+    val commandBuilder = CommandBuilder(this.path, subName, alts)
     builder.invoke(commandBuilder)
     subCommands.add(commandBuilder.build())
 }
@@ -50,6 +68,22 @@ fun CommandBuilder.action(action: CommandExecution.() -> Unit) {
 
 fun CommandBuilder.inheritedAction(inheritedAction: CommandExecution.() -> Boolean) {
     this.inheritedAction = inheritedAction
+}
+
+fun CommandBuilder.permission(vararg permissionDefaults: Permission) {
+    permission(name, *permissionDefaults)
+}
+
+fun CommandBuilder.description(description: String) {
+    this.description = description
+}
+
+fun CommandBuilder.usage(vararg usage: String) {
+    this.usage = usage.toList()
+}
+
+fun CommandBuilder.permission(node: String, vararg permissionDefaults: Permission) {
+    permission = AstolfoPermission(path, node, *permissionDefaults)
 }
 
 open class CommandExecution(val application: AstolfoCommunityApplication, val event: MessageReceivedEvent, val commandPath: String, val args: String, val timeIssued: Long)

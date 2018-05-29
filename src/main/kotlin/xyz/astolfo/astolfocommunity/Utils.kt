@@ -106,3 +106,11 @@ object Utils {
     }
 
 }
+
+fun String.splitFirst(delimiter: String) =
+        if (contains(delimiter)) substringBefore(delimiter).trim() to substringAfter(delimiter).trim()
+        else this to ""
+
+fun String.splitLast(delimiter: String) =
+        if (contains(delimiter)) substringBeforeLast(delimiter).trim() to substringAfterLast(delimiter).trim()
+        else this to ""

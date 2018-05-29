@@ -2,6 +2,7 @@ package xyz.astolfo.astolfocommunity.modules.music
 
 import com.sedmelluq.discord.lavaplayer.track.AudioPlaylist
 import com.sedmelluq.discord.lavaplayer.track.AudioTrack
+import net.dv8tion.jda.core.Permission
 import xyz.astolfo.astolfocommunity.*
 import xyz.astolfo.astolfocommunity.modules.ModuleBuilder
 import xyz.astolfo.astolfocommunity.modules.command
@@ -9,6 +10,7 @@ import xyz.astolfo.astolfocommunity.modules.command
 internal fun ModuleBuilder.createGuildPlaylistCommands() {
     command("guildplaylist", "gpl") {
         command("create", "c") {
+            permission(Permission.MANAGE_SERVER)
             action {
                 if (args.isBlank()) {
                     messageAction("Enter a name to give the playlist!").queue()
@@ -46,6 +48,7 @@ internal fun ModuleBuilder.createGuildPlaylistCommands() {
             }
         }
         command("delete") {
+            permission(Permission.MANAGE_SERVER)
             action {
                 if (args.isBlank()) {
                     messageAction("Enter a playlist name!").queue()
@@ -82,6 +85,7 @@ internal fun ModuleBuilder.createGuildPlaylistCommands() {
             }
         }
         command("add") {
+            permission(Permission.MANAGE_SERVER)
             action {
                 val playlistName: String
                 val songQuery: String

@@ -31,7 +31,7 @@ fun module(name: String, builder: ModuleBuilder.() -> Unit): Module {
 }
 
 fun ModuleBuilder.command(name: String, vararg alts: String, builder: CommandBuilder.() -> Unit) {
-    val commandBuilder = CommandBuilder(name, alts)
+    val commandBuilder = CommandBuilder(this.name, name, alts)
     builder.invoke(commandBuilder)
     commands.add(commandBuilder.build())
 }
