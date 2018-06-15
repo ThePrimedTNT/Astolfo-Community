@@ -5,11 +5,18 @@ import net.dv8tion.jda.core.events.message.MessageReceivedEvent
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.TimeUnit
+import kotlin.concurrent.fixedRateTimer
 
 class CommandSessionManager {
 
     private val worker = Worker()
     private val commandProcessorContext = newFixedThreadPoolContext(100, "Command Session Processor")
+
+    init {
+        fixedRateTimer(name = "Command Session Manager Clean Up", period = TimeUnit.MINUTES.toMillis(5)){
+            cleanUp()
+        }
+    }
 
     private val sessionMap: MutableMap<SessionKey, CommandSession> = ConcurrentHashMap()
     private val sessionJobs = mutableMapOf<SessionKey, Job>()
@@ -32,7 +39,6 @@ class CommandSessionManager {
                 withTimeout(1, TimeUnit.MINUTES) {
                     sessionThread.invoke(newSession)
                 }
-                if(isActive) invalidate(key)
             }
             sessionJobs[key] = sessionJob
             sessionMap[key] = newSession
@@ -50,7 +56,7 @@ class CommandSessionManager {
         sessionJobs.remove(key)?.join()
     }
 
-    fun cleanUp() {
+    private fun cleanUp() {
         sessionMap.toMap().forEach { key, session ->
             worker.add(key) {
                 val job = sessionJobs[key]

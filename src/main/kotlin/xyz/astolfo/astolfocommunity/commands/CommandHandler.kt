@@ -66,8 +66,6 @@ class CommandHandler(val astolfoCommunityApplication: AstolfoCommunityApplicatio
                         if (currentSession.onMessageReceived(execution) == CommandSession.ResponseAction.RUN_COMMAND) {
                             // If the response listeners return true or all the response listeners removed themselves
                             commandSessionManager.invalidate(event)
-                        } else {
-                            commandSessionManager.cleanUp()
                         }
                     }
                 }
