@@ -59,6 +59,8 @@ class AstolfoProperties {
     var osu_api_token = ""
     var weeb_token = ""
     var dialogflow_token = ""
+    var discordbotlist_token = ""
+    var discordbotlist_password = ""
 }
 
 fun main(args: Array<String>) {
