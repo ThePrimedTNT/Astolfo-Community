@@ -24,7 +24,7 @@ class BotLists(private val astolfoCommunityApplication: AstolfoCommunityApplicat
         astolfoCommunityApplication.shardManager.addEventListener(JDAStatPoster(discordBotList))
         launch {
             while (isActive) {
-                val toRemind = astolfoCommunityApplication.astolfoRepositories.userProfileRepository.findUpvoteReminder()
+                val toRemind = astolfoCommunityApplication.astolfoRepositories.userProfileRepository.findUpvoteReminder(System.currentTimeMillis())
                 for (profile in toRemind) {
                     val user = astolfoCommunityApplication.shardManager.getUserById(profile.userId)
                     if(user == null && astolfoCommunityApplication.shardManager.shards.any { it.status.isInit }) continue

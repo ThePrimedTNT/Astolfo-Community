@@ -1,6 +1,10 @@
 package xyz.astolfo.astolfocommunity.modules
 
 import xyz.astolfo.astolfocommunity.*
+import xyz.astolfo.astolfocommunity.commands.action
+import xyz.astolfo.astolfocommunity.commands.command
+import xyz.astolfo.astolfocommunity.commands.inheritedAction
+import xyz.astolfo.astolfocommunity.commands.messageAction
 import java.net.MalformedURLException
 import java.net.URL
 

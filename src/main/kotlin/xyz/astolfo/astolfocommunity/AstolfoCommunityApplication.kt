@@ -13,6 +13,7 @@ import org.springframework.boot.context.properties.ConfigurationProperties
 import org.springframework.boot.context.properties.EnableConfigurationProperties
 import org.springframework.boot.runApplication
 import org.springframework.cache.annotation.EnableCaching
+import xyz.astolfo.astolfocommunity.commands.CommandHandler
 import xyz.astolfo.astolfocommunity.games.GameHandler
 import xyz.astolfo.astolfocommunity.modules.music.MusicManager
 
@@ -28,7 +29,7 @@ class AstolfoCommunityApplication(final val astolfoRepositories: AstolfoReposito
     final val commandHandler = CommandHandler(this)
     final val shardManager: ShardManager
     // TODO: Move this to a better location
-    final val staffMemberIds = properties.staffMemberIds.split(",").map { it.toLong() }
+    final val staffMemberIds = properties.staffMemberIds.split(",").mapNotNull { it.toLongOrNull() }
 
     init {
         shardManager = DefaultShardManagerBuilder()

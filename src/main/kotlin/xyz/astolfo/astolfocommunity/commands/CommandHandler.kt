@@ -1,8 +1,9 @@
-package xyz.astolfo.astolfocommunity
+package xyz.astolfo.astolfocommunity.commands
 
 import ai.api.AIConfiguration
 import ai.api.AIDataService
 import ai.api.AIServiceContextBuilder
+import ai.api.AIServiceException
 import ai.api.model.AIRequest
 import ai.api.model.ResponseMessage
 import com.github.salomonbrys.kotson.contains
@@ -15,6 +16,10 @@ import net.dv8tion.jda.core.Permission
 import net.dv8tion.jda.core.entities.Member
 import net.dv8tion.jda.core.events.message.MessageReceivedEvent
 import net.dv8tion.jda.core.hooks.ListenerAdapter
+import xyz.astolfo.astolfocommunity.ASTOLFO_GSON
+import xyz.astolfo.astolfocommunity.AstolfoCommunityApplication
+import xyz.astolfo.astolfocommunity.AstolfoProperties
+import xyz.astolfo.astolfocommunity.RateLimiter
 import xyz.astolfo.astolfocommunity.modules.modules
 import java.util.*
 import java.util.concurrent.TimeUnit
@@ -27,6 +32,7 @@ class CommandHandler(val astolfoCommunityApplication: AstolfoCommunityApplicatio
     private val commandProcessorContext = newFixedThreadPoolContext(20, "Command Processor")
 
     private val rateLimiter = RateLimiter<Long>(4, 6)
+    private val commandSessionManager = CommandSessionManager()
 
     private val mentionPrefixes: Array<String>
 
@@ -40,23 +46,29 @@ class CommandHandler(val astolfoCommunityApplication: AstolfoCommunityApplicatio
         if (event!!.author.isBot) return
         if (event.textChannel?.canTalk() != true) return
         launch(messageProcessorContext) {
-
-            val rawMessage = event.message.contentRaw!!
             val prefix = astolfoCommunityApplication.astolfoRepositories.getEffectiveGuildSettings(event.guild.idLong).prefix.takeIf { it.isNotBlank() }
                     ?: astolfoCommunityApplication.properties.default_prefix
+
+            val rawMessage = event.message.contentRaw!!
 
             val effectivePrefixes = listOf(*mentionPrefixes, prefix)
             val prefixedMatched = effectivePrefixes.find { rawMessage.startsWith(it, ignoreCase = true) }
 
             if (prefixedMatched == null) {
-                val sessionKey = SessionKey(event.guild.idLong, event.author.idLong, event.channel.idLong)
-                val currentSession = commandSessionMap.getIfPresent(sessionKey)
-                // Checks if there is currently a session, if so, check if its a follow up response
-                if (currentSession != null && currentSession.hasResponseListeners() && processRateLimit(event)) {
-                    val execution = CommandExecution(astolfoCommunityApplication, event, currentSession.commandPath, rawMessage, timeIssued)
-                    if (currentSession.shouldRunCommand(execution) || !currentSession.hasResponseListeners()) {
-                        // If the response listeners return true or all the response listeners removed themselves
-                        commandSessionMap.invalidate(sessionKey)
+                commandScope@ launch(commandProcessorContext) {
+                    val currentSession = commandSessionManager.get(event)
+                    // Checks if there is currently a session, if so, check if its a follow up response
+                    if (currentSession != null) {
+                        if(currentSession.getListeners().isEmpty()) return@commandScope
+                        // TODO add rate limit
+                        //if (!processRateLimit(event)) return@launch
+                        val execution = CommandExecution(astolfoCommunityApplication, event, currentSession, currentSession.commandPath, rawMessage, timeIssued)
+                        if (currentSession.onMessageReceived(execution) == CommandSession.ResponseAction.RUN_COMMAND) {
+                            // If the response listeners return true or all the response listeners removed themselves
+                            commandSessionManager.invalidate(event)
+                        } else {
+                            commandSessionManager.cleanUp()
+                        }
                     }
                 }
                 return@launch
@@ -64,10 +76,10 @@ class CommandHandler(val astolfoCommunityApplication: AstolfoCommunityApplicatio
 
             if (!processRateLimit(event)) return@launch
 
-            launch(commandProcessorContext) {
+            commandScope@ launch(commandProcessorContext) {
                 val commandMessage = rawMessage.substring(prefixedMatched.length).trim()
 
-                if (modules.find { processCommand(event, timeIssued, it.commands, "", commandMessage) } != null || prefixedMatched == prefix) return@launch
+                if (modules.find { processCommand(event, timeIssued, it.commands, "", commandMessage) } != null || prefixedMatched == prefix) return@commandScope
 
                 // Process chat bot stuff
                 val response = chatBotManager.process(event.member, commandMessage)
@@ -92,14 +104,7 @@ class CommandHandler(val astolfoCommunityApplication: AstolfoCommunityApplicatio
         return true
     }
 
-    val commandSessionMap = CacheBuilder.newBuilder()
-            .expireAfterAccess(5, TimeUnit.MINUTES)
-            .removalListener<SessionKey, CommandSession> { it.value.destroy() }
-            .build<SessionKey, CommandSession>()
-
-    data class SessionKey(val guildId: Long, val memberId: Long, val channelId: Long)
-
-    private fun processCommand(event: MessageReceivedEvent, timeIssued: Long, commands: List<Command>, commandPath: String, commandMessage: String): Boolean {
+    private suspend fun processCommand(event: MessageReceivedEvent, timeIssued: Long, commands: List<Command>, commandPath: String, commandMessage: String): Boolean {
         val commandName: String
         val commandContent: String
         if (commandMessage.contains(" ")) {
@@ -120,26 +125,41 @@ class CommandHandler(val astolfoCommunityApplication: AstolfoCommunityApplicatio
 
         val newCommandPath = "$commandPath ${command.name}".trim()
 
-        val execution = CommandExecution(astolfoCommunityApplication, event, newCommandPath, commandContent, timeIssued)
+        fun createExecution(session: CommandSession) = CommandExecution(
+                astolfoCommunityApplication,
+                event,
+                session,
+                newCommandPath,
+                commandContent,
+                timeIssued
+        )
 
-        if (!command.inheritedAction.invoke(execution)) return true
+        if (!command.inheritedAction.invoke(createExecution(InheritedCommandSession(newCommandPath)))) return true
 
         if (!processCommand(event, timeIssued, command.subCommands, newCommandPath, commandContent)) {
-            val sessionKey = SessionKey(event.guild.idLong, event.author.idLong, event.channel.idLong)
-            val currentSession = commandSessionMap.getIfPresent(sessionKey)
+            fun runNewSession() {
+                commandSessionManager.session(event, newCommandPath, { session ->
+                    command.action.invoke(createExecution(session))
+                })
+            }
+
+            val currentSession = commandSessionManager.get(event)
+
             // Checks if command is the same as the previous, if so, check if its a follow up response
-            if (currentSession != null && currentSession.hasResponseListeners() && currentSession.commandPath.equals(newCommandPath, true)) {
-                if (currentSession.shouldRunCommand(execution)) {
-                    // If the response listeners return true
-                    commandSessionMap.invalidate(sessionKey)
-                    command.action.invoke(execution)
-                } else if (!currentSession.hasResponseListeners()) {
-                    // If the response listeners all ran and removed themselves
-                    commandSessionMap.invalidate(sessionKey)
+            if (currentSession != null && currentSession.commandPath.equals(newCommandPath, true)) {
+                val action = currentSession.onMessageReceived(createExecution(currentSession))
+                when (action) {
+                    CommandSession.ResponseAction.RUN_COMMAND -> {
+                        commandSessionManager.invalidate(event)
+                        runNewSession()
+                    }
+                    CommandSession.ResponseAction.IGNORE_COMMAND -> {
+                    }
+                    else -> TODO("Invalid action: $action")
                 }
             } else {
-                commandSessionMap.invalidate(sessionKey)
-                command.action.invoke(execution)
+                commandSessionManager.invalidate(event)
+                runNewSession()
             }
         }
         return true
@@ -185,7 +205,14 @@ class ChatSession constructor(id: String) {
     fun process(dataService: AIDataService, line: String): ChatResponse {
         val request = AIRequest(line)
 
-        val response = dataService.request(request, context)
+        val response = try {
+            dataService.request(request, context)
+        } catch (e: AIServiceException) {
+            e.printStackTrace()
+            return ChatResponse(ChatResponse.ResponseType.MESSAGE,
+                    if (e.message?.startsWith("Authorization failed") == true) "Chat Bot Authorization Invalid (Contact bot owner if you see this message)"
+                    else "Internal Chat Bot Exception")
+        }
         if (response.status.code != 200) error(response.status.errorDetails)
 
         val data = response.result.parameters

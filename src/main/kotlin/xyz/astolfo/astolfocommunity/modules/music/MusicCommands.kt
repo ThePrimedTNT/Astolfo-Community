@@ -5,6 +5,11 @@ import com.sedmelluq.discord.lavaplayer.track.AudioTrack
 import net.dv8tion.jda.core.Permission
 import net.dv8tion.jda.core.utils.PermissionUtil
 import xyz.astolfo.astolfocommunity.*
+import xyz.astolfo.astolfocommunity.commands.*
+import xyz.astolfo.astolfocommunity.menus.paginator
+import xyz.astolfo.astolfocommunity.menus.provider
+import xyz.astolfo.astolfocommunity.menus.renderer
+import xyz.astolfo.astolfocommunity.menus.selectionBuilder
 import xyz.astolfo.astolfocommunity.modules.command
 import xyz.astolfo.astolfocommunity.modules.module
 import java.util.concurrent.TimeUnit
@@ -25,73 +30,30 @@ fun createMusicModule() = module("Music") {
                 messageAction("Either im not allowed to play music from that website or I do not support it!").queue()
                 return@musicAction
             }
-            val trackResponse = tempMessage(message { embed("\uD83D\uDD0E Searching for **$args**...") }) {
-                application.musicManager.audioPlayerManager.loadItemSync(searchQuery)
+            if (!searchQuery.search) {
+                val musicSession = application.musicManager.getMusicSession(guild)!!
+                musicSession.musicLoader.add(searchQuery, event.channel)
+                return@musicAction
             }
-            val audioItem = trackResponse.first
-            val exception = trackResponse.second
-            if (audioItem != null && audioItem is AudioTrack?) {
-                // If the track returned is a normal audio track
-                val audioTrack: AudioTrack = audioItem
-                application.musicManager.getMusicSession(guild)?.let {
-                    it.boundChannel = event.message.textChannel
-                    it.queue(audioTrack)
+            runWhileSessionActive {
+                val trackResponse = tempMessage(message { embed("\uD83D\uDD0E Searching for **$args**...") }) {
+                    application.musicManager.audioPlayerManager.loadItemSync(searchQuery.query)
                 }
-                messageAction(embed { description("[${audioTrack.info.title}](${audioTrack.info.uri}) has been added to the queue") }).queue()
-            } else if (audioItem != null && audioItem is AudioPlaylist?) {
-                // If the track returned is a list of tracks
-                val audioPlaylist: AudioPlaylist = audioItem
-                if (audioPlaylist.isSearchResult) {
-                    // If the tracks returned are from a ytsearch: or scsearch:
-                    val menu = paginator("\uD83D\uDD0E Music Search Results:") {
-                        provider(8, audioPlaylist.tracks.map { audioTrack -> "**${audioTrack.info.title}** *by ${audioTrack.info.author}*" })
-                        renderer {
-                            message {
-                                embed {
-                                    titleProvider.invoke()?.let { title(it) }
-                                    description("Type the number of the song you want.\n$providedString")
-                                    footer("Page ${currentPage + 1}/${provider.pageCount}")
-                                }
-                            }
-                        }
+                val audioPlaylist = trackResponse.first as AudioPlaylist?
+                val exception = trackResponse.second
+                if (audioPlaylist != null && audioPlaylist.isSearchResult) {
+                    // If the track returned is a list of tracks and are from a ytsearch: or scsearch:
+                    val selectedTrack = selectMusic(audioPlaylist.tracks).execute() ?: return@runWhileSessionActive
+                    application.musicManager.getMusicSession(guild)?.let {
+                        it.boundChannel = event.message.textChannel
+                        it.queue(selectedTrack)
                     }
-                    // Waits for a follow up response for song selection
-                    responseListener {
-                        if (menu.isDestroyed) {
-                            removeListener()
-                            true
-                        } else if (it.args.matches("\\d+".toRegex())) {
-                            val numSelection = it.args.toBigInteger().toInt()
-                            if (numSelection < 1 || numSelection > audioPlaylist.tracks.size) {
-                                messageAction("Unknown Selection").queue()
-                                return@responseListener false
-                            }
-                            val selectedTrack = audioPlaylist.tracks[numSelection - 1]
-                            application.musicManager.getMusicSession(guild)?.let {
-                                it.boundChannel = event.message.textChannel
-                                it.queue(selectedTrack)
-                            }
-                            messageAction(embed { description("[${selectedTrack.info.title}](${selectedTrack.info.uri}) has been added to the queue") }).queue()
-                            removeListener()
-                            menu.destroy()
-                            false // Don't run the command since song was added
-                        } else {
-                            messageAction(embed { description("Please type the # of the song you want") }).queue()
-                            false // Still waiting for valid response
-                        }
-                    }
+                    messageAction(embed { description("[${selectedTrack.info.title}](${selectedTrack.info.uri}) has been added to the queue") }).queue()
+                } else if (exception != null) {
+                    messageAction("Failed due to an error: **${exception.message}**").queue()
                 } else {
-                    // If the tracks are from directly from a url
-                    application.musicManager.getMusicSession(guild)?.let { session ->
-                        session.boundChannel = event.message.textChannel
-                        audioPlaylist.tracks.forEach { session.queue(it) }
-                    }
-                    messageAction(embed { setDescription("The playlist [${audioPlaylist.name}]($args) has been added to the queue") }).queue()
+                    messageAction("No matches found for **$args**").queue()
                 }
-            } else if (exception != null) {
-                messageAction("Failed due to an error: **${exception.message}**").queue()
-            } else {
-                messageAction("No matches found for **$args**").queue()
             }
         }
     }
@@ -104,57 +66,35 @@ fun createMusicModule() = module("Music") {
                 application.astolfoRepositories.findRadioStation(args)
             }
 
-            if (results.isEmpty()) {
-                messageAction("No results!").queue()
-                return@musicAction
-            }
+            val selectedRadio = selectionBuilder<RadioEntry>()
+                    .title("\uD83D\uDD0E Radio Search Results:")
+                    .results(results)
+                    .noResultsMessage("No results!")
+                    .resultsRenderer { "`${it.id}` **${it.name}**" }
+                    .renderer {
+                        message {
+                            embed {
+                                titleProvider.invoke()?.let { title(it) }
+                                val string = providedContent.joinToString(separator = "\n")
+                                description("Type the number of the station you want\n$string")
+                                footer("Page ${currentPage + 1}/${provider.pageCount}")
+                            }
+                        }
+                    }.execute() ?: return@musicAction
 
-            val menu = paginator("\uD83D\uDD0E Music Search Results:") {
-                provider(8, results.map { radio -> "`${radio.id}` **${radio.name}**" })
-                renderer {
-                    message {
-                        embed {
-                            titleProvider.invoke()?.let { title(it) }
-                            val string = providedContent.joinToString(separator = "\n")
-                            description("Type the number of the song you want.\n$string")
-                            footer("Page ${currentPage + 1}/${provider.pageCount}")
-                        }
-                    }
-                }
+            val (audioItem, audioException) = tempMessage(message { embed("\uD83D\uDD0E Loading radio **${selectedRadio.name}**...") }) {
+                application.musicManager.audioPlayerManager.loadItemSync(selectedRadio.url)
             }
-            // Waits for a follow up response for radio selection
-            responseListener {
-                if (menu.isDestroyed) {
-                    removeListener()
-                    true
-                } else if (it.args.matches("\\d+".toRegex())) {
-                    val numSelection = it.args.toBigInteger().toLong()
-                    val selectedRadio = results.find { it.id == numSelection }
-                    if (selectedRadio == null) {
-                        messageAction("Unknown Selection").queue()
-                        return@responseListener false
-                    }
-                    val (audioItem, audioException) = tempMessage(message { embed("\uD83D\uDD0E Loading radio **${selectedRadio.name}**...") }) {
-                        application.musicManager.audioPlayerManager.loadItemSync(selectedRadio.url)
-                    }
-                    if (audioItem != null && audioItem is AudioTrack) {
-                        application.musicManager.getMusicSession(guild)?.let {
-                            it.boundChannel = event.message.textChannel
-                            it.queue(audioItem)
-                        }
-                        messageAction(embed { description("**${selectedRadio.name}** has been added to the queue") }).queue()
-                    } else if (audioException != null) {
-                        messageAction("Failed due to an error: **${audioException.message}**").queue()
-                    } else {
-                        messageAction("Unknown error occurred while loading **${selectedRadio.name}** radio station").queue()
-                    }
-                    removeListener()
-                    menu.destroy()
-                    false // Don't run the command since song was added
-                } else {
-                    messageAction(embed { description("Please type the # of the radio station you want") }).queue()
-                    false // Still waiting for valid response
+            if (audioItem != null && audioItem is AudioTrack) {
+                application.musicManager.getMusicSession(guild)?.let {
+                    it.boundChannel = event.message.textChannel
+                    it.queue(audioItem)
                 }
+                messageAction(embed { description("**${selectedRadio.name}** has been added to the queue") }).queue()
+            } else if (audioException != null) {
+                messageAction("Failed due to an error: **${audioException.message}**").queue()
+            } else {
+                messageAction("Unknown error occurred while loading **${selectedRadio.name}** radio station").queue()
             }
         }
     }
@@ -188,7 +128,11 @@ fun createMusicModule() = module("Music") {
                                     "[${currentTrack.info.title}](${currentTrack.info.uri})"
                                 }
                             }
-                            field("\uD83C\uDFBC Queue", false) { providedString }
+                            field("\uD83C\uDFBC Queue", false) {
+                                val content = providedString
+                                println(content)
+                                content
+                            }
                             footer("Page ${currentPage + 1}/${provider.pageCount}")
                         }
                     }
@@ -432,7 +376,7 @@ fun volumeIcon(volume: Int) = when {
     else -> Emotes.SPEAKER_2
 }
 
-fun CommandBuilder.musicAction(memberInVoice: Boolean = true, sameVoiceChannel: Boolean = true, activeSession: Boolean = false, musicAction: CommandExecution.() -> Unit) {
+fun CommandBuilder.musicAction(memberInVoice: Boolean = true, sameVoiceChannel: Boolean = true, activeSession: Boolean = false, musicAction: suspend CommandExecution.() -> Unit) {
     action {
         val author = event.member!!
         if (activeSession && !application.musicManager.hasMusicSession(event.guild)) {

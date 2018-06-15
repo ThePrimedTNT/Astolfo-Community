@@ -2,6 +2,9 @@ package xyz.astolfo.astolfocommunity.modules
 
 import net.dv8tion.jda.core.JDAInfo
 import xyz.astolfo.astolfocommunity.*
+import xyz.astolfo.astolfocommunity.commands.action
+import xyz.astolfo.astolfocommunity.commands.messageAction
+import xyz.astolfo.astolfocommunity.menus.memberSelectionBuilder
 import java.text.DecimalFormat
 
 fun createInfoModule() = module("Info") {
@@ -44,13 +47,12 @@ fun createInfoModule() = module("Info") {
     }
     command("avatar", "pfp") {
         action {
-            selectMember("Profile Selection", args){ selectedMember ->
-                messageAction(embed {
-                    title("Astolfo Profile Pictures", selectedMember.user.avatarUrl)
-                    description("${selectedMember.asMention} Profile Picture!")
-                    image(selectedMember.user.avatarUrl)
-                }).queue()
-            }
+            val selectedMember = memberSelectionBuilder(args).title("Profile Selection").execute() ?: return@action
+            messageAction(embed {
+                title("Astolfo Profile Pictures", selectedMember.user.avatarUrl)
+                description("${selectedMember.asMention} Profile Picture!")
+                image(selectedMember.user.avatarUrl)
+            }).queue()
         }
     }
     command("links", "invite") {

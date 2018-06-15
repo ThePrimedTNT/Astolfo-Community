@@ -1,11 +1,15 @@
 package xyz.astolfo.astolfocommunity.modules
 
-import net.dv8tion.jda.core.entities.Message
+import net.dv8tion.jda.core.entities.MessageEmbed
 import xyz.astolfo.astolfocommunity.*
+import xyz.astolfo.astolfocommunity.commands.action
+import xyz.astolfo.astolfocommunity.commands.getProfile
+import xyz.astolfo.astolfocommunity.commands.messageAction
+import xyz.astolfo.astolfocommunity.menus.paginator
+import xyz.astolfo.astolfocommunity.menus.provider
 import java.awt.Color
 import java.util.*
 import java.util.concurrent.TimeUnit
-import java.util.concurrent.atomic.AtomicInteger
 import kotlin.math.absoluteValue
 import kotlin.math.pow
 import kotlin.math.roundToLong
@@ -49,7 +53,8 @@ fun createCasinoModule() = module("Casino") {
         action {
             paginator("Astolfo Leaderboards") {
                 provider(8, application.astolfoRepositories.userProfileRepository.findTop50ByOrderByCreditsDesc().map { profile ->
-                    val user = application.shardManager.getUserById(profile.userId)?.let { "${it.name}#${it.discriminator}" } ?: "UNKNOWN "+profile.userId
+                    val user = application.shardManager.getUserById(profile.userId)?.let { "${it.name}#${it.discriminator}" }
+                            ?: "UNKNOWN "+profile.userId
                     "**$user** - *${profile.credits}*"
                 })
             }
@@ -98,18 +103,20 @@ fun createCasinoModule() = module("Casino") {
                 else -> TODO("Um what")
             }
 
-            val slotsToShow = AtomicInteger(0)
+            userProfile.credits += result
+            application.astolfoRepositories.userProfileRepository.save(userProfile)
 
-            var response: ((Message?) -> Unit)? = null
+            var slotsToShow = 0
 
-            response = { message ->
-                val finished = slotsToShow.get() >= SLOT_COUNT
-                val newContent = embed {
+            fun isFinished() = slotsToShow >= SLOT_COUNT
+
+            fun createMessage(): MessageEmbed {
+                return embed {
                     var description = "**Bid Amount:** $bidAmount credits\n\n${slotResults.mapIndexed { index, value ->
-                        if (index <= slotsToShow.get()) value
+                        if (index <= slotsToShow) value
                         else symbols[random.nextInt(symbols.size)]
                     }.joinToString(separator = "")}"
-                    if (finished) {
+                    if (isFinished()) {
                         description += when {
                             result < 0 -> {
                                 color(Color.RED)
@@ -125,19 +132,14 @@ fun createCasinoModule() = module("Casino") {
                     }
                     description(description)
                 }
-                slotsToShow.addAndGet(3)
-                if (message == null) messageAction(newContent).queue(response)
-                else {
-                    val action = message.editMessage(newContent)
-                    if (finished) action.queueAfter(1, TimeUnit.SECONDS)
-                    else action.queueAfter(1, TimeUnit.SECONDS, response)
-                }
             }
 
-            response.invoke(null)
-
-            userProfile.credits += result
-            application.astolfoRepositories.userProfileRepository.save(userProfile)
+            val message = messageAction(createMessage()).sendAsync()
+            var delay = 1L
+            while (!isFinished()) {
+                slotsToShow += 3
+                message.editMessage(createMessage(), delay++)
+            }
         }
     }
 }

@@ -2,6 +2,8 @@ package xyz.astolfo.astolfocommunity
 
 import com.github.salomonbrys.kotson.fromJson
 import com.google.gson.Gson
+import com.google.gson.JsonSyntaxException
+import kotlinx.coroutines.experimental.async
 import kotlinx.coroutines.experimental.delay
 import kotlinx.coroutines.experimental.launch
 import okhttp3.OkHttpClient
@@ -12,12 +14,20 @@ import java.util.concurrent.TimeUnit
 val ASTOLFO_GSON = Gson()
 val ASTOLFO_HTTP_CLIENT = OkHttpClient()
 
-inline fun <reified T : Any> webJson(url: String, accept: String? = "application/json"): T? = ASTOLFO_GSON.fromJson(web(url, accept))
+suspend inline fun <reified T : Any> webJson(url: String, accept: String? = "application/json"): T? {
+    val json = web(url, accept)
+    try {
+        return ASTOLFO_GSON.fromJson(json)
+    }catch (e: JsonSyntaxException){
+        println(json)
+        throw e
+    }
+}
 
-fun web(url: String, accept: String? = null): String {
+suspend inline fun web(url: String, accept: String? = null): String {
     val requestBuilder = Request.Builder().url(url)
     if (accept != null) requestBuilder.header("Accept", accept)
-    return ASTOLFO_HTTP_CLIENT.newCall(requestBuilder.build()).execute().use { String(it.body()!!.bytes()) }
+    return async { ASTOLFO_HTTP_CLIENT.newCall(requestBuilder.build()).execute() }.await().use { String(it.body()!!.bytes()) }
 }
 
 class RateLimiter<K>(
@@ -105,4 +115,12 @@ object Utils {
         return timeStr
     }
 
+}
+
+private val WORD_SPLIT_REGEX = Regex("\\s+")
+
+fun String.words(): List<String> {
+    if (isEmpty()) return emptyList()
+    if (!contains(WORD_SPLIT_REGEX)) listOf(this)
+    return split(WORD_SPLIT_REGEX)
 }

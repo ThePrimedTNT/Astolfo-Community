@@ -3,6 +3,10 @@ package xyz.astolfo.astolfocommunity.modules.music
 import com.sedmelluq.discord.lavaplayer.track.AudioPlaylist
 import com.sedmelluq.discord.lavaplayer.track.AudioTrack
 import xyz.astolfo.astolfocommunity.*
+import xyz.astolfo.astolfocommunity.commands.*
+import xyz.astolfo.astolfocommunity.menus.paginator
+import xyz.astolfo.astolfocommunity.menus.provider
+import xyz.astolfo.astolfocommunity.menus.renderer
 import xyz.astolfo.astolfocommunity.modules.ModuleBuilder
 import xyz.astolfo.astolfocommunity.modules.command
 
@@ -112,7 +116,7 @@ internal fun ModuleBuilder.createGuildPlaylistCommands() {
                     return@action
                 }
                 val trackResponse = tempMessage(message { embed("\uD83D\uDD0E Searching for **$searchQuery**...") }) {
-                    application.musicManager.audioPlayerManager.loadItemSync(searchQuery)
+                    application.musicManager.audioPlayerManager.loadItemSync(searchQuery.query)
                 }
                 val audioItem = trackResponse.first
                 val exception = trackResponse.second
@@ -146,13 +150,12 @@ internal fun ModuleBuilder.createGuildPlaylistCommands() {
                         // Waits for a follow up response for song selection
                         responseListener {
                             if (menu.isDestroyed) {
-                                removeListener()
-                                true
-                            } else if (it.args.matches("\\d+".toRegex())) {
-                                val numSelection = it.args.toBigInteger().toInt()
+                                CommandSession.ResponseAction.UNREGISTER_LISTENER
+                            } else if (args.matches("\\d+".toRegex())) {
+                                val numSelection = args.toBigInteger().toInt()
                                 if (numSelection < 1 || numSelection > audioPlaylist.tracks.size) {
                                     messageAction("Unknown Selection").queue()
-                                    return@responseListener false
+                                    return@responseListener CommandSession.ResponseAction.IGNORE_COMMAND
                                 }
                                 val selectedTrack = audioPlaylist.tracks[numSelection - 1]
 
@@ -162,12 +165,11 @@ internal fun ModuleBuilder.createGuildPlaylistCommands() {
                                 application.astolfoRepositories.guildPlaylistRepository.save(playlist)
 
                                 messageAction(embed { description("[${selectedTrack.info.title}](${selectedTrack.info.uri}) has been added to the playlist **${playlist.name}**") }).queue()
-                                removeListener()
                                 menu.destroy()
-                                false // Don't run the command since song was added
+                                CommandSession.ResponseAction.IGNORE_AND_UNREGISTER_LISTENER // Don't run the command since song was added
                             } else {
                                 messageAction(embed { description("Please type the # of the song you want") }).queue()
-                                false // Still waiting for valid response
+                                CommandSession.ResponseAction.IGNORE_COMMAND // Still waiting for valid response
                             }
                         }
                     } else {

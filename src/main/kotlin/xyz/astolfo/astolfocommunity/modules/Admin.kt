@@ -1,7 +1,15 @@
 package xyz.astolfo.astolfocommunity.modules
 
 import net.dv8tion.jda.core.Permission
-import xyz.astolfo.astolfocommunity.*
+import xyz.astolfo.astolfocommunity.commands.action
+import xyz.astolfo.astolfocommunity.commands.command
+import xyz.astolfo.astolfocommunity.commands.inheritedAction
+import xyz.astolfo.astolfocommunity.commands.messageAction
+import xyz.astolfo.astolfocommunity.description
+import xyz.astolfo.astolfocommunity.embed
+import xyz.astolfo.astolfocommunity.field
+import xyz.astolfo.astolfocommunity.menus.memberSelectionBuilder
+import xyz.astolfo.astolfocommunity.title
 
 fun createAdminModule() = module("Admin") {
     command("settings") {
@@ -108,20 +116,19 @@ fun createAdminModule() = module("Admin") {
                 query = args
                 reason = ""
             }
-            selectMember("Kick Selection", query) { selectedMember ->
-                if (!event.guild.selfMember.canInteract(selectedMember)) {
-                    messageAction("I cannot kick that member!").queue()
-                    return@selectMember
-                }
-                val guildController = event.guild.controller
-                val userString = "**${selectedMember.effectiveName}** (**${selectedMember.user.name}#${selectedMember.user.discriminator} ${selectedMember.user.id}**)"
-                if (reason.isBlank()) {
-                    guildController.kick(selectedMember).queue()
-                    messageAction(embed("User $userString has been kicked!")).queue()
-                } else {
-                    guildController.kick(selectedMember, reason).queue()
-                    messageAction(embed("User $userString has been kicked with reason **$reason**!")).queue()
-                }
+            val selectedMember = memberSelectionBuilder(query).title("Kick Selection").execute() ?: return@action
+            if (!event.guild.selfMember.canInteract(selectedMember)) {
+                messageAction("I cannot kick that member!").queue()
+                return@action
+            }
+            val guildController = event.guild.controller
+            val userString = "**${selectedMember.effectiveName}** (**${selectedMember.user.name}#${selectedMember.user.discriminator} ${selectedMember.user.id}**)"
+            if (reason.isBlank()) {
+                guildController.kick(selectedMember).queue()
+                messageAction(embed("User $userString has been kicked!")).queue()
+            } else {
+                guildController.kick(selectedMember, reason).queue()
+                messageAction(embed("User $userString has been kicked with reason **$reason**!")).queue()
             }
         }
     }
@@ -144,20 +151,19 @@ fun createAdminModule() = module("Admin") {
                 query = args
                 reason = ""
             }
-            selectMember("Ban Selection", query) { selectedMember ->
-                if (!event.guild.selfMember.canInteract(selectedMember)) {
-                    messageAction("I cannot ban that member!").queue()
-                    return@selectMember
-                }
-                val guildController = event.guild.controller
-                val userString = "**${selectedMember.effectiveName}** (**${selectedMember.user.name}#${selectedMember.user.discriminator} ${selectedMember.user.id}**)"
-                if (reason.isBlank()) {
-                    guildController.ban(selectedMember, 0).queue()
-                    messageAction(embed("User $userString has been banned!")).queue()
-                } else {
-                    guildController.ban(selectedMember, 0, reason).queue()
-                    messageAction(embed("User $userString has been banned with reason **$reason**!")).queue()
-                }
+            val selectedMember = memberSelectionBuilder(query).title("Ban Selection").execute() ?: return@action
+            if (!event.guild.selfMember.canInteract(selectedMember)) {
+                messageAction("I cannot ban that member!").queue()
+                return@action
+            }
+            val guildController = event.guild.controller
+            val userString = "**${selectedMember.effectiveName}** (**${selectedMember.user.name}#${selectedMember.user.discriminator} ${selectedMember.user.id}**)"
+            if (reason.isBlank()) {
+                guildController.ban(selectedMember, 0).queue()
+                messageAction(embed("User $userString has been banned!")).queue()
+            } else {
+                guildController.ban(selectedMember, 0, reason).queue()
+                messageAction(embed("User $userString has been banned with reason **$reason**!")).queue()
             }
         }
     }

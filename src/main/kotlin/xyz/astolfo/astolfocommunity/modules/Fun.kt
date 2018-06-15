@@ -1,17 +1,23 @@
 package xyz.astolfo.astolfocommunity.modules
 
+import com.github.natanbc.reliqua.request.PendingRequest
 import com.github.natanbc.weeb4j.image.HiddenMode
 import com.github.natanbc.weeb4j.image.NsfwFilter
 import com.oopsjpeg.osu4j.backend.EndpointUsers
 import com.oopsjpeg.osu4j.backend.Osu
-import net.dv8tion.jda.core.MessageBuilder
+import kotlinx.coroutines.experimental.CompletableDeferred
 import org.jsoup.Jsoup
 import xyz.astolfo.astolfocommunity.*
+import xyz.astolfo.astolfocommunity.commands.action
+import xyz.astolfo.astolfocommunity.commands.command
+import xyz.astolfo.astolfocommunity.commands.inheritedAction
+import xyz.astolfo.astolfocommunity.commands.messageAction
 import xyz.astolfo.astolfocommunity.games.ShiritoriGame
 import xyz.astolfo.astolfocommunity.games.SnakeGame
 import xyz.astolfo.astolfocommunity.games.TetrisGame
+import xyz.astolfo.astolfocommunity.menus.memberSelectionBuilder
+import java.math.BigInteger
 import java.util.*
-import java.util.concurrent.TimeUnit
 
 fun createFunModule() = module("Fun") {
     command("osu") {
@@ -37,24 +43,23 @@ fun createFunModule() = module("Fun") {
         }
         command("profile", "p", "user", "stats") {
             action {
+                val osu = Osu.getAPI(application.properties.osu_api_token)
+                val user = try {
+                    osu.users.query(EndpointUsers.ArgumentsBuilder(args).build())
+                } catch (e: Exception) {
+                    messageAction(":mag: I looked for `$args`, but couldn't find them!" +
+                            "\n Try using the sig command instead.").queue()
+                    return@action
+                }
                 messageAction(embed {
-                    val osu = Osu.getAPI(application.properties.osu_api_token)
-                    fun getUser(args: String) = osu.users.query(EndpointUsers.ArgumentsBuilder(args).build())
-                    try {
-                        val user = getUser(args)
-                        val topPlayBeatmap = user.getTopScores(1).get()[0].beatmap.get()
-                        title("Osu stats for ${user.username}", user.url.toString())
-                        description("\nProfile url: ${user.url}" +
-                                "\nCountry: **${user.country}**" +
-                                "\nGlobal Rank: **#${user.rank} (${user.pp}pp)**" +
-                                "\nAccuracy: **${user.accuracy}%**" +
-                                "\nPlay Count: **${user.playCount} (Lv${user.level})**" +
-                                "\nTop play: **$topPlayBeatmap** ${topPlayBeatmap.url}")
-
-                    } catch (e: Exception) {
-                        messageAction(":mag: I looked for `$args`, but couldn't find them!" +
-                                "\n Try using the sig command instead.").queue()
-                    }
+                    val topPlayBeatmap = user.getTopScores(1).get().first().beatmap.get()
+                    title("Osu stats for ${user.username}", user.url.toString())
+                    description("\nProfile url: ${user.url}" +
+                            "\nCountry: **${user.country}**" +
+                            "\nGlobal Rank: **#${user.rank} (${user.pp}pp)**" +
+                            "\nAccuracy: **${user.accuracy}%**" +
+                            "\nPlay Count: **${user.playCount} (Lv${user.level})**" +
+                            "\nTop play: **$topPlayBeatmap** ${topPlayBeatmap.url}")
                 }).queue()
             }
         }
@@ -77,42 +82,66 @@ fun createFunModule() = module("Fun") {
     command("coinflip", "flip", "coin") {
         val random = Random()
         action {
-            messageAction("Flipping a coin for you...").queue {
-                it.editMessage(MessageBuilder().append("Coin landed on **${if (random.nextBoolean()) "Heads" else "Tails"}**").build()).queueAfter(1, TimeUnit.SECONDS)
-            }
+            val flipMessage = messageAction("Flipping a coin for you...").sendAsync()
+            flipMessage.editMessage("Coin landed on **${if (random.nextBoolean()) "Heads" else "Tails"}**", 1L)
         }
     }
     command("roll", "die", "dice") {
         val random = Random()
+
+        val ONE = BigInteger.valueOf(1)
+        val SIX = BigInteger.valueOf(6)
+
         action {
-            val max = args.takeIf { it.isNotBlank() }?.let {
-                val int = it.toIntOrNull()
-                if (int == null) {
-                    messageAction("The die max value must be a whole number!").queue()
+            val parts = args.words()
+            val (bound1, bound2) = when (parts.size) {
+                0 -> ONE to SIX
+                1 -> {
+                    val to = parts[0].toBigIntegerOrNull()
+                    (to?.signum() ?: 1).toBigInteger() to to
+                }
+                2 -> parts[0].toBigIntegerOrNull() to parts[1].toBigIntegerOrNull()
+                else -> {
+                    messageAction("Invalid roll format! Accepted Formats: *<max>*, *<min> <max>*").queue()
                     return@action
                 }
-                int
-            } ?: 6
-
-            messageAction(":game_die: Rolling a dice for you...").queue {
-                it.editMessage(MessageBuilder().append("Dice landed on **${random.nextInt(max - 1) + 1}**").build()).queueAfter(1, TimeUnit.SECONDS)
             }
+
+            if (bound1 == null || bound2 == null) {
+                messageAction("Only whole numbers are allowed for bounds!").queue()
+                return@action
+            }
+
+            val lowerBound = bound1.min(bound2)
+            val upperBound = bound1.max(bound2)
+
+            val diffBound = upperBound - lowerBound
+
+            var randomNum: BigInteger
+            do {
+                randomNum = BigInteger(diffBound.bitLength(), random)
+            } while (randomNum < BigInteger.ZERO || randomNum > diffBound)
+
+            randomNum += lowerBound
+
+            val rollingMessage = messageAction(":game_die: Rolling a dice for you...").sendAsync()
+            rollingMessage.editMessage("Dice landed on **$randomNum**", 1)
         }
     }
     command("8ball") {
         val random = Random()
         val responses = arrayOf("It is certain", "You may rely on it", "Cannot predict now", "Yes", "Reply hazy try again", "Yes definitely", "My reply is no", "Better not tell yo now", "Don't count on it", "Most likely", "Without a doubt", "As I see it, yes", "Outlook not so good", "Outlook good", "My sources say no", "Signs point to yes", "Very doubtful", "It is decidedly so", "Concentrate and ask again")
         action {
-            if (args.isEmpty()) {
+            val question = args
+            if (question.isBlank()) {
                 messageAction(embed(":exclamation: Make sure to ask a question next time. :)")).queue()
-            } else {
-                val question = args
-                messageAction(embed {
-                    title(":8ball: 8 Ball")
-                    field("Question", question, false)
-                    field("Answer", responses[random.nextInt(responses.size)], false)
-                }).queue()
+                return@action
             }
+            messageAction(embed {
+                title(":8ball: 8 Ball")
+                field("Question", question, false)
+                field("Answer", responses[random.nextInt(responses.size)], false)
+            }).queue()
         }
     }
     command("csshumor", "cssjoke", "cssh") {
@@ -142,26 +171,35 @@ fun createFunModule() = module("Fun") {
     }
     command("hug") {
         action {
-            selectMember("Hug Selection", args) { selectedMember ->
-                val image = application.weeb4J.imageProvider.getRandomImage("hug", HiddenMode.DEFAULT, NsfwFilter.NO_NSFW).execute()
-                messageAction(embed {
-                    description("${event.author.asMention} has hugged ${selectedMember.asMention}")
-                    image(image.url)
-                    footer("Powered by weeb.sh")
-                }).queue()
-            }
+            val selectedMember = memberSelectionBuilder(args).title("Hug Selection").execute() ?: return@action
+            val image = application.weeb4J.imageProvider.getRandomImage("hug", HiddenMode.DEFAULT, NsfwFilter.NO_NSFW).await()
+            messageAction(embed {
+                description("${event.author.asMention} has hugged ${selectedMember.asMention}")
+                image(image.url)
+                footer("Powered by weeb.sh")
+            }).queue()
         }
     }
     command("kiss") {
         action {
-            selectMember("Kiss Selection", args) { selectedMember ->
-                val image = application.weeb4J.imageProvider.getRandomImage("kiss", HiddenMode.DEFAULT, NsfwFilter.NO_NSFW).execute()
-                messageAction(embed {
-                    description("${event.author.asMention} has kissed ${selectedMember.asMention}")
-                    image(image.url)
-                    footer("Powered by weeb.sh")
-                }).queue()
-            }
+            val selectedMember = memberSelectionBuilder(args).title("Kiss Selection").execute() ?: return@action
+            val image = application.weeb4J.imageProvider.getRandomImage("kiss", HiddenMode.DEFAULT, NsfwFilter.NO_NSFW).await()
+            messageAction(embed {
+                description("${event.author.asMention} has kissed ${selectedMember.asMention}")
+                image(image.url)
+                footer("Powered by weeb.sh")
+            }).queue()
+        }
+    }
+    command("slap") {
+        action {
+            val selectedMember = memberSelectionBuilder(args).title("Slap Selection").execute() ?: return@action
+            val image = application.weeb4J.imageProvider.getRandomImage("slap", HiddenMode.DEFAULT, NsfwFilter.NO_NSFW).await()
+            messageAction(embed {
+                description("${event.author.asMention} has slapped ${selectedMember.asMention}")
+                image(image.url)
+                footer("Powered by weeb.sh")
+            }).queue()
         }
     }
     command("game") {
@@ -223,9 +261,15 @@ fun createFunModule() = module("Fun") {
 }
 
 class Advice(val slip: AdviceSlip?) {
-    inner class AdviceSlip(val advice: String?, val slip_id: String?)
+    inner class AdviceSlip(val advice: String?, @Suppress("unused") val slip_id: String?)
 }
 
 class Cat(val file: String?)
 class Neko(val neko: String?)
 class DadJoke(val id: String?, val status: Int?, var joke: String?)
+
+suspend inline fun <E> PendingRequest<E>.await(): E {
+    val future = CompletableDeferred<E>()
+    async({ future.complete(it) }, { future.completeExceptionally(it) })
+    return future.await()
+}

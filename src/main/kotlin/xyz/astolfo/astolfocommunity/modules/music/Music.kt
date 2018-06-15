@@ -17,12 +17,12 @@ import com.sedmelluq.discord.lavaplayer.track.AudioItem
 import com.sedmelluq.discord.lavaplayer.track.AudioPlaylist
 import com.sedmelluq.discord.lavaplayer.track.AudioTrack
 import com.sedmelluq.discord.lavaplayer.track.AudioTrackEndReason
-import kotlinx.coroutines.experimental.delay
-import kotlinx.coroutines.experimental.launch
+import kotlinx.coroutines.experimental.*
 import lavalink.client.LavalinkUtil
 import lavalink.client.io.Lavalink
 import lavalink.client.player.event.AudioEventAdapterWrapped
 import net.dv8tion.jda.core.entities.Guild
+import net.dv8tion.jda.core.entities.MessageChannel
 import net.dv8tion.jda.core.entities.TextChannel
 import net.dv8tion.jda.core.entities.VoiceChannel
 import net.dv8tion.jda.core.events.ReadyEvent
@@ -30,11 +30,12 @@ import net.dv8tion.jda.core.events.guild.GuildLeaveEvent
 import net.dv8tion.jda.core.hooks.ListenerAdapter
 import org.apache.commons.io.FileUtils
 import xyz.astolfo.astolfocommunity.*
+import xyz.astolfo.astolfocommunity.commands.CommandExecution
+import xyz.astolfo.astolfocommunity.menus.selectionBuilder
 import java.io.File
 import java.net.MalformedURLException
 import java.net.URI
 import java.net.URL
-import java.util.concurrent.CompletableFuture
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.LinkedBlockingDeque
 import java.util.concurrent.TimeUnit
@@ -144,7 +145,8 @@ class MusicManager(astolfoCommunityApplication: AstolfoCommunityApplication, pro
         Runtime.getRuntime().addShutdownHook(Thread {
             val musicMap = mutableMapOf<Int, MutableMap<Long, MusicSessionSave>>()
             musicSessionMap.toMap().forEach { guild, musicSession ->
-                musicMap.computeIfAbsent(guild.jda.shardInfo.shardId, { mutableMapOf() })[guild.idLong] = MusicSessionSave(musicSession.player.link.channel?.idLong ?: 0,
+                musicMap.computeIfAbsent(guild.jda.shardInfo.shardId, { mutableMapOf() })[guild.idLong] = MusicSessionSave(musicSession.player.link.channel?.idLong
+                        ?: 0,
                         musicSession.boundChannel.idLong,
                         musicSession.player.playingTrack?.let { LavalinkUtil.toMessage(it) },
                         musicSession.player.playingTrack?.let { musicSession.player.trackPosition } ?: 0,
@@ -171,7 +173,7 @@ class MusicManager(astolfoCommunityApplication: AstolfoCommunityApplication, pro
     }
 }
 
-class MusicSession(musicManager: MusicManager, guild: Guild, var boundChannel: TextChannel) : AudioEventAdapterWrapped() {
+class MusicSession(private val musicManager: MusicManager, guild: Guild, var boundChannel: MessageChannel) : AudioEventAdapterWrapped() {
     val player = musicManager.lavaLink.getPlayer(guild)
 
     private val queueLock = Any()
@@ -181,6 +183,7 @@ class MusicSession(musicManager: MusicManager, guild: Guild, var boundChannel: T
     var lastSeenMember = System.currentTimeMillis()
 
     private var nowPlayingMessage: AsyncMessage? = null
+    val musicLoader = MusicLoader()
 
     var repeatMode = RepeatMode.NOTHING
         set(value) {
@@ -274,6 +277,71 @@ class MusicSession(musicManager: MusicManager, guild: Guild, var boundChannel: T
         player.removeListener(this)
         player.link.resetPlayer()
         nowPlayingMessage?.delete()
+        musicLoader.destroy()
+    }
+
+    inner class MusicLoader {
+
+        private val tasks = mutableListOf<MusicLoaderTask>()
+        private var destroyed = false
+
+        fun add(musicQuery: MusicUtils.MusicQuery, messageChannel: MessageChannel) {
+            synchronized(tasks) {
+                if (destroyed) return
+                tasks.add(MusicLoaderTask(musicQuery, messageChannel))
+            }
+        }
+
+        fun destroy() {
+            destroyed = true
+            synchronized(tasks) {
+                tasks.forEach { it.destroy() }
+            }
+        }
+
+        inner class MusicLoaderTask(val query: MusicUtils.MusicQuery, val messageChannel: MessageChannel) {
+
+            private val message = messageChannel.sendMessage(embed("\uD83D\uDD0E Loading **${query.query}** to queue...")).sendAsync()
+            private val loaderJob = launch {
+                val result = musicManager.audioPlayerManager.loadItemSync(query.query)
+                val audioItem = result.first
+                val exception = result.second
+                if (audioItem != null && audioItem is AudioTrack) {
+                    // If the track returned is a normal audio track
+                    val audioTrack: AudioTrack = audioItem
+                    boundChannel = messageChannel
+                    queue(audioTrack)
+                    message.editMessage(embed("[${audioTrack.info.title}](${audioTrack.info.uri}) has been added to the queue"))
+                } else if (audioItem != null && audioItem is AudioPlaylist) {
+                    val audioPlaylist: AudioPlaylist = audioItem
+                    // If the tracks are from directly from a url
+                    boundChannel = messageChannel
+                    audioPlaylist.tracks.forEach { queue(it) }
+                    message.editMessage(embed("The playlist [${audioPlaylist.name}](${query.query}) has been added to the queue"))
+                } else if (exception != null) {
+                    message.editMessage("Failed due to an error: **${exception.message}**")
+                } else {
+                    message.editMessage("No matches found for **${query.query}**")
+                }
+            }
+
+            init {
+                loaderJob.invokeOnCompletion {
+                    launch {
+                        synchronized(tasks) {
+                            // Remove task once its completed
+                            tasks.remove(this@MusicLoaderTask)
+                        }
+                    }
+                }
+            }
+
+            fun destroy() = runBlocking {
+                loaderJob.cancelAndJoin()
+                if (loaderJob.isCancelled) message.editMessage(embed("\uD83D\uDD0E Loading **${query.query}** to queue... **[CANCELLED]**"))
+            }
+        }
+
     }
 
 }
@@ -281,8 +349,15 @@ class MusicSession(musicManager: MusicManager, guild: Guild, var boundChannel: T
 fun Lavalink.connect(voiceChannel: VoiceChannel) = getLink(voiceChannel.guild).connect(voiceChannel)
 fun Lavalink.getPlayer(guild: Guild) = getLink(guild).player!!
 
-fun AudioPlayerManager.loadItemSync(searchQuery: String, timeout: Long = 1L, timeUnit: TimeUnit = TimeUnit.MINUTES): Pair<AudioItem?, FriendlyException?> {
-    val future = CompletableFuture<Pair<AudioItem?, FriendlyException?>>()
+inline fun CommandExecution.selectMusic(results: List<AudioTrack>) = selectionBuilder<AudioTrack>()
+        .title("\uD83D\uDD0E Music Search Results:")
+        .results(results)
+        .noResultsMessage("Unknown Song!")
+        .resultsRenderer { "**${it.info.title}** *by ${it.info.author}*" }
+        .description("Type the number of the song you want")
+
+suspend fun AudioPlayerManager.loadItemSync(searchQuery: String): Pair<AudioItem?, FriendlyException?> {
+    val future = CompletableDeferred<Pair<AudioItem?, FriendlyException?>>()
     loadItem(searchQuery, object : AudioLoadResultHandler {
         override fun trackLoaded(track: AudioTrack?) {
             future.complete(track to null)
@@ -300,24 +375,26 @@ fun AudioPlayerManager.loadItemSync(searchQuery: String, timeout: Long = 1L, tim
             future.complete(playlist to null)
         }
     })
-    return future.get(timeout, timeUnit)!!
+    return future.await()
 }
 
 object MusicUtils {
 
     private val allowedHosts = listOf("youtube.com", "youtu.be", "music.youtube.com", "soundcloud.com", "bandcamp.com", "beam.pro", "mixer.com", "vimeo.com")
 
-    fun getEffectiveSearchQuery(query: String): String? {
+    fun getEffectiveSearchQuery(query: String): MusicQuery? {
         return try {
             val url = URL(query)
             val host = url.host.let { if (it.startsWith("www")) it.substring(4) else it }
             if (!allowedHosts.any { it.equals(host, true) }) {
                 return null
             }
-            query
+            MusicQuery(query, false)
         } catch (e: MalformedURLException) {
-            "ytsearch: $query"
+            MusicQuery("ytsearch: $query", true)
         }
     }
+
+    class MusicQuery(val query: String, val search: Boolean)
 
 }
