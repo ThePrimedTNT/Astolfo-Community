@@ -1,6 +1,5 @@
 package xyz.astolfo.astolfocommunity.menus
 
-import kotlinx.coroutines.experimental.launch
 import net.dv8tion.jda.core.entities.Message
 import net.dv8tion.jda.core.events.message.react.GenericMessageReactionEvent
 import net.dv8tion.jda.core.hooks.ListenerAdapter
@@ -120,13 +119,12 @@ class Paginator(private val commandExecution: CommandExecution, val titleProvide
 
     fun destroy() {
         // Clean Up
+        if(isDestroyed) return
         isDestroyed = true
         commandExecution.session.removeListener(destroyListener)
         commandExecution.event.jda.removeEventListener(listener)
-        launch {
-            message?.delete()
-            message = null
-        }
+        message?.delete()
+        message = null
     }
 
     companion object {

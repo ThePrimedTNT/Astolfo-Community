@@ -2,6 +2,7 @@ package xyz.astolfo.astolfocommunity.modules.music
 
 import com.sedmelluq.discord.lavaplayer.track.AudioPlaylist
 import com.sedmelluq.discord.lavaplayer.track.AudioTrack
+import net.dv8tion.jda.core.Permission
 import xyz.astolfo.astolfocommunity.*
 import xyz.astolfo.astolfocommunity.commands.*
 import xyz.astolfo.astolfocommunity.menus.paginator
@@ -13,6 +14,7 @@ import xyz.astolfo.astolfocommunity.modules.command
 internal fun ModuleBuilder.createGuildPlaylistCommands() {
     command("guildplaylist", "gpl") {
         command("create", "c") {
+            permission(Permission.MANAGE_SERVER)
             action {
                 if (args.isBlank()) {
                     messageAction("Enter a name to give the playlist!").queue()
@@ -50,6 +52,7 @@ internal fun ModuleBuilder.createGuildPlaylistCommands() {
             }
         }
         command("delete") {
+            permission(Permission.MANAGE_SERVER)
             action {
                 if (args.isBlank()) {
                     messageAction("Enter a playlist name!").queue()
@@ -80,22 +83,16 @@ internal fun ModuleBuilder.createGuildPlaylistCommands() {
                     title("Guild Playlist Info")
                     description("**Name:** *${playlist.name}*\n" +
                             "**Key:** ${playlist.playlistKey}")
-                    field("Details", "**Guild:** *${application.shardManager.getGuildById(playlist.guildId)?.name ?: "Not Found"}*\n" +
+                    field("Details", "**Guild:** *${application.shardManager.getGuildById(playlist.guildId)?.name
+                            ?: "Not Found"}*\n" +
                             "**Song Count:** *${playlist.songs.size}*", false)
                 }).queue()
             }
         }
         command("add") {
+            permission(Permission.MANAGE_SERVER)
             action {
-                val playlistName: String
-                val songQuery: String
-                if (args.contains(" ")) {
-                    playlistName = args.substringBefore(" ").trim()
-                    songQuery = args.substringAfter(" ").trim()
-                } else {
-                    playlistName = args
-                    songQuery = ""
-                }
+                val (playlistName, songQuery) = args.splitFirst(" ")
                 if (playlistName.isBlank()) {
                     messageAction("Enter a playlist name!").queue()
                     return@action

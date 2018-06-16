@@ -1,5 +1,6 @@
 package xyz.astolfo.astolfocommunity
 
+import kotlinx.coroutines.experimental.*
 import net.dv8tion.jda.core.EmbedBuilder
 import net.dv8tion.jda.core.MessageBuilder
 import net.dv8tion.jda.core.entities.Emote
@@ -10,6 +11,8 @@ import net.dv8tion.jda.core.requests.RestAction
 import net.dv8tion.jda.core.requests.restaction.MessageAction
 import net.dv8tion.jda.core.utils.Promise
 import java.awt.Color
+import java.util.concurrent.CopyOnWriteArrayList
+import java.util.concurrent.Future
 import java.util.concurrent.TimeUnit
 
 fun embed(text: String) = embed { description(text) }
@@ -47,28 +50,21 @@ fun Message.toAsync() = AsyncMessage(Promise(this))
 
 class AsyncMessage(asyncMessage: RequestFuture<Message>) {
 
+    companion object {
+        private val asyncRequestFutureContext = newFixedThreadPoolContext(50, "Async Request Future")
+    }
+
+    // The latest version from discord
     private var cachedMessage: Message? = null
+    // If the message was deleted, no longer intractable
     private var deleted = false
 
-    private val waitingActions = mutableListOf<(Message) -> Unit>()
+    private val taskManager = TaskManager()
 
     init {
         asyncMessage.thenApply {
             cachedMessage = it
-            synchronized(waitingActions) {
-                waitingActions.forEach { it.invoke(cachedMessage!!) }
-                waitingActions.clear()
-            }
-        }
-    }
-
-    private fun thenApply(action: (Message) -> Unit) {
-        synchronized(waitingActions) {
-            if (cachedMessage != null) {
-                action.invoke(cachedMessage!!)
-            } else if (!deleted) {
-                waitingActions.add(action)
-            }
+            taskManager.start()
         }
     }
 
@@ -82,20 +78,20 @@ class AsyncMessage(asyncMessage: RequestFuture<Message>) {
         if (newEditTime < cachedEditTime) cachedMessage = newMessage
     }
 
-    private fun handle(action: (Message) -> RestAction<Void>, response: () -> Unit) {
-        thenApply { action.invoke(it).queue({ response.invoke() }) }
+    private fun handle(action: (Message) -> RestAction<Void?>, response: () -> Unit) {
+        synchronized(taskManager) {
+            if (deleted) return
+            taskManager.add(action, 0L, TimeUnit.MINUTES) { response.invoke() }
+        }
     }
 
-    private fun handleMessage(action: (Message) -> RestAction<Message>, delay: Long, unit: TimeUnit, response: (Message) -> Unit) {
-        thenApply { oldMessage ->
-            fun handleNewMessage(newMessage: Message) {
-                updateCachedWithNew(newMessage)
-                response.invoke(newMessage)
+    private fun handleMessage(action: (Message) -> RestAction<Message?>, delay: Long, unit: TimeUnit, response: (Message) -> Unit) {
+        synchronized(taskManager) {
+            if (deleted) return
+            taskManager.add(action, delay, unit) {
+                updateCachedWithNew(it!!)
+                response.invoke(it)
             }
-
-            val action = action.invoke(oldMessage)
-            if (delay > 0) action.queueAfter(delay, unit, ::handleNewMessage)
-            else action.queue(::handleNewMessage)
         }
     }
 
@@ -115,13 +111,71 @@ class AsyncMessage(asyncMessage: RequestFuture<Message>) {
             handleMessage({ it.editMessage(newContent) }, delay, unit, response)
 
     fun delete(response: () -> Unit = {}) {
-        thenApply {
-            it.delete().queue {
-                deleted = true
+        synchronized(taskManager) {
+            if (deleted) throw IllegalStateException("Message already deleted!")
+            taskManager.dispose()
+            taskManager.add({ it.delete() }, 0, TimeUnit.MINUTES, {
                 cachedMessage = null
                 response.invoke()
+            })
+            deleted = true
+        }
+    }
+
+    inner class TaskManager {
+        private val tasks: MutableList<AsyncMessageTask<*>> = CopyOnWriteArrayList()
+        private var started = false
+
+        fun start() {
+            synchronized(tasks) {
+                if (started) throw IllegalStateException("You cannot start the task manager twice!")
+                started = true
+                tasks.forEach { it.start() }
             }
         }
+
+        fun <E> add(action: (Message) -> RestAction<E?>, delay: Long, unit: TimeUnit, response: (E?) -> Unit) = add(AsyncMessageTask(action, delay, unit, response))
+
+        private fun add(task: AsyncMessageTask<*>) {
+            synchronized(tasks) {
+                if (deleted) throw IllegalStateException("AsyncMessage already disposed!")
+                tasks.add(task)
+                if (started) task.start()
+            }
+        }
+
+        fun dispose() {
+            synchronized(tasks) {
+                tasks.forEach { it.dispose() }
+            }
+        }
+
+        inner class AsyncMessageTask<E>(val action: (Message) -> RestAction<E?>, val delay: Long, val unit: TimeUnit, val response: (E?) -> Unit) {
+            private val lock = Any()
+            private var task: Job? = null
+            private var restFuture: Future<E?>? = null
+            fun start() {
+                synchronized(lock) {
+                    val restAction = action.invoke(cachedMessage!!)
+                    restFuture = if (delay > 0) restAction.submitAfter(delay, unit)
+                    else restAction.submit()
+                    task = launch(asyncRequestFutureContext) {
+                        // TODO find solution that doesn't block a thread
+                        val result = restFuture!!.get(5, TimeUnit.MINUTES)
+                        response.invoke(result)
+                    }
+                }
+            }
+
+            fun dispose() {
+                synchronized(lock) {
+                    restFuture?.cancel(true)
+                    runBlocking { task?.cancelAndJoin() }
+                    tasks.remove(this@AsyncMessageTask)
+                }
+            }
+        }
+
     }
 
 }

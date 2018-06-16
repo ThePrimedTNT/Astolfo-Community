@@ -37,6 +37,7 @@ import java.net.MalformedURLException
 import java.net.URI
 import java.net.URL
 import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.LinkedBlockingDeque
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicInteger
@@ -282,7 +283,7 @@ class MusicSession(private val musicManager: MusicManager, guild: Guild, var bou
 
     inner class MusicLoader {
 
-        private val tasks = mutableListOf<MusicLoaderTask>()
+        private val tasks: MutableList<MusicLoaderTask> = CopyOnWriteArrayList()
         private var destroyed = false
 
         fun add(musicQuery: MusicUtils.MusicQuery, messageChannel: MessageChannel) {
@@ -293,8 +294,8 @@ class MusicSession(private val musicManager: MusicManager, guild: Guild, var bou
         }
 
         fun destroy() {
-            destroyed = true
             synchronized(tasks) {
+                destroyed = true
                 tasks.forEach { it.destroy() }
             }
         }
@@ -327,12 +328,8 @@ class MusicSession(private val musicManager: MusicManager, guild: Guild, var bou
 
             init {
                 loaderJob.invokeOnCompletion {
-                    launch {
-                        synchronized(tasks) {
-                            // Remove task once its completed
-                            tasks.remove(this@MusicLoaderTask)
-                        }
-                    }
+                    // Remove task once its completed
+                    tasks.remove(this@MusicLoaderTask)
                 }
             }
 
@@ -349,7 +346,7 @@ class MusicSession(private val musicManager: MusicManager, guild: Guild, var bou
 fun Lavalink.connect(voiceChannel: VoiceChannel) = getLink(voiceChannel.guild).connect(voiceChannel)
 fun Lavalink.getPlayer(guild: Guild) = getLink(guild).player!!
 
-inline fun CommandExecution.selectMusic(results: List<AudioTrack>) = selectionBuilder<AudioTrack>()
+fun CommandExecution.selectMusic(results: List<AudioTrack>) = selectionBuilder<AudioTrack>()
         .title("\uD83D\uDD0E Music Search Results:")
         .results(results)
         .noResultsMessage("Unknown Song!")
@@ -358,7 +355,7 @@ inline fun CommandExecution.selectMusic(results: List<AudioTrack>) = selectionBu
 
 suspend fun AudioPlayerManager.loadItemSync(searchQuery: String): Pair<AudioItem?, FriendlyException?> {
     val future = CompletableDeferred<Pair<AudioItem?, FriendlyException?>>()
-    loadItem(searchQuery, object : AudioLoadResultHandler {
+    val loadTask = loadItem(searchQuery, object : AudioLoadResultHandler {
         override fun trackLoaded(track: AudioTrack?) {
             future.complete(track to null)
         }
@@ -375,6 +372,7 @@ suspend fun AudioPlayerManager.loadItemSync(searchQuery: String): Pair<AudioItem
             future.complete(playlist to null)
         }
     })
+    future.invokeOnCompletion { loadTask.cancel(true) }
     return future.await()
 }
 

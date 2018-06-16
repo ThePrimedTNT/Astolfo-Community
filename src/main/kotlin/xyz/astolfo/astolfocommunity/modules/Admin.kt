@@ -1,10 +1,7 @@
 package xyz.astolfo.astolfocommunity.modules
 
 import net.dv8tion.jda.core.Permission
-import xyz.astolfo.astolfocommunity.commands.action
-import xyz.astolfo.astolfocommunity.commands.command
-import xyz.astolfo.astolfocommunity.commands.inheritedAction
-import xyz.astolfo.astolfocommunity.commands.messageAction
+import xyz.astolfo.astolfocommunity.commands.*
 import xyz.astolfo.astolfocommunity.description
 import xyz.astolfo.astolfocommunity.embed
 import xyz.astolfo.astolfocommunity.field
@@ -13,13 +10,7 @@ import xyz.astolfo.astolfocommunity.title
 
 fun createAdminModule() = module("Admin") {
     command("settings") {
-        inheritedAction {
-            if (!event.member.hasPermission(Permission.ADMINISTRATOR)) {
-                messageAction(embed("You must be a server admin in order to change settings!")).queue()
-                return@inheritedAction false
-            }
-            true
-        }
+        permission(Permission.ADMINISTRATOR)
         action {
             messageAction(embed {
                 title("Astolfo Guild Settings")
@@ -54,11 +45,8 @@ fun createAdminModule() = module("Admin") {
         }
     }
     command("prune", "purge", "delete") {
+        permission(Permission.MESSAGE_MANAGE)
         action {
-            if (!event.member.hasPermission(Permission.MESSAGE_MANAGE)) {
-                messageAction(embed("You need the `Manage Messages` permission in order to delete messages!")).queue()
-                return@action
-            }
             val amountToDelete = args.takeIf { it.isNotBlank() }?.let {
                 val amountNum = it.toIntOrNull()
                 if (amountNum == null) {
@@ -98,13 +86,10 @@ fun createAdminModule() = module("Admin") {
         }
     }
     command("kick") {
+        permission(Permission.KICK_MEMBERS)
         action {
             if (!event.guild.selfMember.hasPermission(Permission.KICK_MEMBERS)) {
                 messageAction(embed("I need the `Kick Members` permission in order to kick people!")).queue()
-                return@action
-            }
-            if (!event.member.hasPermission(Permission.KICK_MEMBERS)) {
-                messageAction(embed("You need the `Kick Members` permission in order to kick people!")).queue()
                 return@action
             }
             val query: String

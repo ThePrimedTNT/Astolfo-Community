@@ -157,4 +157,13 @@ data class UserUpvote(var lastUpvote: Long = -1L, var remindedUpvote: Boolean = 
 
 @Entity
 data class GuildSettings(@Id val guildId: Long = 0L,
-                         var prefix: String = "")
+                         var prefix: String = "",
+                         @ElementCollection
+                         @LazyCollection(LazyCollectionOption.FALSE)
+                         @CollectionTable(name = "guild_settings_permissions", joinColumns = [(JoinColumn(name = "guildId"))])
+                         @MapKeyClass(PermissionSetting::class)
+                         @Column(name = "allow")
+                         var permissions: Map<PermissionSetting, Boolean> = mutableMapOf())
+
+@Embeddable
+data class PermissionSetting(val role: Long = 0L, val channel: Long = 0L, @Column(length = 45) val node: String = "")

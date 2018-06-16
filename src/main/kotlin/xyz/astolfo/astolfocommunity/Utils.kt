@@ -18,7 +18,7 @@ suspend inline fun <reified T : Any> webJson(url: String, accept: String? = "app
     val json = web(url, accept)
     try {
         return ASTOLFO_GSON.fromJson(json)
-    }catch (e: JsonSyntaxException){
+    } catch (e: JsonSyntaxException) {
         println(json)
         throw e
     }
@@ -124,3 +124,11 @@ fun String.words(): List<String> {
     if (!contains(WORD_SPLIT_REGEX)) listOf(this)
     return split(WORD_SPLIT_REGEX)
 }
+
+fun String.splitFirst(delimiter: String) =
+        if (contains(delimiter)) substringBefore(delimiter).trim() to substringAfter(delimiter).trim()
+        else this to ""
+
+fun String.splitLast(delimiter: String) =
+        if (contains(delimiter)) substringBeforeLast(delimiter).trim() to substringAfterLast(delimiter).trim()
+        else this to ""
