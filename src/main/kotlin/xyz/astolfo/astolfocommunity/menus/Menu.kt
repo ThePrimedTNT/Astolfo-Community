@@ -6,14 +6,13 @@ import net.dv8tion.jda.core.hooks.ListenerAdapter
 import xyz.astolfo.astolfocommunity.*
 import xyz.astolfo.astolfocommunity.commands.CommandExecution
 import xyz.astolfo.astolfocommunity.commands.CommandSession
-import xyz.astolfo.astolfocommunity.commands.messageAction
 import kotlin.math.max
 import kotlin.math.min
 
 
 fun CommandExecution.paginator(titleProvider: String? = "", builder: PaginatorBuilder.() -> Unit) = paginator({ titleProvider }, builder)
 fun CommandExecution.paginator(titleProvider: () -> String? = { null }, builder: PaginatorBuilder.() -> Unit): Paginator {
-    val paginatorBuilder = PaginatorBuilder(this, titleProvider, PaginatorProvider(0) { listOf() }, {
+    val paginatorBuilder = PaginatorBuilder(this, titleProvider, PaginatorProvider(0) { listOf() }) {
         message {
             embed {
                 titleProvider.invoke()?.let { title(it) }
@@ -21,7 +20,7 @@ fun CommandExecution.paginator(titleProvider: () -> String? = { null }, builder:
                 footer("Page ${currentPage + 1}/${provider.pageCount}")
             }
         }
-    })
+    }
     builder.invoke(paginatorBuilder)
     return paginatorBuilder.build()
 }

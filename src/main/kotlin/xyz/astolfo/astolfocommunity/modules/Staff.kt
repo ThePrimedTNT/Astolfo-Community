@@ -1,14 +1,12 @@
 package xyz.astolfo.astolfocommunity.modules
 
-import xyz.astolfo.astolfocommunity.*
-import xyz.astolfo.astolfocommunity.commands.action
-import xyz.astolfo.astolfocommunity.commands.command
-import xyz.astolfo.astolfocommunity.commands.inheritedAction
-import xyz.astolfo.astolfocommunity.commands.messageAction
+import xyz.astolfo.astolfocommunity.RadioEntry
+import xyz.astolfo.astolfocommunity.description
+import xyz.astolfo.astolfocommunity.embed
 import java.net.MalformedURLException
 import java.net.URL
 
-fun createStaffModule() = module("Staff") {
+fun createStaffModule() = module("Developer", true) {
     command("staff") {
         inheritedAction {
             if (!application.staffMemberIds.contains(event.author.idLong)) {

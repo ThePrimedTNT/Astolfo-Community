@@ -163,7 +163,9 @@ data class GuildSettings(@Id val guildId: Long = 0L,
                          @CollectionTable(name = "guild_settings_permissions", joinColumns = [(JoinColumn(name = "guildId"))])
                          @MapKeyClass(PermissionSetting::class)
                          @Column(name = "allow")
-                         var permissions: Map<PermissionSetting, Boolean> = mutableMapOf())
+                         var permissions: Map<PermissionSetting, Boolean> = mutableMapOf()) {
+    fun getEffectiveGuildPrefix(application: AstolfoCommunityApplication) = prefix.takeIf { it.isNotBlank() } ?: application.properties.default_prefix
+}
 
 @Embeddable
 data class PermissionSetting(val role: Long = 0L, val channel: Long = 0L, @Column(length = 45) val node: String = "")

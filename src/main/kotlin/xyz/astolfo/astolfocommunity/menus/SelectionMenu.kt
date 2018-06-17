@@ -4,15 +4,30 @@ import com.jagrosh.jdautilities.commons.utils.FinderUtil
 import kotlinx.coroutines.experimental.CompletableDeferred
 import net.dv8tion.jda.core.entities.Member
 import net.dv8tion.jda.core.entities.Message
+import net.dv8tion.jda.core.entities.Role
+import net.dv8tion.jda.core.entities.TextChannel
 import xyz.astolfo.astolfocommunity.*
-import xyz.astolfo.astolfocommunity.commands.*
-
+import xyz.astolfo.astolfocommunity.commands.CommandExecution
+import xyz.astolfo.astolfocommunity.commands.CommandSession
+import java.util.concurrent.atomic.AtomicReference
 
 fun CommandExecution.memberSelectionBuilder(query: String) = selectionBuilder<Member>()
         .results(FinderUtil.findMembers(query, event.guild))
         .noResultsMessage("Unknown Member!")
         .resultsRenderer { "**${it.effectiveName} (${it.user.name}#${it.user.discriminator})**" }
         .description("Type the number of the member you want.")
+
+fun CommandExecution.textChannelSelectionBuilder(query: String) = selectionBuilder<TextChannel>()
+        .results(FinderUtil.findTextChannels(query, event.guild))
+        .noResultsMessage("Unknown Text Channel!")
+        .resultsRenderer { "**${it.name} (${it.id})**" }
+        .description("Type the number of the text channel you want.")
+
+fun CommandExecution.roleSelectionBuilder(query: String) = selectionBuilder<Role>()
+        .results(FinderUtil.findRoles(query, event.guild))
+        .noResultsMessage("Unknown Role!")
+        .resultsRenderer { "**${it.name} (${it.id})**" }
+        .description("Type the number of the role you want.")
 
 fun <E> CommandExecution.selectionBuilder() = SelectionMenuBuilder<E>(this)
 
@@ -52,6 +67,7 @@ class SelectionMenuBuilder<E>(private val execution: CommandExecution) {
             renderer { this@SelectionMenuBuilder.renderer.invoke(this) }
         }
         val response = CompletableDeferred<E?>()
+        val errorMessage = AtomicReference<AsyncMessage>()
         // Waits for a follow up response for user selection
         responseListener {
             if (menu.isDestroyed) {
@@ -59,18 +75,55 @@ class SelectionMenuBuilder<E>(private val execution: CommandExecution) {
             } else if (args.matches("\\d+".toRegex())) {
                 val numSelection = args.toBigInteger().toInt()
                 if (numSelection < 1 || numSelection > results.size) {
-                    messageAction("Unknown Selection").queue()
+                    errorMessage.getAndSet(messageAction("Unknown Selection").sendAsync())?.delete()
                     return@responseListener CommandSession.ResponseAction.IGNORE_COMMAND
                 }
                 val selectedMember = results[numSelection - 1]
                 response.complete(selectedMember)
                 CommandSession.ResponseAction.IGNORE_AND_UNREGISTER_LISTENER
             } else {
-                CommandSession.ResponseAction.RUN_COMMAND
+                if (event.message.contentRaw == args) {
+                    errorMessage.getAndSet(messageAction("Response must be a number!").sendAsync())?.delete()
+                    return@responseListener CommandSession.ResponseAction.IGNORE_COMMAND
+                } else CommandSession.ResponseAction.RUN_COMMAND
             }
         }
         destroyListener { response.complete(null) }
-        response.invokeOnCompletion { menu.destroy() }
+        response.invokeOnCompletion {
+            menu.destroy()
+            errorMessage.get()?.delete()
+        }
+        return response.await()
+    }
+}
+
+fun CommandExecution.chatInput(inputMessage: String) = ChatInputBuilder(this)
+        .description(inputMessage)
+
+class ChatInputBuilder(private val execution: CommandExecution) {
+    private var title: String = ""
+    private var description: String = "Input = Output"
+
+    fun title(value: String) = apply { title = value }
+    fun description(value: String) = apply { description = value }
+
+    suspend fun execute(): String? = with(execution) {
+        val response = CompletableDeferred<String?>()
+        val message = messageAction(embed {
+            if(title.isNotBlank()) title(title)
+            description(description)
+        }).sendAsync()
+        // Waits for a follow up response for user selection
+        responseListener {
+            if (message.isDeleted) {
+                CommandSession.ResponseAction.UNREGISTER_LISTENER
+            } else {
+                response.complete(args)
+                CommandSession.ResponseAction.IGNORE_AND_UNREGISTER_LISTENER
+            }
+        }
+        destroyListener { response.complete(null) }
+        response.invokeOnCompletion { message.delete() }
         return response.await()
     }
 }

@@ -2,8 +2,6 @@ package xyz.astolfo.astolfocommunity.modules
 
 import net.dv8tion.jda.core.JDAInfo
 import xyz.astolfo.astolfocommunity.*
-import xyz.astolfo.astolfocommunity.commands.action
-import xyz.astolfo.astolfocommunity.commands.messageAction
 import xyz.astolfo.astolfocommunity.menus.memberSelectionBuilder
 import java.text.DecimalFormat
 
@@ -91,7 +89,7 @@ fun createInfoModule() = module("Info") {
                     title("Astolfo Command Help")
                     description("If you're having  trouble with anything, you can always stop by our support server!" +
                             "\nInvite Link: https://discord.gg/23RB2Wc")
-                    modules.forEach {
+                    modules.filterNot { it.hidden }.forEach {
                         val commandNames = it.commands.joinToString(" ") { "`${it.name}` " }
                         field("${it.name} Commands", commandNames, false)
                     }

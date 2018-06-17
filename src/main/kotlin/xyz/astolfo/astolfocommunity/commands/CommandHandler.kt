@@ -21,9 +21,9 @@ import xyz.astolfo.astolfocommunity.modules.modules
 import java.util.*
 import java.util.concurrent.TimeUnit
 
-class CommandHandler(val astolfoCommunityApplication: AstolfoCommunityApplication) : ListenerAdapter() {
+class CommandHandler(val application: AstolfoCommunityApplication) : ListenerAdapter() {
 
-    private val chatBotManager = ChatBotManager(astolfoCommunityApplication.properties)
+    private val chatBotManager = ChatBotManager(application.properties)
 
     private val messageProcessorContext = newFixedThreadPoolContext(20, "Message Processor")
     private val commandProcessorContext = newFixedThreadPoolContext(20, "Command Processor")
@@ -34,7 +34,7 @@ class CommandHandler(val astolfoCommunityApplication: AstolfoCommunityApplicatio
     private val mentionPrefixes: Array<String>
 
     init {
-        val botId = astolfoCommunityApplication.properties.bot_user_id
+        val botId = application.properties.bot_user_id
         mentionPrefixes = arrayOf("<@$botId>", "<@!$botId>")
     }
 
@@ -43,8 +43,7 @@ class CommandHandler(val astolfoCommunityApplication: AstolfoCommunityApplicatio
         if (event!!.author.isBot) return
         if (event.textChannel?.canTalk() != true) return
         launch(messageProcessorContext) {
-            val prefix = astolfoCommunityApplication.astolfoRepositories.getEffectiveGuildSettings(event.guild.idLong).prefix.takeIf { it.isNotBlank() }
-                    ?: astolfoCommunityApplication.properties.default_prefix
+            val prefix = application.astolfoRepositories.getEffectiveGuildSettings(event.guild.idLong).getEffectiveGuildPrefix(application)
 
             val rawMessage = event.message.contentRaw!!
 
@@ -59,7 +58,7 @@ class CommandHandler(val astolfoCommunityApplication: AstolfoCommunityApplicatio
                         if (currentSession.getListeners().isEmpty()) return@commandScope
                         // TODO add rate limit
                         //if (!processRateLimit(event)) return@launch
-                        val execution = CommandExecution(astolfoCommunityApplication, event, currentSession, currentSession.commandPath, rawMessage, timeIssued)
+                        val execution = CommandExecution(application, event, currentSession, currentSession.commandPath, rawMessage, timeIssued)
                         if (currentSession.onMessageReceived(execution) == CommandSession.ResponseAction.RUN_COMMAND) {
                             // If the response listeners return true or all the response listeners removed themselves
                             commandSessionManager.invalidate(event)
@@ -113,7 +112,7 @@ class CommandHandler(val astolfoCommunityApplication: AstolfoCommunityApplicatio
         val newCommandPath = "$commandPath ${command.name}".trim()
 
         fun createExecution(session: CommandSession) = CommandExecution(
-                astolfoCommunityApplication,
+                application,
                 event,
                 session,
                 newCommandPath,
@@ -129,7 +128,7 @@ class CommandHandler(val astolfoCommunityApplication: AstolfoCommunityApplicatio
             hasPermission = !event.member.hasPermission(event.textChannel, *permission.permissionDefaults)
         // Check Astolfo permission if discord permission didn't already grant permissions
         if (hasPermission != true)
-            AstolfoPermissionUtils.hasPermission(event.member, event.textChannel, astolfoCommunityApplication.astolfoRepositories.getEffectiveGuildSettings(event.guild.idLong).permissions, permission)?.let { hasPermission = it }
+            AstolfoPermissionUtils.hasPermission(event.member, event.textChannel, application.astolfoRepositories.getEffectiveGuildSettings(event.guild.idLong).permissions, permission)?.let { hasPermission = it }
 
         if (hasPermission == false) {
             event.channel.sendMessage("You are missing the astolfo **${permission.path}**${if (permission.permissionDefaults.isNotEmpty())

@@ -8,10 +8,6 @@ import com.oopsjpeg.osu4j.backend.Osu
 import kotlinx.coroutines.experimental.CompletableDeferred
 import org.jsoup.Jsoup
 import xyz.astolfo.astolfocommunity.*
-import xyz.astolfo.astolfocommunity.commands.action
-import xyz.astolfo.astolfocommunity.commands.command
-import xyz.astolfo.astolfocommunity.commands.inheritedAction
-import xyz.astolfo.astolfocommunity.commands.messageAction
 import xyz.astolfo.astolfocommunity.games.ShiritoriGame
 import xyz.astolfo.astolfocommunity.games.SnakeGame
 import xyz.astolfo.astolfocommunity.games.TetrisGame

@@ -12,7 +12,6 @@ import net.dv8tion.jda.core.requests.restaction.MessageAction
 import net.dv8tion.jda.core.utils.Promise
 import java.awt.Color
 import java.util.concurrent.CopyOnWriteArrayList
-import java.util.concurrent.Future
 import java.util.concurrent.TimeUnit
 
 fun embed(text: String) = embed { description(text) }
@@ -57,7 +56,8 @@ class AsyncMessage(asyncMessage: RequestFuture<Message>) {
     // The latest version from discord
     private var cachedMessage: Message? = null
     // If the message was deleted, no longer intractable
-    private var deleted = false
+    var isDeleted = false
+        private set
 
     private val taskManager = TaskManager()
 
@@ -80,14 +80,14 @@ class AsyncMessage(asyncMessage: RequestFuture<Message>) {
 
     private fun handle(action: (Message) -> RestAction<Void?>, response: () -> Unit) {
         synchronized(taskManager) {
-            if (deleted) return
+            if (isDeleted) return
             taskManager.add(action, 0L, TimeUnit.MINUTES) { response.invoke() }
         }
     }
 
     private fun handleMessage(action: (Message) -> RestAction<Message?>, delay: Long, unit: TimeUnit, response: (Message) -> Unit) {
         synchronized(taskManager) {
-            if (deleted) return
+            if (isDeleted) return
             taskManager.add(action, delay, unit) {
                 updateCachedWithNew(it!!)
                 response.invoke(it)
@@ -112,13 +112,13 @@ class AsyncMessage(asyncMessage: RequestFuture<Message>) {
 
     fun delete(response: () -> Unit = {}) {
         synchronized(taskManager) {
-            if (deleted) throw IllegalStateException("Message already deleted!")
+            if (isDeleted) throw IllegalStateException("Message already deleted!")
             taskManager.dispose()
             taskManager.add({ it.delete() }, 0, TimeUnit.MINUTES, {
                 cachedMessage = null
                 response.invoke()
             })
-            deleted = true
+            isDeleted = true
         }
     }
 
@@ -134,11 +134,12 @@ class AsyncMessage(asyncMessage: RequestFuture<Message>) {
             }
         }
 
-        fun <E> add(action: (Message) -> RestAction<E?>, delay: Long, unit: TimeUnit, response: (E?) -> Unit) = add(AsyncMessageTask(action, delay, unit, response))
+        fun <E> add(action: (Message) -> RestAction<E?>, delay: Long, unit: TimeUnit, response: (E?) -> Unit) =
+                add(AsyncMessageTask(action, delay, unit, response))
 
         private fun add(task: AsyncMessageTask<*>) {
             synchronized(tasks) {
-                if (deleted) throw IllegalStateException("AsyncMessage already disposed!")
+                if (isDeleted) throw IllegalStateException("AsyncMessage already disposed!")
                 tasks.add(task)
                 if (started) task.start()
             }
@@ -153,16 +154,26 @@ class AsyncMessage(asyncMessage: RequestFuture<Message>) {
         inner class AsyncMessageTask<E>(val action: (Message) -> RestAction<E?>, val delay: Long, val unit: TimeUnit, val response: (E?) -> Unit) {
             private val lock = Any()
             private var task: Job? = null
-            private var restFuture: Future<E?>? = null
+            private var restFuture: RequestFuture<E?>? = null
             fun start() {
+                fun submit() {
+                    synchronized(lock) {
+                        val restAction = action.invoke(cachedMessage!!)
+                        restFuture = restAction.submit()
+                        restFuture!!.thenApply {
+                            response.invoke(it)
+                            tasks.remove(this@AsyncMessageTask)
+                        }
+                    }
+                }
                 synchronized(lock) {
-                    val restAction = action.invoke(cachedMessage!!)
-                    restFuture = if (delay > 0) restAction.submitAfter(delay, unit)
-                    else restAction.submit()
-                    task = launch(asyncRequestFutureContext) {
-                        // TODO find solution that doesn't block a thread
-                        val result = restFuture!!.get(5, TimeUnit.MINUTES)
-                        response.invoke(result)
+                    if (delay > 0) {
+                        task = launch(asyncRequestFutureContext) {
+                            delay(delay, unit)
+                            submit()
+                        }
+                    } else {
+                        submit()
                     }
                 }
             }

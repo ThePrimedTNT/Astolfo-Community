@@ -5,7 +5,8 @@ import com.sedmelluq.discord.lavaplayer.track.AudioTrack
 import net.dv8tion.jda.core.Permission
 import net.dv8tion.jda.core.utils.PermissionUtil
 import xyz.astolfo.astolfocommunity.*
-import xyz.astolfo.astolfocommunity.commands.*
+import xyz.astolfo.astolfocommunity.commands.CommandBuilder
+import xyz.astolfo.astolfocommunity.commands.CommandExecution
 import xyz.astolfo.astolfocommunity.menus.paginator
 import xyz.astolfo.astolfocommunity.menus.provider
 import xyz.astolfo.astolfocommunity.menus.renderer
@@ -128,11 +129,7 @@ fun createMusicModule() = module("Music") {
                                     "[${currentTrack.info.title}](${currentTrack.info.uri})"
                                 }
                             }
-                            field("\uD83C\uDFBC Queue", false) {
-                                val content = providedString
-                                println(content)
-                                content
-                            }
+                            field("\uD83C\uDFBC Queue", false) { providedString }
                             footer("Page ${currentPage + 1}/${provider.pageCount}")
                         }
                     }
@@ -376,24 +373,36 @@ fun volumeIcon(volume: Int) = when {
     else -> Emotes.SPEAKER_2
 }
 
-fun CommandBuilder.musicAction(memberInVoice: Boolean = true, sameVoiceChannel: Boolean = true, activeSession: Boolean = false, musicAction: suspend CommandExecution.() -> Unit) {
-    action {
-        val author = event.member!!
-        if (activeSession && !application.musicManager.hasMusicSession(event.guild)) {
-            messageAction("There is no active music session!").queue()
-            return@action
-        }
-        if (memberInVoice && !author.voiceState.inVoiceChannel()) {
-            messageAction("You must join a voice channel to use music commands!").queue()
-            return@action
-        }
-        if (memberInVoice && sameVoiceChannel && application.musicManager.hasMusicSession(event.guild) && event.guild.selfMember.voiceState.inVoiceChannel()) {
-            if (author.voiceState.channel !== event.guild.selfMember.voiceState.channel) {
-                messageAction("You must be in the same voice channel as Astolfo to use music commands!").queue()
-                return@action
+fun CommandBuilder.musicAction(
+        memberInVoice: Boolean = true,
+        sameVoiceChannel: Boolean = true,
+        activeSession: Boolean = false,
+        musicAction: suspend CommandExecution.() -> Unit
+) {
+    stageActions<Any?> {
+        action {
+            val musicManager = application.musicManager
+            val guild = event.guild
+            val author = event.member!!
+            if (activeSession && !musicManager.hasMusicSession(guild)) {
+                messageAction("There is no active music session!").queue()
+                return@action false
             }
+            if (memberInVoice && !author.voiceState.inVoiceChannel()) {
+                messageAction("You must join a voice channel to use music commands!").queue()
+                return@action false
+            }
+            if (memberInVoice && sameVoiceChannel && musicManager.hasMusicSession(guild) && guild.selfMember.voiceState.inVoiceChannel()) {
+                if (author.voiceState.channel !== guild.selfMember.voiceState.channel) {
+                    messageAction("You must be in the same voice channel as Astolfo to use music commands!").queue()
+                    return@action false
+                }
+            }
+            true
         }
-        musicAction.invoke(this)
+        basicAction {
+            musicAction.invoke(this)
+        }
     }
 }
 

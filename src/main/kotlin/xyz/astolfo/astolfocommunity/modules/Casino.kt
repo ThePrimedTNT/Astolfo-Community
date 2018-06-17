@@ -2,9 +2,6 @@ package xyz.astolfo.astolfocommunity.modules
 
 import net.dv8tion.jda.core.entities.MessageEmbed
 import xyz.astolfo.astolfocommunity.*
-import xyz.astolfo.astolfocommunity.commands.action
-import xyz.astolfo.astolfocommunity.commands.getProfile
-import xyz.astolfo.astolfocommunity.commands.messageAction
 import xyz.astolfo.astolfocommunity.menus.paginator
 import xyz.astolfo.astolfocommunity.menus.provider
 import java.awt.Color

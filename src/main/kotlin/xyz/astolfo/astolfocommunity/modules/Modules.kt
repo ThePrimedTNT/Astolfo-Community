@@ -2,6 +2,7 @@ package xyz.astolfo.astolfocommunity.modules
 
 import xyz.astolfo.astolfocommunity.commands.Command
 import xyz.astolfo.astolfocommunity.commands.CommandBuilder
+import xyz.astolfo.astolfocommunity.modules.admin.createAdminModule
 import xyz.astolfo.astolfocommunity.modules.music.createMusicModule
 
 val modules = initModules()
@@ -17,15 +18,15 @@ fun initModules(): List<Module> {
     return listOf(infoModule, funModule, musicModule, adminModule, casinoModule, staffModule)
 }
 
-class Module(val name: String, val commands: List<Command>)
+class Module(val name: String, val hidden: Boolean, val commands: List<Command>)
 
-class ModuleBuilder(val name: String) {
+class ModuleBuilder(val name: String, val hidden: Boolean) {
     var commands = mutableListOf<Command>()
-    fun build() = Module(name, commands)
+    fun build() = Module(name, hidden, commands)
 }
 
-inline fun module(name: String, builder: ModuleBuilder.() -> Unit): Module {
-    val moduleBuilder = ModuleBuilder(name)
+inline fun module(name: String, hidden: Boolean = false, builder: ModuleBuilder.() -> Unit): Module {
+    val moduleBuilder = ModuleBuilder(name, hidden)
     builder.invoke(moduleBuilder)
     return moduleBuilder.build()
 }

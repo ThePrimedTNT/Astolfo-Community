@@ -6,6 +6,10 @@ import com.google.gson.JsonSyntaxException
 import kotlinx.coroutines.experimental.async
 import kotlinx.coroutines.experimental.delay
 import kotlinx.coroutines.experimental.launch
+import net.dv8tion.jda.core.requests.RequestFuture
+import net.dv8tion.jda.core.requests.RestAction
+import net.dv8tion.jda.core.requests.RestFuture
+import net.dv8tion.jda.core.utils.Checks
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import java.util.concurrent.ConcurrentHashMap
