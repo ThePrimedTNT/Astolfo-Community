@@ -46,9 +46,8 @@ class MusicManager(astolfoCommunityApplication: AstolfoCommunityApplication, pro
 
     val lavaLink = Lavalink(
             properties.bot_user_id,
-            properties.shard_count,
-            { shardId -> astolfoCommunityApplication.shardManager.getShardById(shardId) }
-    )
+            properties.shard_count
+    ) { shardId -> astolfoCommunityApplication.shardManager.getShardById(shardId) }
 
     private val saveFolder = File("./tempMusic/sessions/")
 
@@ -57,6 +56,7 @@ class MusicManager(astolfoCommunityApplication: AstolfoCommunityApplication, pro
     val musicManagerListener = object : ListenerAdapter() {
         override fun onReady(event: ReadyEvent?) {
             val shardFile = File(saveFolder, "${event!!.jda.shardInfo.shardId}.json")
+            println("Loading music session file from ${shardFile.absolutePath}")
             if (!shardFile.exists()) return
             val data = ASTOLFO_GSON.fromJson<MutableMap<Long, MusicSessionSave>>(shardFile.readText())
             for (guild in event.jda.guilds) {
@@ -144,22 +144,28 @@ class MusicManager(astolfoCommunityApplication: AstolfoCommunityApplication, pro
         }
 
         Runtime.getRuntime().addShutdownHook(Thread {
-            val musicMap = mutableMapOf<Int, MutableMap<Long, MusicSessionSave>>()
-            musicSessionMap.toMap().forEach { guild, musicSession ->
-                musicMap.computeIfAbsent(guild.jda.shardInfo.shardId, { mutableMapOf() })[guild.idLong] = MusicSessionSave(musicSession.player.link.channel?.idLong
-                        ?: 0,
-                        musicSession.boundChannel.idLong,
-                        musicSession.player.playingTrack?.let { LavalinkUtil.toMessage(it) },
-                        musicSession.player.playingTrack?.let { musicSession.player.trackPosition } ?: 0,
-                        musicSession.songQueue.map { LavalinkUtil.toMessage(it) },
-                        musicSession.repeatSongQueue.map { LavalinkUtil.toMessage(it) },
-                        musicSession.repeatMode)
-                stopMusicSession(guild)
-            }
-            if (saveFolder.exists()) FileUtils.cleanDirectory(saveFolder)
-            musicMap.forEach { shardId, sessions ->
-                val shardFile = File(saveFolder, "$shardId.json")
-                FileUtils.writeStringToFile(shardFile, ASTOLFO_GSON.toJson(sessions), Charsets.UTF_8)
+            try {
+                println("Saving music sessions to ${saveFolder.absolutePath}")
+                val musicMap = mutableMapOf<Int, MutableMap<Long, MusicSessionSave>>()
+                musicSessionMap.toMap().forEach { guild, musicSession ->
+                    musicMap.computeIfAbsent(guild.jda.shardInfo.shardId, { mutableMapOf() })[guild.idLong] = MusicSessionSave(musicSession.player.link.channel?.idLong
+                            ?: 0,
+                            musicSession.boundChannel.idLong,
+                            musicSession.player.playingTrack?.let { LavalinkUtil.toMessage(it) },
+                            musicSession.player.playingTrack?.let { musicSession.player.trackPosition } ?: 0,
+                            musicSession.songQueue.map { LavalinkUtil.toMessage(it) },
+                            musicSession.repeatSongQueue.map { LavalinkUtil.toMessage(it) },
+                            musicSession.repeatMode)
+                    stopMusicSession(guild)
+                }
+                if (saveFolder.exists()) FileUtils.cleanDirectory(saveFolder)
+                musicMap.forEach { shardId, sessions ->
+                    val shardFile = File(saveFolder, "$shardId.json")
+                    FileUtils.writeStringToFile(shardFile, ASTOLFO_GSON.toJson(sessions), Charsets.UTF_8)
+                }
+                println("Saved!")
+            } catch (e: Exception) {
+                e.printStackTrace()
             }
         })
     }

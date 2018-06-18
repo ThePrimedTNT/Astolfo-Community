@@ -33,7 +33,7 @@ fun createCasinoModule() = module("Casino") {
             val currentTime = System.currentTimeMillis()
             val timeLeft = day1 - (currentTime - userDaily.lastDaily)
             if (timeLeft > minute30) {
-                messageAction(embed("You can receive your next daily in **${Utils.formatDuration(timeLeft)}**.")).queue()
+                messageAction(embed("You can receive your next daily in **${Utils.formatDuration(timeLeft)}**. If you haven't upvoted already, you can get your daily bonus of 1000 credits! https://discordbots.org/bot/${event.jda.selfUser.idLong}")).queue()
                 return@action
             }
 

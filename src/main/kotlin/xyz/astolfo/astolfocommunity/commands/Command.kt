@@ -19,7 +19,7 @@ class Command(
         val description: String,
         val subCommands: List<Command>,
         val permission: AstolfoPermission,
-        val inheritedAction: suspend CommandExecution.() -> Boolean,
+        val inheritedActions: List<suspend CommandExecution.() -> Boolean>,
         val action: suspend CommandExecution.() -> Unit
 )
 
@@ -29,7 +29,7 @@ class CommandBuilder(val path: String, val name: String, val alts: List<String>)
         val guildPrefix = getGuildSettings().getEffectiveGuildPrefix(application)
         messageAction("Unknown command! Type **$guildPrefix$commandPath help** for a list of commands.").queue()
     }
-    private var inheritedAction: suspend CommandExecution.() -> Boolean = { true }
+    private var inheritedActions = mutableListOf<suspend CommandExecution.() -> Boolean>()
     private var permission = AstolfoPermission(path, name)
     private var usage = listOf<String>()
     private var description = ""
@@ -41,7 +41,7 @@ class CommandBuilder(val path: String, val name: String, val alts: List<String>)
     }
 
     fun action(action: suspend CommandExecution.() -> Unit) = apply { this.action = action }
-    fun inheritedAction(inheritedAction: suspend CommandExecution.() -> Boolean) = apply { this.inheritedAction = inheritedAction }
+    fun inheritedAction(inheritedAction: suspend CommandExecution.() -> Boolean) = apply { this.inheritedActions.add(inheritedAction) }
     fun permission(vararg permissionDefaults: Permission) = apply { permission(name, *permissionDefaults) }
     fun description(description: String) = apply { this.description = description }
     fun usage(vararg usage: String) = apply { this.usage = usage.toList() }
@@ -74,7 +74,30 @@ class CommandBuilder(val path: String, val name: String, val alts: List<String>)
                 }
             }
         }
-        return Command(name, alts, usage, description, subCommands, permission, inheritedAction, action)
+        return Command(name, alts, usage, description, subCommands, permission, inheritedActions, action)
+    }
+}
+
+private const val DEFAULT_LONG_TERM_UPVOTE_MESSAGE = "You must upvote the bot to use this feature!"
+private fun defaultShortTermUpvoteMessage(days: Long) = "You havn't upvoted in the past $days days! Upvote to continue using this feature."
+
+fun CommandBuilder.upvote(days: Long, longTermReason: String = DEFAULT_LONG_TERM_UPVOTE_MESSAGE,
+                          shortTermReason: String = defaultShortTermUpvoteMessage(days)) = inheritedAction { upvote(days, longTermReason, shortTermReason) }
+
+fun CommandExecution.upvote(days: Long, longTermReason: String = DEFAULT_LONG_TERM_UPVOTE_MESSAGE,
+                            shortTermReason: String = defaultShortTermUpvoteMessage(days)): Boolean {
+    val profile = application.astolfoRepositories.getEffectiveUserProfile(event.author.idLong)
+    val upvoteInfo = profile.userUpvote
+    return when {
+        upvoteInfo.lastUpvote <= 0 || upvoteInfo.timeSinceLastUpvote >= TimeUnit.DAYS.toMillis(days + 3) -> {
+            messageAction("$longTermReason Upvote here: <https://discordbots.org/bot/${event.jda.selfUser.idLong}>").queue()
+            false
+        }
+        upvoteInfo.timeSinceLastUpvote >= TimeUnit.DAYS.toMillis(days) -> {
+            messageAction("$shortTermReason Upvote here: <https://discordbots.org/bot/${event.jda.selfUser.idLong}>").queue()
+            false
+        }
+        else -> true
     }
 }
 
@@ -125,6 +148,7 @@ open class CommandExecution(
     suspend fun getGuildSettings() = withContext(DefaultDispatcher) { application.astolfoRepositories.getEffectiveGuildSettings(event.guild.idLong) }
     suspend fun setGuildSettings(guildSettings: GuildSettings) =
             withContext(DefaultDispatcher) { application.astolfoRepositories.guildSettingsRepository.save(guildSettings) }
+
     suspend inline fun <E> withGuildSettings(block: (GuildSettings) -> E): E {
         val guildSettings = getGuildSettings()
         val result = block.invoke(guildSettings)

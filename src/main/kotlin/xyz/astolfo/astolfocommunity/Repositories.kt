@@ -57,7 +57,7 @@ interface UserProfileRepository : CrudRepository<UserProfile, Long> {
 
     fun findTop50ByOrderByCreditsDesc(): List<UserProfile>
 
-    @Query("select p from UserProfile p where p.userUpvote.lastUpvote > 0 AND ?1 - p.userUpvote.lastUpvote > 17280000 AND p.userUpvote.remindedUpvote = false")
+    @Query("select p from UserProfile p where p.userUpvote.lastUpvote > 0 AND ?1 - p.userUpvote.lastUpvote > 172800000 AND p.userUpvote.remindedUpvote = false")
     fun findUpvoteReminder(currentTime: Long): List<UserProfile>
 }
 

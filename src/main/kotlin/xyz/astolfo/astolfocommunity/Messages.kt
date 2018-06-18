@@ -75,7 +75,7 @@ class AsyncMessage(asyncMessage: RequestFuture<Message>) {
         }
         val cachedEditTime = cachedMessage!!.editedTime
         val newEditTime = newMessage.editedTime
-        if (newEditTime < cachedEditTime) cachedMessage = newMessage
+        if (newEditTime > cachedEditTime) cachedMessage = newMessage
     }
 
     private fun handle(action: (Message) -> RestAction<Void?>, response: () -> Unit) {

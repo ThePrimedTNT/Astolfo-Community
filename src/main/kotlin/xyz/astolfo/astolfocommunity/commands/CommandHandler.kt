@@ -39,6 +39,7 @@ class CommandHandler(val application: AstolfoCommunityApplication) : ListenerAda
     }
 
     override fun onMessageReceived(event: MessageReceivedEvent?) {
+        application.statsDClient.incrementCounter("messages_received")
         val timeIssued = System.nanoTime()
         if (event!!.author.isBot) return
         if (event.textChannel?.canTalk() != true) return
@@ -73,12 +74,17 @@ class CommandHandler(val application: AstolfoCommunityApplication) : ListenerAda
             commandScope@ launch(commandProcessorContext) {
                 val commandMessage = rawMessage.substring(prefixedMatched.length).trim()
 
-                if (modules.find { processCommand(event, timeIssued, it.commands, "", commandMessage) } != null || prefixedMatched == prefix) return@commandScope
+                if (modules.find { processCommand(event, timeIssued, it.commands, "", commandMessage) } != null) {
+                    application.statsDClient.incrementCounter("commands_executed")
+                    return@commandScope
+                }
+                if (prefixedMatched == prefix) return@commandScope
 
                 // Process chat bot stuff
                 val response = chatBotManager.process(event.member, commandMessage)
                 if (response.type == ChatResponse.ResponseType.COMMAND) {
-                    modules.find { processCommand(event, timeIssued, it.commands, "", response.response) }
+                    if (modules.find { processCommand(event, timeIssued, it.commands, "", response.response) } != null)
+                        application.statsDClient.incrementCounter("commands_executed")
                 } else {
                     event.channel.sendMessage(response.response).queue()
                 }
@@ -137,7 +143,7 @@ class CommandHandler(val application: AstolfoCommunityApplication) : ListenerAda
             return true
         }
 
-        if (!command.inheritedAction.invoke(createExecution(InheritedCommandSession(newCommandPath)))) return true
+        if (!command.inheritedActions.all { it.invoke(createExecution(InheritedCommandSession(newCommandPath))) }) return true
 
         if (!processCommand(event, timeIssued, command.subCommands, newCommandPath, commandContent)) {
             fun runNewSession() {

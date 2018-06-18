@@ -7,6 +7,7 @@ import net.dv8tion.jda.core.utils.PermissionUtil
 import xyz.astolfo.astolfocommunity.*
 import xyz.astolfo.astolfocommunity.commands.CommandBuilder
 import xyz.astolfo.astolfocommunity.commands.CommandExecution
+import xyz.astolfo.astolfocommunity.commands.upvote
 import xyz.astolfo.astolfocommunity.menus.paginator
 import xyz.astolfo.astolfocommunity.menus.provider
 import xyz.astolfo.astolfocommunity.menus.renderer
@@ -167,17 +168,7 @@ fun createMusicModule() = module("Music") {
         }
     }
     command("volume", "v") {
-        inheritedAction {
-            val profile = application.astolfoRepositories.getEffectiveUserProfile(event.author.idLong)
-            val upvoteInfo = profile.userUpvote
-            if (upvoteInfo.lastUpvote <= 0 || upvoteInfo.timeSinceLastUpvote >= TimeUnit.DAYS.toMillis(5)) {
-                messageAction("Due to performance reasons, you must upvote the bot to use this feature! https://discordbots.org/bot/${event.jda.selfUser.idLong}").queue()
-                false
-            } else if (upvoteInfo.timeSinceLastUpvote >= TimeUnit.DAYS.toMillis(2)) {
-                messageAction("You havn't upvoted in the past two days! Upvote to continue using the volume feature. https://discordbots.org/bot/${event.jda.selfUser.idLong}").queue()
-                false
-            } else true
-        }
+        upvote(2, "Due to performance reasons, you must upvote the bot to use this feature!")
         musicAction(activeSession = true) {
             val musicSession = application.musicManager.getMusicSession(event.guild)!!
             val newVolume = args.takeIf { it.isNotBlank() }?.let {
