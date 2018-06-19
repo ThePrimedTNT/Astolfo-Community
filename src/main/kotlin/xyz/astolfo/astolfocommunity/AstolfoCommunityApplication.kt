@@ -12,6 +12,7 @@ import net.dv8tion.jda.core.entities.Game
 import net.dv8tion.jda.core.events.guild.GuildJoinEvent
 import net.dv8tion.jda.core.events.guild.GuildLeaveEvent
 import net.dv8tion.jda.core.hooks.ListenerAdapter
+import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.autoconfigure.SpringBootApplication
 import org.springframework.boot.context.properties.ConfigurationProperties
 import org.springframework.boot.context.properties.EnableConfigurationProperties
@@ -20,6 +21,7 @@ import org.springframework.cache.annotation.EnableCaching
 import xyz.astolfo.astolfocommunity.commands.CommandHandler
 import xyz.astolfo.astolfocommunity.games.GameHandler
 import xyz.astolfo.astolfocommunity.modules.music.MusicManager
+import xyz.astolfo.astolfocommunity.support.DonationManager
 import java.util.concurrent.TimeUnit
 
 
@@ -27,7 +29,7 @@ import java.util.concurrent.TimeUnit
 @SpringBootApplication
 @EnableCaching
 @EnableConfigurationProperties(AstolfoProperties::class)
-class AstolfoCommunityApplication(val astolfoRepositories: AstolfoRepositories,  val properties: AstolfoProperties) {
+class AstolfoCommunityApplication(val astolfoRepositories: AstolfoRepositories, val properties: AstolfoProperties) {
 
     final val musicManager = MusicManager(this, properties)
     final val weeb4J = Weeb4J.Builder().setToken(TokenType.WOLKE, properties.weeb_token).build()
@@ -76,6 +78,10 @@ class AstolfoProperties {
     var custom_gateway_enabled = false
     var custom_gateway_url = ""
     var custom_gateway_delay = 0
+    var patreon_client_id = ""
+    var patreon_client_secret = ""
+    var patreon_creators_refresh_token = ""
+    var patreon_webhook_secret = ""
 }
 
 class StatsListener(val application: AstolfoCommunityApplication) : ListenerAdapter() {

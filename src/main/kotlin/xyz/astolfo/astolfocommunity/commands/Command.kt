@@ -78,29 +78,6 @@ class CommandBuilder(val path: String, val name: String, val alts: List<String>)
     }
 }
 
-private const val DEFAULT_LONG_TERM_UPVOTE_MESSAGE = "You must upvote the bot to use this feature!"
-private fun defaultShortTermUpvoteMessage(days: Long) = "You havn't upvoted in the past $days days! Upvote to continue using this feature."
-
-fun CommandBuilder.upvote(days: Long, longTermReason: String = DEFAULT_LONG_TERM_UPVOTE_MESSAGE,
-                          shortTermReason: String = defaultShortTermUpvoteMessage(days)) = inheritedAction { upvote(days, longTermReason, shortTermReason) }
-
-fun CommandExecution.upvote(days: Long, longTermReason: String = DEFAULT_LONG_TERM_UPVOTE_MESSAGE,
-                            shortTermReason: String = defaultShortTermUpvoteMessage(days)): Boolean {
-    val profile = application.astolfoRepositories.getEffectiveUserProfile(event.author.idLong)
-    val upvoteInfo = profile.userUpvote
-    return when {
-        upvoteInfo.lastUpvote <= 0 || upvoteInfo.timeSinceLastUpvote >= TimeUnit.DAYS.toMillis(days + 3) -> {
-            messageAction("$longTermReason Upvote here: <https://discordbots.org/bot/${event.jda.selfUser.idLong}>").queue()
-            false
-        }
-        upvoteInfo.timeSinceLastUpvote >= TimeUnit.DAYS.toMillis(days) -> {
-            messageAction("$shortTermReason Upvote here: <https://discordbots.org/bot/${event.jda.selfUser.idLong}>").queue()
-            false
-        }
-        else -> true
-    }
-}
-
 open class CommandExecution(
         val application: AstolfoCommunityApplication,
         val event: MessageReceivedEvent,

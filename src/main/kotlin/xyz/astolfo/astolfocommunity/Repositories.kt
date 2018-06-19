@@ -13,6 +13,7 @@ import org.springframework.cache.annotation.Cacheable
 import org.springframework.data.jpa.repository.Query
 import org.springframework.data.repository.CrudRepository
 import org.springframework.stereotype.Component
+import xyz.astolfo.astolfocommunity.support.DonationRepository
 import java.io.Serializable
 import java.sql.SQLException
 import java.util.*
@@ -23,7 +24,8 @@ import javax.persistence.*
 class AstolfoRepositories(val guildSettingsRepository: GuildSettingsRepository,
                           val userProfileRepository: UserProfileRepository,
                           val radioRepository: RadioRepository,
-                          val guildPlaylistRepository: GuildPlaylistRepository) {
+                          val guildPlaylistRepository: GuildPlaylistRepository,
+                          val donationRepository: DonationRepository) {
     fun getEffectiveGuildSettings(id: Long): GuildSettings = guildSettingsRepository.findById(id).orElse(null)
             ?: GuildSettings(guildId = id)
 
@@ -57,7 +59,7 @@ interface UserProfileRepository : CrudRepository<UserProfile, Long> {
 
     fun findTop50ByOrderByCreditsDesc(): List<UserProfile>
 
-    @Query("select p from UserProfile p where p.userUpvote.lastUpvote > 0 AND ?1 - p.userUpvote.lastUpvote > 172800000 AND p.userUpvote.remindedUpvote = false")
+    @Query("select p from UserProfile p where p.userUpvote.lastUpvote > 0 AND ?1 - p.userUpvote.lastUpvote > 345600000 AND p.userUpvote.remindedUpvote = false")
     fun findUpvoteReminder(currentTime: Long): List<UserProfile>
 }
 

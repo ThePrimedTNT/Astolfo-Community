@@ -12,6 +12,7 @@ import net.dv8tion.jda.core.requests.RestFuture
 import net.dv8tion.jda.core.utils.Checks
 import okhttp3.OkHttpClient
 import okhttp3.Request
+import java.text.NumberFormat
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.TimeUnit
 
@@ -118,6 +119,10 @@ object Utils {
         timeStr = timeStr.trim { it <= ' ' }
         return timeStr
     }
+
+    val currencyFormatter = NumberFormat.getCurrencyInstance();
+
+    fun formatMoney(number: Double) = currencyFormatter.format(number)!!
 
 }
 

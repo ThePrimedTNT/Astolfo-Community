@@ -7,13 +7,14 @@ import net.dv8tion.jda.core.utils.PermissionUtil
 import xyz.astolfo.astolfocommunity.*
 import xyz.astolfo.astolfocommunity.commands.CommandBuilder
 import xyz.astolfo.astolfocommunity.commands.CommandExecution
-import xyz.astolfo.astolfocommunity.commands.upvote
 import xyz.astolfo.astolfocommunity.menus.paginator
 import xyz.astolfo.astolfocommunity.menus.provider
 import xyz.astolfo.astolfocommunity.menus.renderer
 import xyz.astolfo.astolfocommunity.menus.selectionBuilder
 import xyz.astolfo.astolfocommunity.modules.command
 import xyz.astolfo.astolfocommunity.modules.module
+import xyz.astolfo.astolfocommunity.support.SupportLevel
+import xyz.astolfo.astolfocommunity.support.supportBuilder
 import java.util.concurrent.TimeUnit
 
 
@@ -168,7 +169,10 @@ fun createMusicModule() = module("Music") {
         }
     }
     command("volume", "v") {
-        upvote(2, "Due to performance reasons, you must upvote the bot to use this feature!")
+        supportBuilder {
+            upvote(2).longTermUpvoteMessage("Due to performance reasons, you must upvote the bot to use this feature!")
+            supportLevel(SupportLevel.SUPPORTER)
+        }
         musicAction(activeSession = true) {
             val musicSession = application.musicManager.getMusicSession(event.guild)!!
             val newVolume = args.takeIf { it.isNotBlank() }?.let {

@@ -4,6 +4,7 @@
 src/main/resources/dev.properties
 src/main/resources/astolfo.properties
 tempMusic/
+patreonRefreshToken.json
 
 ### STS ###
 .apt_generated
