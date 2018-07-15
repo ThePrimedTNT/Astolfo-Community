@@ -11,6 +11,7 @@ import xyz.astolfo.astolfocommunity.menus.paginator
 import xyz.astolfo.astolfocommunity.menus.provider
 import xyz.astolfo.astolfocommunity.menus.renderer
 import xyz.astolfo.astolfocommunity.menus.selectionBuilder
+import xyz.astolfo.astolfocommunity.messages.*
 import xyz.astolfo.astolfocommunity.modules.command
 import xyz.astolfo.astolfocommunity.modules.module
 import xyz.astolfo.astolfocommunity.support.SupportLevel
@@ -112,8 +113,8 @@ fun createMusicModule() = module("Music") {
             val musicSession = application.musicManager.getMusicSession(event.guild)!!
             val paginator = paginator("Astolfo-Community Music Queue") {
                 provider(8, {
-                    val songs = musicSession.songQueue
-                    val repeatedSongs = musicSession.repeatSongQueue
+                    val songs = musicSession.songQueue()
+                    val repeatedSongs = musicSession.repeatSongQueue()
                     if (songs.isEmpty() && repeatedSongs.isEmpty()) listOf("No songs in queue")
                     else listOf(songs, repeatedSongs).flatten().map { audioTrack ->
                         "${if (repeatedSongs.contains(audioTrack)) "\uD83D\uDD04 " else ""}[${audioTrack.info.title}](${audioTrack.info.uri}) **${Utils.formatSongDuration(audioTrack.info.length, audioTrack.info.isStream)}**"
@@ -123,8 +124,8 @@ fun createMusicModule() = module("Music") {
                     message {
                         embed {
                             titleProvider.invoke()?.let { title(it) }
-                            val currentTrack = musicSession.player.playingTrack
-                            field("\uD83C\uDFB6 Now Playing" + if (currentTrack != null) " - ${Utils.formatSongDuration(musicSession.player.trackPosition)}/${Utils.formatSongDuration(currentTrack.info.length, currentTrack.info.isStream)}" else "", false) {
+                            val currentTrack = musicSession.playingTrack()
+                            field("\uD83C\uDFB6 Now Playing" + if (currentTrack != null) " - ${Utils.formatSongDuration(musicSession.trackPosition)}/${Utils.formatSongDuration(currentTrack.info.length, currentTrack.info.isStream)}" else "", false) {
                                 if (currentTrack == null) {
                                     "No song currently playing"
                                 } else {
@@ -155,7 +156,7 @@ fun createMusicModule() = module("Music") {
                 }
                 amountNum
             } ?: 1
-            val songsSkipped = musicSession.skip(amountToSkip)
+            val songsSkipped = musicSession.skip(amountToSkip).await()
             messageAction(embed {
                 when {
                     songsSkipped.isEmpty() -> description("No songs where skipped.")
@@ -192,11 +193,11 @@ fun createMusicModule() = module("Music") {
                 amountNum
             }
             if (newVolume == null) {
-                val currentVolume = musicSession.player.volume
+                val currentVolume = musicSession.volume
                 messageAction(embed { description("Current volume is **$currentVolume%**!") }).queue()
             } else {
-                val oldVolume = musicSession.player.volume
-                musicSession.player.volume = newVolume
+                val oldVolume = musicSession.volume
+                musicSession.volume = newVolume
                 messageAction(embed { description("${volumeIcon(newVolume)} Volume has changed from **$oldVolume%** to **$newVolume%**") }).queue()
             }
         }
@@ -204,7 +205,7 @@ fun createMusicModule() = module("Music") {
     command("seek") {
         musicAction(activeSession = true) {
             val musicSession = application.musicManager.getMusicSession(event.guild)!!
-            val currentTrack = musicSession.player.playingTrack
+            val currentTrack = musicSession.playingTrack()
             if (currentTrack == null) {
                 messageAction("There are no tracks currently playing!").queue()
                 return@musicAction
@@ -231,14 +232,14 @@ fun createMusicModule() = module("Music") {
                 messageAction("I cannot seek that far into the song!").queue()
                 return@musicAction
             }
-            musicSession.player.seekTo(time)
+            musicSession.trackPosition = time
             messageAction("I have seeked to the time **${Utils.formatSongDuration(time)}**").queue()
         }
     }
     command("forward", "fwd") {
         musicAction(activeSession = true) {
             val musicSession = application.musicManager.getMusicSession(event.guild)!!
-            val currentTrack = musicSession.player.playingTrack
+            val currentTrack = musicSession.playingTrack()
             if (currentTrack == null) {
                 messageAction("There are no tracks currently playing!").queue()
                 return@musicAction
@@ -261,19 +262,19 @@ fun createMusicModule() = module("Music") {
                 messageAction("Please give a time that's greater than 0!").queue()
                 return@musicAction
             }
-            val effectiveTime = time + musicSession.player.trackPosition
+            val effectiveTime = time + musicSession.trackPosition
             if (effectiveTime > currentTrack.info.length) {
                 messageAction("You cannot forward into the song by that much!").queue()
                 return@musicAction
             }
-            musicSession.player.seekTo(effectiveTime)
+            musicSession.trackPosition = effectiveTime
             messageAction("I have forwarded the song to the time **${Utils.formatSongDuration(effectiveTime)}**").queue()
         }
     }
     command("rewind", "rwd") {
         musicAction(activeSession = true) {
             val musicSession = application.musicManager.getMusicSession(event.guild)!!
-            val currentTrack = musicSession.player.playingTrack
+            val currentTrack = musicSession.playingTrack()
             if (currentTrack == null) {
                 messageAction("There are no tracks currently playing!").queue()
                 return@musicAction
@@ -296,19 +297,19 @@ fun createMusicModule() = module("Music") {
                 messageAction("Please give a time that's greater than 0!").queue()
                 return@musicAction
             }
-            val effectiveTime = musicSession.player.trackPosition - time
+            val effectiveTime = musicSession.trackPosition - time
             if (effectiveTime < 0) {
                 messageAction("You cannot rewind back in the song by that much!").queue()
                 return@musicAction
             }
-            musicSession.player.seekTo(effectiveTime)
+            musicSession.trackPosition = effectiveTime
             messageAction("I have rewound the song to the time **${Utils.formatSongDuration(effectiveTime)}**").queue()
         }
     }
     command("repeat") {
         musicAction(activeSession = true) {
             val musicSession = application.musicManager.getMusicSession(event.guild)!!
-            val currentTrack = musicSession.player.playingTrack
+            val currentTrack = musicSession.playingTrack()
             if (currentTrack == null) {
                 messageAction("There are no tracks currently playing!").queue()
                 return@musicAction
@@ -338,17 +339,29 @@ fun createMusicModule() = module("Music") {
             }
         }
     }
+    command("shuffle") {
+        musicAction(activeSession = true) {
+            val musicSession = application.musicManager.getMusicSession(event.guild)!!
+            val currentTrack = musicSession.playingTrack()
+            if (currentTrack == null) {
+                messageAction("There are no tracks currently playing!").queue()
+                return@musicAction
+            }
+            musicSession.shuffle()
+            messageAction("Music Queue has been shuffled!").queue()
+        }
+    }
     command("pause") {
         musicAction(activeSession = true) {
             val musicSession = application.musicManager.getMusicSession(event.guild)!!
-            musicSession.player.isPaused = true
+            musicSession.isPaused = true
             messageAction("Music has paused!").queue()
         }
     }
-    command("resume") {
+    command("resume", "unpause") {
         musicAction(activeSession = true) {
             val musicSession = application.musicManager.getMusicSession(event.guild)!!
-            musicSession.player.isPaused = false
+            musicSession.isPaused = false
             messageAction("Music has resumed playing!").queue()
         }
     }

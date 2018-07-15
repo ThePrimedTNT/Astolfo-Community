@@ -3,7 +3,6 @@ package xyz.astolfo.astolfocommunity.support
 import kotlinx.coroutines.experimental.delay
 import kotlinx.coroutines.experimental.launch
 import org.discordbots.api.client.DiscordBotListAPI
-import org.discordbots.api.client.integration.JDAStatPoster
 import org.springframework.http.HttpStatus
 import org.springframework.http.ResponseEntity
 import org.springframework.stereotype.Controller
@@ -13,7 +12,7 @@ import org.springframework.web.bind.annotation.RequestMapping
 import org.springframework.web.bind.annotation.RequestMethod
 import xyz.astolfo.astolfocommunity.AstolfoCommunityApplication
 import xyz.astolfo.astolfocommunity.AstolfoProperties
-import xyz.astolfo.astolfocommunity.message
+import xyz.astolfo.astolfocommunity.messages.message
 import java.util.concurrent.TimeUnit
 
 
@@ -26,19 +25,32 @@ class BotListManager(private val application: AstolfoCommunityApplication,
         val discordBotList = DiscordBotListAPI.Builder().token(properties.discordbotlist_token).build()
         launch {
             while (application.shardManager.shardsQueued > 0) delay(10, TimeUnit.MILLISECONDS)
-            application.shardManager.addEventListener(JDAStatPoster(discordBotList))
-            while (isActive) {
-                val toRemind = application.astolfoRepositories.userProfileRepository.findUpvoteReminder(System.currentTimeMillis())
-                for (profile in toRemind) {
-                    val user = application.shardManager.getUserById(profile.userId)
-                    if (user == null && application.shardManager.shards.any { it.status.isInit }) continue
-                    user?.openPrivateChannel()?.queue { privateChannel ->
-                        privateChannel.sendMessage(message("Looks like you havn't upvoted for a while. Make sure to upvote daily! https://discordbots.org/bot/${privateChannel.jda.selfUser.idLong}")).queue()
+            launch {
+                while (isActive) {
+                    val toRemind = application.astolfoRepositories.userProfileRepository.findUpvoteReminder(System.currentTimeMillis())
+                    for (profile in toRemind) {
+                        val user = application.shardManager.getUserById(profile.userId)
+                        if (user == null && application.shardManager.shards.any { it.status.isInit }) continue
+                        user?.openPrivateChannel()?.queue { privateChannel ->
+                            privateChannel.sendMessage(message("Looks like you havn't upvoted for a while. Make sure to upvote daily! https://discordbots.org/bot/${privateChannel.jda.selfUser.idLong}")).queue()
+                        }
+                        profile.userUpvote.remindedUpvote = true
+                        application.astolfoRepositories.userProfileRepository.save(profile)
                     }
-                    profile.userUpvote.remindedUpvote = true
-                    application.astolfoRepositories.userProfileRepository.save(profile)
+                    delay(10, TimeUnit.MINUTES)
                 }
-                delay(10, TimeUnit.MINUTES)
+            }
+            launch {
+                while (isActive) {
+                    val shards = application.shardManager.shards.filterNotNull()
+                    val jda = shards.firstOrNull()
+                    if (jda?.selfUser != null && jda.shardInfo.shardTotal == shards.size) {
+                        discordBotList.setStats(jda.selfUser.id, shards.map { it.shardInfo.shardId.toString() to it.guilds.size }.toMap())
+                        delay(5, TimeUnit.MINUTES)
+                    } else {
+                        delay(5, TimeUnit.SECONDS)
+                    }
+                }
             }
         }
     }

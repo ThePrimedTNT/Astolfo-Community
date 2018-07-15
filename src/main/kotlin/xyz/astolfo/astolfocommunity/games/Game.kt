@@ -7,8 +7,9 @@ import net.dv8tion.jda.core.entities.TextChannel
 import net.dv8tion.jda.core.events.message.MessageDeleteEvent
 import net.dv8tion.jda.core.events.message.react.GenericMessageReactionEvent
 import net.dv8tion.jda.core.hooks.ListenerAdapter
-import xyz.astolfo.astolfocommunity.AsyncMessage
-import xyz.astolfo.astolfocommunity.sendAsync
+import xyz.astolfo.astolfocommunity.messages.CachedMessage
+import xyz.astolfo.astolfocommunity.messages.sendCached
+import xyz.astolfo.astolfocommunity.value
 import java.util.concurrent.ConcurrentHashMap
 
 class GameHandler {
@@ -32,7 +33,7 @@ class GameHandler {
 
 }
 
-abstract class Game(protected val gameHandler: GameHandler, val member: Member, val channel: TextChannel) {
+abstract class Game(@Suppress("MemberVisibilityCanBePrivate") protected val gameHandler: GameHandler, val member: Member, val channel: TextChannel) {
 
     abstract fun start()
 
@@ -44,13 +45,13 @@ abstract class Game(protected val gameHandler: GameHandler, val member: Member, 
 
 abstract class ReactionGame(gameHandler: GameHandler, member: Member, channel: TextChannel, private val reactions: List<String>) : Game(gameHandler, member, channel) {
 
-    protected var currentMessage: AsyncMessage? = null
+    protected var currentMessage: CachedMessage? = null
 
     private val listener = object : ListenerAdapter() {
         override fun onGenericMessageReaction(event: GenericMessageReactionEvent?) {
             if (currentMessage == null || event!!.user.idLong == event.jda.selfUser.idLong) return
 
-            if (currentMessage!!.getIdLong() != event.messageIdLong || event.user.isBot) return
+            if (currentMessage!!.idLong.value != event.messageIdLong || event.user.isBot) return
 
             if (event.user.idLong != member.user.idLong) {
                 if (event.guild.selfMember.hasPermission(event.textChannel, Permission.MESSAGE_MANAGE)) event.reaction.removeReaction(event.user).queue()
@@ -61,13 +62,13 @@ abstract class ReactionGame(gameHandler: GameHandler, member: Member, channel: T
         }
 
         override fun onMessageDelete(event: MessageDeleteEvent?) {
-            if (currentMessage?.getIdLong() == event!!.messageIdLong) endGame()
+            if (currentMessage?.idLong?.value == event!!.messageIdLong) endGame()
         }
     }
 
     protected fun setContent(messageEmbed: MessageEmbed) {
         if (currentMessage == null) {
-            currentMessage = channel.sendMessage(messageEmbed).sendAsync()
+            currentMessage = channel.sendMessage(messageEmbed).sendCached()
             reactions.forEach { currentMessage!!.addReaction(it) }
         } else {
             currentMessage!!.editMessage(messageEmbed)

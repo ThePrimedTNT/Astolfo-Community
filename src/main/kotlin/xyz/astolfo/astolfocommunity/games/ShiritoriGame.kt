@@ -8,7 +8,7 @@ import net.dv8tion.jda.core.entities.TextChannel
 import net.dv8tion.jda.core.events.message.MessageReceivedEvent
 import net.dv8tion.jda.core.hooks.ListenerAdapter
 import org.springframework.core.io.ClassPathResource
-import xyz.astolfo.astolfocommunity.*
+import xyz.astolfo.astolfocommunity.messages.*
 import java.lang.Math.max
 import java.util.*
 import java.util.concurrent.TimeUnit
@@ -48,10 +48,10 @@ class ShiritoriGame(gameHandler: GameHandler, member: Member, channel: TextChann
     private val usedWords = mutableListOf<String>()
     private var startLetter = ('a'..'z').toList().let { it[random.nextInt(it.size)] }
     private var lastWordTime = 0L
-    private var infoMessage: AsyncMessage? = null
-    private var lastWarning: AsyncMessage? = null
-    private var thinkingMessage: AsyncMessage? = null
-    private var scoreboardMessage: AsyncMessage? = null
+    private var infoMessage: CachedMessage? = null
+    private var lastWarning: CachedMessage? = null
+    private var thinkingMessage: CachedMessage? = null
+    private var scoreboardMessage: CachedMessage? = null
 
     private var computerDelay: Job? = null
 
@@ -75,28 +75,28 @@ class ShiritoriGame(gameHandler: GameHandler, member: Member, channel: TextChann
             val currentTurn = this@ShiritoriGame.currentTurn
 
             if (currentTurn.member.user.idLong != event.author.idLong) {
-                lastWarning = channel.sendMessage(embed("It is not your turn yet!")).sendAsync()
+                lastWarning = channel.sendMessage(embed("It is not your turn yet!")).sendCached()
                 return
             }
 
             val wordInput = event.message.contentRaw.toLowerCase().replace(wordFilter, "")
             if (wordInput.length < 4) {
-                lastWarning = channel.sendMessage(embed("Word *must be at least* ***4 or more*** *letters long*! You said **$wordInput**")).sendAsync()
+                lastWarning = channel.sendMessage(embed("Word *must be at least* ***4 or more*** *letters long*! You said **$wordInput**")).sendCached()
                 return
             }
 
             if (!wordInput.startsWith(startLetter)) {
-                lastWarning = channel.sendMessage(embed("Word must start with **$startLetter** You said: **$wordInput**")).sendAsync()
+                lastWarning = channel.sendMessage(embed("Word must start with **$startLetter** You said: **$wordInput**")).sendCached()
                 return
             }
 
             if (!words.contains(wordInput)) {
-                lastWarning = channel.sendMessage(embed("Unknown word... Make sure its a noun or verb! You said: **$wordInput**")).sendAsync()
+                lastWarning = channel.sendMessage(embed("Unknown word... Make sure its a noun or verb! You said: **$wordInput**")).sendCached()
                 return
             }
 
             if (usedWords.contains(wordInput)) {
-                lastWarning = channel.sendMessage(embed("That word has already been used! You said: **$wordInput**")).sendAsync()
+                lastWarning = channel.sendMessage(embed("That word has already been used! You said: **$wordInput**")).sendCached()
                 return
             }
 
@@ -130,13 +130,13 @@ class ShiritoriGame(gameHandler: GameHandler, member: Member, channel: TextChann
                     "\n*Length:* **$lengthBonus** (*${wordInput.length} letters*)" +
                     "\n*Total:* **${Math.ceil(moveScore).toInt()}**", true)
             field("Scores", players.joinToString(separator = "\n") { "*${it.name}:* **${Math.ceil(it.score).toInt()}**" }, true)
-        }).sendAsync()
+        }).sendCached()
 
         if (turnId + 1 >= players.size) turnId = 0
         else turnId++
 
         if (currentTurn.member.user.idLong == channel.guild.selfMember.user.idLong) {
-            thinkingMessage = channel.sendMessage("Thinking...").sendAsync()
+            thinkingMessage = channel.sendMessage("Thinking...").sendCached()
             val chosenWord = wordPool.filter { it.startsWith(startLetter) && !usedWords.contains(it) }.let { it[(random.nextDouble().pow(2) * it.size).toInt()] }
             computerDelay = launch {
                 delay(((1 - random.nextDouble().pow(2)) * difficulty.responseTime).toLong(), TimeUnit.SECONDS)
@@ -170,8 +170,8 @@ class ShiritoriGame(gameHandler: GameHandler, member: Member, channel: TextChann
                     "\n__**Points:**__" +
                     "\n- *Length Bonus:* Number of letters *minus four*" +
                     "\n- *Speed Bonus:* **15 seconds** minus time it took")
-        }).sendAsync()
-        scoreboardMessage = channel.sendMessage("You may go first, can be any word that is 4 letters or longer and starting with the letter **$startLetter**!").sendAsync()
+        }).sendCached()
+        scoreboardMessage = channel.sendMessage("You may go first, can be any word that is 4 letters or longer and starting with the letter **$startLetter**!").sendCached()
         lastWordTime = System.currentTimeMillis()
 
         channel.jda.addEventListener(listener)

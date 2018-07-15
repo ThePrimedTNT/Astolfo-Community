@@ -1,9 +1,11 @@
 package xyz.astolfo.astolfocommunity.modules
 
+import kotlinx.coroutines.experimental.delay
 import net.dv8tion.jda.core.entities.MessageEmbed
 import xyz.astolfo.astolfocommunity.*
 import xyz.astolfo.astolfocommunity.menus.paginator
 import xyz.astolfo.astolfocommunity.menus.provider
+import xyz.astolfo.astolfocommunity.messages.*
 import java.awt.Color
 import java.util.*
 import java.util.concurrent.TimeUnit
@@ -131,11 +133,11 @@ fun createCasinoModule() = module("Casino") {
                 }
             }
 
-            val message = messageAction(createMessage()).sendAsync()
-            var delay = 1L
+            val message = messageAction(createMessage()).sendCached()
+            var editDelay = 1L
             while (!isFinished()) {
                 slotsToShow += 3
-                message.editMessage(createMessage(), delay++)
+                message.editMessage(createMessage(), editDelay++)
             }
         }
     }

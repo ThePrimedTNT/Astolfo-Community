@@ -13,6 +13,7 @@ import com.google.common.cache.CacheLoader
 import kotlinx.coroutines.experimental.launch
 import kotlinx.coroutines.experimental.newFixedThreadPoolContext
 import net.dv8tion.jda.core.Permission
+import net.dv8tion.jda.core.entities.ChannelType
 import net.dv8tion.jda.core.entities.Member
 import net.dv8tion.jda.core.events.message.MessageReceivedEvent
 import net.dv8tion.jda.core.hooks.ListenerAdapter
@@ -42,6 +43,7 @@ class CommandHandler(val application: AstolfoCommunityApplication) : ListenerAda
         application.statsDClient.incrementCounter("messages_received")
         val timeIssued = System.nanoTime()
         if (event!!.author.isBot) return
+        if(event.channelType != ChannelType.TEXT) return
         if (event.textChannel?.canTalk() != true) return
         launch(messageProcessorContext) {
             val prefix = application.astolfoRepositories.getEffectiveGuildSettings(event.guild.idLong).getEffectiveGuildPrefix(application)
@@ -79,6 +81,11 @@ class CommandHandler(val application: AstolfoCommunityApplication) : ListenerAda
                     return@commandScope
                 }
                 if (prefixedMatched == prefix) return@commandScope
+
+                if (commandMessage.isEmpty()) {
+                    event.channel.sendMessage("Hi :D").queue()
+                    return@commandScope
+                }
 
                 // Process chat bot stuff
                 val response = chatBotManager.process(event.member, commandMessage)
@@ -131,7 +138,7 @@ class CommandHandler(val application: AstolfoCommunityApplication) : ListenerAda
         var hasPermission: Boolean? = if (event.member.hasPermission(Permission.ADMINISTRATOR)) true else null
         // Check discord permission if the member isn't a admin already
         if (hasPermission != true && permission.permissionDefaults.isNotEmpty())
-            hasPermission = !event.member.hasPermission(event.textChannel, *permission.permissionDefaults)
+            hasPermission = event.member.hasPermission(event.textChannel, *permission.permissionDefaults)
         // Check Astolfo permission if discord permission didn't already grant permissions
         if (hasPermission != true)
             AstolfoPermissionUtils.hasPermission(event.member, event.textChannel, application.astolfoRepositories.getEffectiveGuildSettings(event.guild.idLong).permissions, permission)?.let { hasPermission = it }
@@ -147,6 +154,7 @@ class CommandHandler(val application: AstolfoCommunityApplication) : ListenerAda
 
         if (!processCommand(event, timeIssued, command.subCommands, newCommandPath, commandContent)) {
             fun runNewSession() {
+                application.statsDClient.incrementCounter("commandExecuteCount", "command:$newCommandPath")
                 commandSessionManager.session(event, newCommandPath, { session ->
                     command.action.invoke(createExecution(session))
                 })

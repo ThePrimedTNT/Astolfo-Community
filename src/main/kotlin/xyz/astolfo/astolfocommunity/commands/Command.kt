@@ -9,6 +9,7 @@ import net.dv8tion.jda.core.entities.Message
 import net.dv8tion.jda.core.entities.MessageEmbed
 import net.dv8tion.jda.core.events.message.MessageReceivedEvent
 import xyz.astolfo.astolfocommunity.*
+import xyz.astolfo.astolfocommunity.messages.*
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicReference
 
@@ -90,9 +91,9 @@ open class CommandExecution(
     fun messageAction(embed: MessageEmbed) = event.channel.sendMessage(embed)!!
     fun messageAction(msg: Message) = event.channel.sendMessage(msg)!!
     suspend fun <T> tempMessage(msg: Message, temp: suspend () -> T): T {
-        val atomicMessage = AtomicReference<AsyncMessage>()
+        val atomicMessage = AtomicReference<CachedMessage>()
         val future = async(parent = (session as CommandSessionImpl).parentJob) {
-            atomicMessage.set(messageAction(msg).sendAsync())
+            atomicMessage.set(messageAction(msg).sendCached())
             temp.invoke()
         }
         future.invokeOnCompletion { atomicMessage.get()?.delete() }
@@ -134,7 +135,7 @@ open class CommandExecution(
     }
 }
 
-class StageAction<E>(val newData: () -> E) {
+class StageAction<E>(private val newData: () -> E) {
     private val actions = mutableListOf<StageActionEntry<E>>()
 
     fun basicAction(block: suspend CommandExecution.(E) -> Unit) = action {

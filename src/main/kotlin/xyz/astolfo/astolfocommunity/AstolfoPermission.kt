@@ -36,7 +36,6 @@ object AstolfoPermissionUtils {
         val roles = member.roles.reversed().toMutableList()
         roles.add(0, member.guild.publicRole)
         roles.forEach { role -> hasPermission(role, textChannel, permissions, permissionToCheck)?.let { hasPermission = it } }
-        println(hasPermission)
         return hasPermission
     }
 

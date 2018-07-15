@@ -1,6 +1,7 @@
 package xyz.astolfo.astolfocommunity.support
 
 import xyz.astolfo.astolfocommunity.commands.CommandBuilder
+import xyz.astolfo.astolfocommunity.messages.embed
 import java.util.concurrent.TimeUnit
 
 
@@ -23,7 +24,7 @@ class SupportBuilder(private val commandBuilder: CommandBuilder) {
     fun build() = commandBuilder.inheritedAction {
         if (supportLevel != null) {
             // Check if user has valid support role
-            val donationEntry = application.astolfoRepositories.donationRepository.findByDiscordId(event.author.idLong)
+            val donationEntry = application.donationManager.getByDiscordId(event.author.idLong)
             if (donationEntry != null && donationEntry.supportLevel.ordinal >= supportLevel!!.ordinal) return@inheritedAction true
         }
         if (upvoteDays > 0) {
@@ -36,12 +37,12 @@ class SupportBuilder(private val commandBuilder: CommandBuilder) {
                 else -> null
             } ?: return@inheritedAction true
             val stringBuilder = StringBuilder(message)
-            stringBuilder.append(" Upvote here: <https://discordbots.org/bot/${event.jda.selfUser.idLong}>")
+            stringBuilder.append(" Upvote at [discordbots.org](https://discordbots.org/bot/${event.jda.selfUser.idLong})")
             if(supportLevel != null){
-                stringBuilder.append(" Instead of upvoting you can always become a patron (<https://www.patreon.com/theprimedtnt>) and unlock even more features!" +
-                        " To unlock this command by donating you need at least the ${supportLevel!!.rewardName} Reward.")
+                stringBuilder.append(" You can also unlock this feature by becoming a [patreon](https://www.patreon.com/theprimedtnt)" +
+                        " and getting at least the **${supportLevel!!.rewardName}** Reward.")
             }
-            messageAction(stringBuilder).queue()
+            messageAction(embed(stringBuilder.toString())).queue()
             return@inheritedAction false
         }
         true

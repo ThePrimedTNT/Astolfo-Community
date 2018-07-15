@@ -3,9 +3,10 @@ package xyz.astolfo.astolfocommunity.menus
 import net.dv8tion.jda.core.entities.Message
 import net.dv8tion.jda.core.events.message.react.GenericMessageReactionEvent
 import net.dv8tion.jda.core.hooks.ListenerAdapter
-import xyz.astolfo.astolfocommunity.*
 import xyz.astolfo.astolfocommunity.commands.CommandExecution
 import xyz.astolfo.astolfocommunity.commands.CommandSession
+import xyz.astolfo.astolfocommunity.messages.*
+import xyz.astolfo.astolfocommunity.value
 import kotlin.math.max
 import kotlin.math.min
 
@@ -79,12 +80,12 @@ class Paginator(private val commandExecution: CommandExecution, val titleProvide
             }
         }
 
-    private var message: AsyncMessage? = null
+    private var message: CachedMessage? = null
 
     private val listener = object : ListenerAdapter() {
         override fun onGenericMessageReaction(event: GenericMessageReactionEvent?) {
             if (event!!.user.idLong != commandExecution.event.author.idLong) return
-            if (message?.getIdLong() != event.messageIdLong) return
+            if (message?.idLong?.value != event.messageIdLong) return
             val name = event.reactionEmote.name
             if (name == SELECT) {
                 destroy()
@@ -138,7 +139,7 @@ class Paginator(private val commandExecution: CommandExecution, val titleProvide
         if (isDestroyed) return
         val newMessage = renderer.invoke(this@Paginator)
         if (message == null) {
-            message = commandExecution.messageAction(newMessage).sendAsync()
+            message = commandExecution.messageAction(newMessage).sendCached()
 
             val pageCount = provider.pageCount
             val emotes = mutableListOf<String>()

@@ -3,6 +3,7 @@ package xyz.astolfo.astolfocommunity
 import com.github.natanbc.weeb4j.TokenType
 import com.github.natanbc.weeb4j.Weeb4J
 import com.timgroup.statsd.NonBlockingStatsDClient
+import io.sentry.Sentry
 import kotlinx.coroutines.experimental.delay
 import kotlinx.coroutines.experimental.launch
 import net.dv8tion.jda.bot.sharding.DefaultShardManagerBuilder
@@ -12,14 +13,17 @@ import net.dv8tion.jda.core.entities.Game
 import net.dv8tion.jda.core.events.guild.GuildJoinEvent
 import net.dv8tion.jda.core.events.guild.GuildLeaveEvent
 import net.dv8tion.jda.core.hooks.ListenerAdapter
-import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.autoconfigure.SpringBootApplication
 import org.springframework.boot.context.properties.ConfigurationProperties
 import org.springframework.boot.context.properties.EnableConfigurationProperties
 import org.springframework.boot.runApplication
+import org.springframework.boot.web.servlet.ServletContextInitializer
 import org.springframework.cache.annotation.EnableCaching
+import org.springframework.context.annotation.Bean
+import org.springframework.web.servlet.HandlerExceptionResolver
 import xyz.astolfo.astolfocommunity.commands.CommandHandler
 import xyz.astolfo.astolfocommunity.games.GameHandler
+import xyz.astolfo.astolfocommunity.messages.MessageCache
 import xyz.astolfo.astolfocommunity.modules.music.MusicManager
 import xyz.astolfo.astolfocommunity.support.DonationManager
 import java.util.concurrent.TimeUnit
@@ -29,8 +33,10 @@ import java.util.concurrent.TimeUnit
 @SpringBootApplication
 @EnableCaching
 @EnableConfigurationProperties(AstolfoProperties::class)
-class AstolfoCommunityApplication(val astolfoRepositories: AstolfoRepositories, val properties: AstolfoProperties) {
+class AstolfoCommunityApplication(val astolfoRepositories: AstolfoRepositories,
+                                  val properties: AstolfoProperties) {
 
+    final val donationManager = DonationManager(this, properties)
     final val musicManager = MusicManager(this, properties)
     final val weeb4J = Weeb4J.Builder().setToken(TokenType.WOLKE, properties.weeb_token).build()
     final val gameHandler = GameHandler()
@@ -41,13 +47,15 @@ class AstolfoCommunityApplication(val astolfoRepositories: AstolfoRepositories, 
     final val statsDClient = NonBlockingStatsDClient(properties.datadog_prefix, "localhost", 8125, "tag:value")
 
     init {
+        if (properties.sentry_dsn.isNotBlank()) Sentry.init(properties.sentry_dsn)
+
         val statsListener = StatsListener(this)
         val shardManagerBuilder = DefaultShardManagerBuilder()
                 .setCompressionEnabled(true)
                 .setToken(properties.token)
                 .setStatus(OnlineStatus.DO_NOT_DISTURB)
                 .setGame(Game.watching("myself boot"))
-                .addEventListeners(commandHandler, musicManager.lavaLink, musicManager.musicManagerListener)
+                .addEventListeners(commandHandler, statsListener, musicManager.lavaLink, musicManager.musicManagerListener)
                 .setShardsTotal(properties.shard_count)
         if (properties.custom_gateway_enabled) shardManagerBuilder.setSessionController(AstolfoSessionController(properties.custom_gateway_url, properties.custom_gateway_delay))
         shardManager = shardManagerBuilder.build()
@@ -57,6 +65,16 @@ class AstolfoCommunityApplication(val astolfoRepositories: AstolfoRepositories, 
             shardManager.setGame(Game.listening("the community"))
             shardManager.setStatus(OnlineStatus.ONLINE)
         }
+    }
+
+    @Bean
+    fun sentryExceptionResolver(): HandlerExceptionResolver {
+        return io.sentry.spring.SentryExceptionResolver()
+    }
+
+    @Bean
+    fun sentryServletContextInitializer(): ServletContextInitializer {
+        return io.sentry.spring.SentryServletContextInitializer()
     }
 }
 
@@ -78,10 +96,10 @@ class AstolfoProperties {
     var custom_gateway_enabled = false
     var custom_gateway_url = ""
     var custom_gateway_delay = 0
-    var patreon_client_id = ""
-    var patreon_client_secret = ""
-    var patreon_creators_refresh_token = ""
-    var patreon_webhook_secret = ""
+    var patreon_users = ""
+    var patreon_url = ""
+    var patreon_auth = ""
+    var sentry_dsn = ""
 }
 
 class StatsListener(val application: AstolfoCommunityApplication) : ListenerAdapter() {
@@ -95,6 +113,7 @@ class StatsListener(val application: AstolfoCommunityApplication) : ListenerAdap
                     it.jda.getGuildById(it.guildIdLong)?.selfMember?.voiceState?.inVoiceChannel() == true
                 }.size.toLong())
                 application.statsDClient.recordGaugeValue("users", application.shardManager.users.toSet().size.toLong())
+                application.statsDClient.recordGaugeValue("cachedmessages", MessageCache.cachedMessageCount.toLong())
                 delay(1, TimeUnit.MINUTES)
             }
         }

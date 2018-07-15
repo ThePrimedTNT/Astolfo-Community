@@ -12,6 +12,7 @@ import xyz.astolfo.astolfocommunity.games.ShiritoriGame
 import xyz.astolfo.astolfocommunity.games.SnakeGame
 import xyz.astolfo.astolfocommunity.games.TetrisGame
 import xyz.astolfo.astolfocommunity.menus.memberSelectionBuilder
+import xyz.astolfo.astolfocommunity.messages.*
 import java.math.BigInteger
 import java.util.*
 
@@ -78,7 +79,7 @@ fun createFunModule() = module("Fun") {
     command("coinflip", "flip", "coin") {
         val random = Random()
         action {
-            val flipMessage = messageAction("Flipping a coin for you...").sendAsync()
+            val flipMessage = messageAction("Flipping a coin for you...").sendCached()
             flipMessage.editMessage("Coin landed on **${if (random.nextBoolean()) "Heads" else "Tails"}**", 1L)
         }
     }
@@ -120,7 +121,7 @@ fun createFunModule() = module("Fun") {
 
             randomNum += lowerBound
 
-            val rollingMessage = messageAction(":game_die: Rolling a dice for you...").sendAsync()
+            val rollingMessage = messageAction(":game_die: Rolling a dice for you...").sendCached()
             rollingMessage.editMessage("Dice landed on **$randomNum**", 1)
         }
     }

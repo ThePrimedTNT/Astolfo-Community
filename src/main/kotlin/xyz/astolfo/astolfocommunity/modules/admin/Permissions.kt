@@ -94,7 +94,7 @@ internal fun ModuleBuilder.permissionCommand() = command("permissions") {
             action({ parseScope(args.argsIterator(), it, false) })
             basicAction {
                 val (role, channel) = Pair(it.role, it.textChannel)
-                println(getGuildSettings().permissions)
+
                 val permissions = getGuildSettings().permissions.filter {
                     @Suppress("CascadeIf")
                     if (it.key.role != role.idLong) false

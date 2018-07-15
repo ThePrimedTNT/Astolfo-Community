@@ -3,13 +3,10 @@ package xyz.astolfo.astolfocommunity
 import com.github.salomonbrys.kotson.fromJson
 import com.google.gson.Gson
 import com.google.gson.JsonSyntaxException
+import kotlinx.coroutines.experimental.Deferred
 import kotlinx.coroutines.experimental.async
 import kotlinx.coroutines.experimental.delay
 import kotlinx.coroutines.experimental.launch
-import net.dv8tion.jda.core.requests.RequestFuture
-import net.dv8tion.jda.core.requests.RestAction
-import net.dv8tion.jda.core.requests.RestFuture
-import net.dv8tion.jda.core.utils.Checks
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import java.text.NumberFormat
@@ -141,3 +138,13 @@ fun String.splitFirst(delimiter: String) =
 fun String.splitLast(delimiter: String) =
         if (contains(delimiter)) substringBeforeLast(delimiter).trim() to substringAfterLast(delimiter).trim()
         else this to ""
+
+val <T> Deferred<T>.value: T?
+    get() = if (isCompleted && !isCompletedExceptionally) getCompleted() else null
+
+inline fun <T> synchronized2(lock1: Any, lock2: Any, block: () -> T): T =
+        synchronized(lock1) {
+            synchronized(lock2) {
+                block()
+            }
+        }

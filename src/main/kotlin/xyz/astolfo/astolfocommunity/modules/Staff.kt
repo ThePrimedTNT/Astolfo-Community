@@ -1,8 +1,8 @@
 package xyz.astolfo.astolfocommunity.modules
 
 import xyz.astolfo.astolfocommunity.RadioEntry
-import xyz.astolfo.astolfocommunity.description
-import xyz.astolfo.astolfocommunity.embed
+import xyz.astolfo.astolfocommunity.messages.description
+import xyz.astolfo.astolfocommunity.messages.embed
 import java.net.MalformedURLException
 import java.net.URL
 

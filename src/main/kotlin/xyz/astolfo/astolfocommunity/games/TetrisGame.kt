@@ -7,9 +7,9 @@ import net.dv8tion.jda.core.EmbedBuilder
 import net.dv8tion.jda.core.entities.Member
 import net.dv8tion.jda.core.entities.TextChannel
 import net.dv8tion.jda.core.events.message.react.GenericMessageReactionEvent
-import xyz.astolfo.astolfocommunity.description
-import xyz.astolfo.astolfocommunity.embed
-import xyz.astolfo.astolfocommunity.title
+import xyz.astolfo.astolfocommunity.messages.description
+import xyz.astolfo.astolfocommunity.messages.embed
+import xyz.astolfo.astolfocommunity.messages.title
 import java.awt.Point
 import java.util.*
 import java.util.concurrent.TimeUnit

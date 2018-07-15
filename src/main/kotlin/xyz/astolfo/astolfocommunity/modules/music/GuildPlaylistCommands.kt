@@ -8,6 +8,7 @@ import xyz.astolfo.astolfocommunity.commands.*
 import xyz.astolfo.astolfocommunity.menus.paginator
 import xyz.astolfo.astolfocommunity.menus.provider
 import xyz.astolfo.astolfocommunity.menus.renderer
+import xyz.astolfo.astolfocommunity.messages.*
 import xyz.astolfo.astolfocommunity.modules.ModuleBuilder
 import xyz.astolfo.astolfocommunity.modules.command
 

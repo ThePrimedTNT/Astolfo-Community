@@ -6,9 +6,9 @@ import net.dv8tion.jda.core.entities.Member
 import net.dv8tion.jda.core.entities.Message
 import net.dv8tion.jda.core.entities.Role
 import net.dv8tion.jda.core.entities.TextChannel
-import xyz.astolfo.astolfocommunity.*
 import xyz.astolfo.astolfocommunity.commands.CommandExecution
 import xyz.astolfo.astolfocommunity.commands.CommandSession
+import xyz.astolfo.astolfocommunity.messages.*
 import java.util.concurrent.atomic.AtomicReference
 
 fun CommandExecution.memberSelectionBuilder(query: String) = selectionBuilder<Member>()
@@ -67,7 +67,7 @@ class SelectionMenuBuilder<E>(private val execution: CommandExecution) {
             renderer { this@SelectionMenuBuilder.renderer.invoke(this) }
         }
         val response = CompletableDeferred<E?>()
-        val errorMessage = AtomicReference<AsyncMessage>()
+        val errorMessage = AtomicReference<CachedMessage>()
         // Waits for a follow up response for user selection
         responseListener {
             if (menu.isDestroyed) {
@@ -75,7 +75,7 @@ class SelectionMenuBuilder<E>(private val execution: CommandExecution) {
             } else if (args.matches("\\d+".toRegex())) {
                 val numSelection = args.toBigInteger().toInt()
                 if (numSelection < 1 || numSelection > results.size) {
-                    errorMessage.getAndSet(messageAction("Unknown Selection").sendAsync())?.delete()
+                    errorMessage.getAndSet(messageAction("Unknown Selection").sendCached())?.delete()
                     return@responseListener CommandSession.ResponseAction.IGNORE_COMMAND
                 }
                 val selectedMember = results[numSelection - 1]
@@ -83,7 +83,7 @@ class SelectionMenuBuilder<E>(private val execution: CommandExecution) {
                 CommandSession.ResponseAction.IGNORE_AND_UNREGISTER_LISTENER
             } else {
                 if (event.message.contentRaw == args) {
-                    errorMessage.getAndSet(messageAction("Response must be a number!").sendAsync())?.delete()
+                    errorMessage.getAndSet(messageAction("Response must be a number!").sendCached())?.delete()
                     return@responseListener CommandSession.ResponseAction.IGNORE_COMMAND
                 } else CommandSession.ResponseAction.RUN_COMMAND
             }
@@ -110,9 +110,9 @@ class ChatInputBuilder(private val execution: CommandExecution) {
     suspend fun execute(): String? = with(execution) {
         val response = CompletableDeferred<String?>()
         val message = messageAction(embed {
-            if(title.isNotBlank()) title(title)
+            if (title.isNotBlank()) title(title)
             description(description)
-        }).sendAsync()
+        }).sendCached()
         // Waits for a follow up response for user selection
         responseListener {
             if (message.isDeleted) {
