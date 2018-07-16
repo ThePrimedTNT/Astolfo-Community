@@ -5,13 +5,12 @@ import com.google.gson.JsonObject
 import kotlinx.coroutines.experimental.channels.Channel
 import kotlinx.coroutines.experimental.channels.actor
 import kotlinx.coroutines.experimental.channels.sendBlocking
+import net.dv8tion.jda.core.entities.Member
 import net.dv8tion.jda.core.entities.Message
 import okhttp3.Request
 import okhttp3.Response
 import okhttp3.WebSocket
 import okhttp3.WebSocketListener
-import org.hibernate.sql.Delete
-import org.springframework.stereotype.Component
 import xyz.astolfo.astolfocommunity.*
 import xyz.astolfo.astolfocommunity.messages.message
 import java.util.concurrent.TimeUnit
@@ -169,6 +168,7 @@ class DonationManager(private val application: AstolfoCommunityApplication,
             override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) {
                 reconnect()
             }
+
             override fun onClosed(webSocket: WebSocket, code: Int, reason: String) {
                 reconnect()
             }
@@ -184,7 +184,7 @@ class DonationManager(private val application: AstolfoCommunityApplication,
                         val entries = ASTOLFO_GSON.fromJson<List<PatreonEntry>>(d)
                         wsActor.sendBlocking(ReadyEvent(entries))
                     }
-                    "CREATE","UPDATE" -> {
+                    "CREATE", "UPDATE" -> {
                         val entry = ASTOLFO_GSON.fromJson<PatreonEntry>(d)
                         wsActor.sendBlocking(ConsumeEvent(entry))
                     }
@@ -198,22 +198,31 @@ class DonationManager(private val application: AstolfoCommunityApplication,
         })
     }
 
-    private fun reconnect(){
+    private fun reconnect() {
         Thread.sleep(TimeUnit.SECONDS.toMillis(30))
         connect()
     }
 
+    fun getByMember(member: Member): SupportLevel {
+        val guild = getByDiscordId(member.guild.owner.user.idLong)?.supportLevel ?: SupportLevel.DEFAULT
+        val user = getByDiscordId(member.user.idLong)?.supportLevel ?: SupportLevel.DEFAULT
+        return guild.max(user)
+    }
+
     fun getByDiscordId(discordId: Long) = synchronized(entries) { entries.find { it.discord_id == discordId } }
+
 
 }
 
 enum class SupportLevel(val rewardId: Long?, val rewardName: String, val upvote: Boolean, val cost: Long, val queueSize: Long) {
     DEFAULT(null, "Default", false, 0, 200),
-    UPVOTER(null, "Upvoter", true, 0, 500),
+    UPVOTER(null, "Upvoter", true, 0, 400),
     SUPPORTER(2117513L, "Supporter", false, 5 * 100, 1000),
     ADVANCED_SUPPORTER(2117519L, "Advanced Supporter", false, 10 * 100, 2000),
     SERVANT(2117523L, "Servant", false, 20 * 100, 5000),
     MASTER(2117526L, "Astolfo's Master", false, 40 * 100, 10000);
+
+    fun max(other: SupportLevel) = if (ordinal < other.ordinal) other else this
 
     companion object {
         fun toLevel(rewardId: Long?, hasUpvoted: Boolean): SupportLevel = when {

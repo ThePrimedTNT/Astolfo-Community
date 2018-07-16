@@ -2,9 +2,12 @@ package xyz.astolfo.astolfocommunity.modules.music
 
 import com.sedmelluq.discord.lavaplayer.track.AudioPlaylist
 import com.sedmelluq.discord.lavaplayer.track.AudioTrack
+import kotlinx.coroutines.experimental.CompletableDeferred
 import net.dv8tion.jda.core.Permission
 import net.dv8tion.jda.core.utils.PermissionUtil
-import xyz.astolfo.astolfocommunity.*
+import xyz.astolfo.astolfocommunity.Emotes
+import xyz.astolfo.astolfocommunity.RadioEntry
+import xyz.astolfo.astolfocommunity.Utils
 import xyz.astolfo.astolfocommunity.commands.CommandBuilder
 import xyz.astolfo.astolfocommunity.commands.CommandExecution
 import xyz.astolfo.astolfocommunity.menus.paginator
@@ -12,7 +15,6 @@ import xyz.astolfo.astolfocommunity.menus.provider
 import xyz.astolfo.astolfocommunity.menus.renderer
 import xyz.astolfo.astolfocommunity.menus.selectionBuilder
 import xyz.astolfo.astolfocommunity.messages.*
-import xyz.astolfo.astolfocommunity.modules.command
 import xyz.astolfo.astolfocommunity.modules.module
 import xyz.astolfo.astolfocommunity.support.SupportLevel
 import xyz.astolfo.astolfocommunity.support.supportBuilder
@@ -36,7 +38,7 @@ fun createMusicModule() = module("Music") {
             }
             if (!searchQuery.search) {
                 val musicSession = application.musicManager.getMusicSession(guild)!!
-                musicSession.musicLoader.add(searchQuery, event.channel)
+                musicSession.musicLoader.add(event.member, searchQuery, event.textChannel)
                 return@musicAction
             }
             runWhileSessionActive {
@@ -50,7 +52,7 @@ fun createMusicModule() = module("Music") {
                     val selectedTrack = selectMusic(audioPlaylist.tracks).execute() ?: return@runWhileSessionActive
                     application.musicManager.getMusicSession(guild)?.let {
                         it.boundChannel = event.message.textChannel
-                        it.queue(selectedTrack)
+                        it.queue(event.member, listOf(selectedTrack), false, CompletableDeferred())
                     }
                     messageAction(embed { description("[${selectedTrack.info.title}](${selectedTrack.info.uri}) has been added to the queue") }).queue()
                 } else if (exception != null) {
@@ -92,7 +94,7 @@ fun createMusicModule() = module("Music") {
             if (audioItem != null && audioItem is AudioTrack) {
                 application.musicManager.getMusicSession(guild)?.let {
                     it.boundChannel = event.message.textChannel
-                    it.queue(audioItem)
+                    it.queue(event.member, listOf(audioItem), false, CompletableDeferred())
                 }
                 messageAction(embed { description("**${selectedRadio.name}** has been added to the queue") }).queue()
             } else if (audioException != null) {

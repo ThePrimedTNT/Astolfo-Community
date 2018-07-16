@@ -44,7 +44,7 @@ dependencies {
     //compile('org.springframework.session:spring-session-data-redis')
     compile("org.jetbrains.kotlin:kotlin-stdlib-jdk8")
     compile("org.jetbrains.kotlin:kotlin-reflect")
-    runtime('com.h2database:h2')
+    runtime('com.h2database:h2:+')
     compile 'mysql:mysql-connector-java'
     compile 'org.mariadb.jdbc:mariadb-java-client'
     compileOnly('org.springframework.boot:spring-boot-configuration-processor')

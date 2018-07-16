@@ -50,7 +50,7 @@ fun createInfoModule() = module("Info") {
             messageAction(embed {
                 title("Astolfo Profile Pictures", selectedMember.user.avatarUrl)
                 description("${selectedMember.asMention} Profile Picture!")
-                image(selectedMember.user.avatarUrl)
+                image(selectedMember.user.effectiveAvatarUrl)
             }).queue()
         }
     }
@@ -90,9 +90,10 @@ fun createInfoModule() = module("Info") {
                     title("Astolfo Command Help")
                     description("If you're having  trouble with anything, you can always stop by our support server!" +
                             "\nInvite Link: https://discord.gg/23RB2Wc")
-                    modules.filterNot { it.hidden }.forEach {
-                        val commandNames = it.commands.joinToString(" ") { "`${it.name}` " }
-                        field("${it.name} Commands", commandNames, false)
+                    for (module in modules) {
+                        if ((module.hidden) || (module.nsfw && !this@action.event.textChannel.isNSFW)) continue
+                        val commandNames = module.commands.joinToString(" ") { "`${it.name}` " }
+                        field("${module.name} Commands", commandNames, false)
                     }
                 }).queue()
             }

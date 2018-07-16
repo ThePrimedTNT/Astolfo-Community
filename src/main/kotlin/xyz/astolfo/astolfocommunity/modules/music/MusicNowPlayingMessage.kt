@@ -2,7 +2,6 @@ package xyz.astolfo.astolfocommunity.modules.music
 
 import com.sedmelluq.discord.lavaplayer.track.AudioTrack
 import kotlinx.coroutines.experimental.Job
-import kotlinx.coroutines.experimental.cancelChildren
 import kotlinx.coroutines.experimental.channels.Channel
 import kotlinx.coroutines.experimental.channels.actor
 import kotlinx.coroutines.experimental.channels.sendBlocking
@@ -17,7 +16,7 @@ class MusicNowPlayingMessage(private val musicSession: MusicSession) {
 
     private val parent = Job()
     private val messageActor = actor<AudioTrack>(context = nowPlayingContext, parent = parent, capacity = Channel.UNLIMITED) {
-        for (track in channel){
+        for (track in channel) {
             updateInternal(track)
         }
     }
@@ -32,15 +31,21 @@ class MusicNowPlayingMessage(private val musicSession: MusicSession) {
             }
         }
 
+        fun sendMessage() {
+            if (musicSession.boundChannel.canTalk())
+                nowPlayingMessage = musicSession.boundChannel.sendMessage(newMessage).sendCached()
+        }
+
         if (nowPlayingMessage == null) {
-            nowPlayingMessage = musicSession.boundChannel.sendMessage(newMessage).sendCached()
-        } else if(track != internalTrack){
+            sendMessage()
+        } else if (track != internalTrack) {
             val messageId = nowPlayingMessage?.idLong?.await()
             if (messageId != null && musicSession.boundChannel.hasLatestMessage() && musicSession.boundChannel.latestMessageIdLong == messageId) {
                 nowPlayingMessage!!.editMessage(newMessage)
             } else {
                 nowPlayingMessage!!.delete()
-                nowPlayingMessage = musicSession.boundChannel.sendMessage(newMessage).sendCached()
+                nowPlayingMessage = null
+                sendMessage()
             }
         }
         internalTrack = track
@@ -50,7 +55,7 @@ class MusicNowPlayingMessage(private val musicSession: MusicSession) {
         messageActor.sendBlocking(track)
     }
 
-    fun dispose(){
+    fun dispose() {
         messageActor.close()
         parent.cancel()
     }

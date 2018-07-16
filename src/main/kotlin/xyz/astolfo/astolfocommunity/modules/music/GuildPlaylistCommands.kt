@@ -2,15 +2,16 @@ package xyz.astolfo.astolfocommunity.modules.music
 
 import com.sedmelluq.discord.lavaplayer.track.AudioPlaylist
 import com.sedmelluq.discord.lavaplayer.track.AudioTrack
+import kotlinx.coroutines.experimental.CompletableDeferred
 import net.dv8tion.jda.core.Permission
-import xyz.astolfo.astolfocommunity.*
-import xyz.astolfo.astolfocommunity.commands.*
+import xyz.astolfo.astolfocommunity.GuildPlaylistEntry
+import xyz.astolfo.astolfocommunity.commands.CommandSession
 import xyz.astolfo.astolfocommunity.menus.paginator
 import xyz.astolfo.astolfocommunity.menus.provider
 import xyz.astolfo.astolfocommunity.menus.renderer
 import xyz.astolfo.astolfocommunity.messages.*
 import xyz.astolfo.astolfocommunity.modules.ModuleBuilder
-import xyz.astolfo.astolfocommunity.modules.command
+import xyz.astolfo.astolfocommunity.splitFirst
 
 internal fun ModuleBuilder.createGuildPlaylistCommands() {
     command("guildplaylist", "gpl") {
@@ -200,9 +201,11 @@ internal fun ModuleBuilder.createGuildPlaylistCommands() {
                     messageAction("I couldn't find a playlist with that name!").queue()
                     return@musicAction
                 }
+                val member = event.member
                 application.musicManager.getMusicSession(event.guild)?.let { session ->
                     session.boundChannel = event.message.textChannel
-                    playlist.lavaplayerSongs.forEach { session.queue(it) }
+                    // TODO add donation support
+                    session.queue(member, playlist.lavaplayerSongs, false, CompletableDeferred())
                 }
                 messageAction(embed { setDescription("The guild playlist **${playlist.name}** has been added to the queue") }).queue()
             }

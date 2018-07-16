@@ -10,6 +10,8 @@ import com.github.salomonbrys.kotson.contains
 import com.github.salomonbrys.kotson.fromJson
 import com.google.common.cache.CacheBuilder
 import com.google.common.cache.CacheLoader
+import io.sentry.Sentry
+import io.sentry.event.EventBuilder
 import kotlinx.coroutines.experimental.launch
 import kotlinx.coroutines.experimental.newFixedThreadPoolContext
 import net.dv8tion.jda.core.Permission
@@ -18,6 +20,7 @@ import net.dv8tion.jda.core.entities.Member
 import net.dv8tion.jda.core.events.message.MessageReceivedEvent
 import net.dv8tion.jda.core.hooks.ListenerAdapter
 import xyz.astolfo.astolfocommunity.*
+import xyz.astolfo.astolfocommunity.modules.Module
 import xyz.astolfo.astolfocommunity.modules.modules
 import java.util.*
 import java.util.concurrent.TimeUnit
@@ -43,7 +46,7 @@ class CommandHandler(val application: AstolfoCommunityApplication) : ListenerAda
         application.statsDClient.incrementCounter("messages_received")
         val timeIssued = System.nanoTime()
         if (event!!.author.isBot) return
-        if(event.channelType != ChannelType.TEXT) return
+        if (event.channelType != ChannelType.TEXT) return
         if (event.textChannel?.canTalk() != true) return
         launch(messageProcessorContext) {
             val prefix = application.astolfoRepositories.getEffectiveGuildSettings(event.guild.idLong).getEffectiveGuildPrefix(application)
@@ -76,7 +79,7 @@ class CommandHandler(val application: AstolfoCommunityApplication) : ListenerAda
             commandScope@ launch(commandProcessorContext) {
                 val commandMessage = rawMessage.substring(prefixedMatched.length).trim()
 
-                if (modules.find { processCommand(event, timeIssued, it.commands, "", commandMessage) } != null) {
+                if (modules.find { processCommand(it, event, timeIssued, it.commands, "", commandMessage) } != null) {
                     application.statsDClient.incrementCounter("commands_executed")
                     return@commandScope
                 }
@@ -90,7 +93,7 @@ class CommandHandler(val application: AstolfoCommunityApplication) : ListenerAda
                 // Process chat bot stuff
                 val response = chatBotManager.process(event.member, commandMessage)
                 if (response.type == ChatResponse.ResponseType.COMMAND) {
-                    if (modules.find { processCommand(event, timeIssued, it.commands, "", response.response) } != null)
+                    if (modules.find { processCommand(it, event, timeIssued, it.commands, "", response.response) } != null)
                         application.statsDClient.incrementCounter("commands_executed")
                 } else {
                     event.channel.sendMessage(response.response).queue()
@@ -111,7 +114,7 @@ class CommandHandler(val application: AstolfoCommunityApplication) : ListenerAda
         return true
     }
 
-    private suspend fun processCommand(event: MessageReceivedEvent, timeIssued: Long, commands: List<Command>, commandPath: String, commandMessage: String): Boolean {
+    private suspend fun processCommand(module: Module?, event: MessageReceivedEvent, timeIssued: Long, commands: List<Command>, commandPath: String, commandMessage: String): Boolean {
         val (commandName, commandContent) = commandMessage.splitFirst(" ")
 
         val command = commands.find { it.name.equals(commandName, ignoreCase = true) || it.alts.any { it.equals(commandName, ignoreCase = true) } }
@@ -133,6 +136,8 @@ class CommandHandler(val application: AstolfoCommunityApplication) : ListenerAda
                 timeIssued
         )
 
+        if (module?.let { !it.inheritedActions.all { it.invoke(createExecution(InheritedCommandSession(newCommandPath))) } } == true) return true
+
         val permission = command.permission
 
         var hasPermission: Boolean? = if (event.member.hasPermission(Permission.ADMINISTRATOR)) true else null
@@ -152,7 +157,7 @@ class CommandHandler(val application: AstolfoCommunityApplication) : ListenerAda
 
         if (!command.inheritedActions.all { it.invoke(createExecution(InheritedCommandSession(newCommandPath))) }) return true
 
-        if (!processCommand(event, timeIssued, command.subCommands, newCommandPath, commandContent)) {
+        if (!processCommand(null, event, timeIssued, command.subCommands, newCommandPath, commandContent)) {
             fun runNewSession() {
                 application.statsDClient.incrementCounter("commandExecuteCount", "command:$newCommandPath")
                 commandSessionManager.session(event, newCommandPath, { session ->
@@ -225,6 +230,7 @@ class ChatSession constructor(id: String) {
         val response = try {
             dataService.request(request, context)
         } catch (e: AIServiceException) {
+            Sentry.capture(e)
             e.printStackTrace()
             return ChatResponse(ChatResponse.ResponseType.MESSAGE,
                     if (e.message?.startsWith("Authorization failed") == true) "Chat Bot Authorization Invalid (Contact bot owner if you see this message)"

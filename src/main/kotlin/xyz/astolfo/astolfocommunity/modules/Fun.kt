@@ -63,17 +63,17 @@ fun createFunModule() = module("Fun") {
     }
     command("advice") {
         action {
-            messageAction(embed("\uD83D\uDCD6 ${webJson<Advice>("http://api.adviceslip.com/advice")!!.slip!!.advice}")).queue()
+            messageAction(embed("\uD83D\uDCD6 ${webJson<Advice>("http://api.adviceslip.com/advice").await().slip!!.advice}")).queue()
         }
     }
     command("cat", "cats") {
         action {
-            messageAction(webJson<Cat>("http://aws.random.cat/meow", null)!!.file!!).queue()
+            messageAction(webJson<Cat>("http://aws.random.cat/meow", null).await().file!!).queue()
         }
     }
     command("catgirl", "neko", "catgirls") {
         action {
-            messageAction(webJson<Neko>("https://nekos.life/api/neko")!!.neko!!).queue()
+            messageAction(webJson<Neko>("https://nekos.life/api/neko").await().neko!!).queue()
         }
     }
     command("coinflip", "flip", "coin") {
@@ -144,7 +144,7 @@ fun createFunModule() = module("Fun") {
     command("csshumor", "cssjoke", "cssh") {
         action {
             messageAction(embed("```css" +
-                    "\n${Jsoup.parse(web("https://csshumor.com/")).select(".crayon-code").text()}" +
+                    "\n${Jsoup.parse(web("https://csshumor.com/").await()).select(".crayon-code").text()}" +
                     "\n```")).queue()
         }
     }
@@ -154,7 +154,7 @@ fun createFunModule() = module("Fun") {
             val r = random.nextInt(4665) + 1
             messageAction(embed {
                 title("Cyanide and Happiness")
-                image(Jsoup.parse(web("http://explosm.net/comics/$r/"))
+                image(Jsoup.parse(web("http://explosm.net/comics/$r/").await())
                         .select("#main-comic").first()
                         .attr("src")
                         .let { if (it.startsWith("//")) "https:$it" else it })
@@ -163,7 +163,7 @@ fun createFunModule() = module("Fun") {
     }
     command("dadjoke", "djoke", "dadjokes", "djokes") {
         action {
-            messageAction(embed("\uD83D\uDCD6 **Dadjoke:** ${webJson<DadJoke>("https://icanhazdadjoke.com/")!!.joke!!}")).queue()
+            messageAction(embed("\uD83D\uDCD6 **Dadjoke:** ${webJson<DadJoke>("https://icanhazdadjoke.com/").await().joke!!}")).queue()
         }
     }
     command("hug") {

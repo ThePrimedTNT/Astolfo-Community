@@ -2,6 +2,7 @@ package xyz.astolfo.astolfocommunity
 
 import com.sedmelluq.discord.lavaplayer.track.AudioTrack
 import lavalink.client.LavalinkUtil
+import org.hibernate.annotations.ColumnDefault
 import org.hibernate.annotations.GenericGenerator
 import org.hibernate.annotations.LazyCollection
 import org.hibernate.annotations.LazyCollectionOption
@@ -163,9 +164,24 @@ data class GuildSettings(@Id val guildId: Long = 0L,
                          @CollectionTable(name = "guild_settings_permissions", joinColumns = [(JoinColumn(name = "guildId"))])
                          @MapKeyClass(PermissionSetting::class)
                          @Column(name = "allow")
-                         var permissions: Map<PermissionSetting, Boolean> = mutableMapOf()) {
-    fun getEffectiveGuildPrefix(application: AstolfoCommunityApplication) = prefix.takeIf { it.isNotBlank() } ?: application.properties.default_prefix
+                         var permissions: Map<PermissionSetting, Boolean> = mutableMapOf(),
+                         @ElementCollection
+                         @LazyCollection(LazyCollectionOption.FALSE)
+                         @CollectionTable(name = "guild_settings_joinleavemessage", joinColumns = [(JoinColumn(name = "guildId"))])
+                         @MapKeyColumn(name = "isjoinsmg")
+                         var joinLeaveMessage: Map<Boolean, JoinLeaveSetting> = mutableMapOf()) {
+    fun getEffectiveGuildPrefix(application: AstolfoCommunityApplication) = prefix.takeIf { it.isNotBlank() }
+            ?: application.properties.default_prefix
 }
+
+@Embeddable
+class JoinLeaveSetting(@ColumnDefault("0")
+                       var channelId: Long = 0L,
+                       @ColumnDefault("false")
+                       var enabled: Boolean = false,
+                       @Column(length = 1000)
+                       @ColumnDefault("\"\"")
+                       var message: String = "")
 
 @Embeddable
 data class PermissionSetting(val role: Long = 0L, val channel: Long = 0L, @Column(length = 45) val node: String = "")

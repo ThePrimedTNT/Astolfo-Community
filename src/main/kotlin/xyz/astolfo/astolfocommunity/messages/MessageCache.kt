@@ -4,6 +4,7 @@ import kotlinx.coroutines.experimental.*
 import kotlinx.coroutines.experimental.sync.Mutex
 import kotlinx.coroutines.experimental.sync.withLock
 import net.dv8tion.jda.core.MessageBuilder
+import net.dv8tion.jda.core.Permission
 import net.dv8tion.jda.core.entities.Emote
 import net.dv8tion.jda.core.entities.Message
 import net.dv8tion.jda.core.entities.MessageEmbed
@@ -165,8 +166,9 @@ class CachedMessage(messageDeferred: CompletableDeferred<Message>) {
 
     fun delete() = launch(cachedContext) {
         editManager.dispose()
-        internalWaitForMessage {
-            it.delete().queue()
+        internalWaitForMessage { msg ->
+            if (!msg.hasPermission(Permission.MESSAGE_READ)) return@internalWaitForMessage
+            msg.delete().queue()
         }
         isDeleted = true
     }
@@ -194,9 +196,9 @@ class CachedMessage(messageDeferred: CompletableDeferred<Message>) {
                 this.newContent = newContent
                 contentQueued?.cancelAndJoin()
                 val mainJob = Job()
-                val completableDeferred = messageMutex.withLock {
-                    message.editMessage(newContent).submit().toCompletableDeferred(mainJob)
-                }
+                val completableDeferred = internalWaitForMessage {
+                    it.editMessage(newContent).submit().toCompletableDeferred(mainJob)
+                }.await()
                 launch(parent = mainJob, context = cachedContext) {
                     withTimeout(1, TimeUnit.MINUTES) {
                         muteUnknownError {
@@ -225,6 +227,7 @@ class CachedMessage(messageDeferred: CompletableDeferred<Message>) {
         fun addReaction(emote: Emote, delay: Long, delayUnit: TimeUnit) = addReaction(EmoteActionKey(0, emote = emote), delay, delayUnit)
         private fun addReaction(key: EmoteActionKey, delay: Long, delayUnit: TimeUnit) = runBlocking(cachedContext) {
             internalWaitForMessage { msg ->
+                if (!msg.hasPermission(Permission.MESSAGE_HISTORY)) return@internalWaitForMessage
                 val emote = key.emote
                 val unicode = key.unicode
                 val action = if (emote != null) msg.addReaction(emote) else msg.addReaction(unicode!!)
@@ -235,6 +238,8 @@ class CachedMessage(messageDeferred: CompletableDeferred<Message>) {
 
         fun clearReactions(delay: Long, delayUnit: TimeUnit) {
             internalWaitForMessage { msg ->
+                if (!msg.hasPermission(Permission.MESSAGE_MANAGE)) return@internalWaitForMessage
+
                 val action = msg.clearReactions()
                 if (delay <= 0) action.queue()
                 else action.queueAfter(delay, delayUnit)

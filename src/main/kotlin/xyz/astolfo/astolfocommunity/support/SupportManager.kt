@@ -4,7 +4,6 @@ import xyz.astolfo.astolfocommunity.commands.CommandBuilder
 import xyz.astolfo.astolfocommunity.messages.embed
 import java.util.concurrent.TimeUnit
 
-
 fun CommandBuilder.supportBuilder(block: SupportBuilder.() -> Unit) {
     val supportBuilder = SupportBuilder(this)
     block(supportBuilder)

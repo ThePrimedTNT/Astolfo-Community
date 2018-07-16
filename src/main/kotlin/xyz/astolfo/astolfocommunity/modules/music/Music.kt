@@ -24,8 +24,9 @@ import kotlinx.coroutines.experimental.channels.sendBlocking
 import lavalink.client.LavalinkUtil
 import lavalink.client.io.Lavalink
 import lavalink.client.player.event.AudioEventAdapterWrapped
+import net.dv8tion.jda.core.Permission
 import net.dv8tion.jda.core.entities.Guild
-import net.dv8tion.jda.core.entities.MessageChannel
+import net.dv8tion.jda.core.entities.Member
 import net.dv8tion.jda.core.entities.TextChannel
 import net.dv8tion.jda.core.entities.VoiceChannel
 import net.dv8tion.jda.core.events.ReadyEvent
@@ -37,10 +38,12 @@ import xyz.astolfo.astolfocommunity.AstolfoCommunityApplication
 import xyz.astolfo.astolfocommunity.AstolfoProperties
 import xyz.astolfo.astolfocommunity.commands.CommandExecution
 import xyz.astolfo.astolfocommunity.menus.selectionBuilder
+import xyz.astolfo.astolfocommunity.messages.color
 import xyz.astolfo.astolfocommunity.messages.description
 import xyz.astolfo.astolfocommunity.messages.embed
 import xyz.astolfo.astolfocommunity.messages.sendCached
 import xyz.astolfo.astolfocommunity.synchronized2
+import java.awt.Color
 import java.io.File
 import java.net.MalformedURLException
 import java.net.URI
@@ -51,12 +54,12 @@ import java.util.concurrent.LinkedBlockingDeque
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicInteger
 
-class MusicManager(astolfoCommunityApplication: AstolfoCommunityApplication, properties: AstolfoProperties) {
+class MusicManager(val application: AstolfoCommunityApplication, properties: AstolfoProperties) {
 
     val lavaLink = Lavalink(
             properties.bot_user_id,
             properties.shard_count
-    ) { shardId -> astolfoCommunityApplication.shardManager.getShardById(shardId) }
+    ) { shardId -> application.shardManager.getShardById(shardId) }
 
     private val saveFolder = File("./tempMusic/sessions/")
 
@@ -162,6 +165,8 @@ class MusicManager(astolfoCommunityApplication: AstolfoCommunityApplication, pro
                     FileUtils.writeStringToFile(shardFile, ASTOLFO_GSON.toJson(sessions), Charsets.UTF_8)
                 }
                 println("Saved!")
+                // TODO move this to a proper system
+                application.shardManager.shutdown()
             } catch (e: Exception) {
                 e.printStackTrace()
             }
@@ -169,7 +174,7 @@ class MusicManager(astolfoCommunityApplication: AstolfoCommunityApplication, pro
     }
 
     fun getMusicSession(guild: Guild) = musicSessionMap[guild]
-    fun getMusicSession(guild: Guild, boundChannel: TextChannel) = musicSessionMap.computeIfAbsent(guild, { MusicSession(this, guild, boundChannel) })
+    fun getMusicSession(guild: Guild, boundChannel: TextChannel) = musicSessionMap.computeIfAbsent(guild) { MusicSession(this, guild, boundChannel) }
     fun hasMusicSession(guild: Guild) = musicSessionMap.containsKey(guild)
 
     fun stopMusicSession(guild: Guild) {
@@ -178,7 +183,7 @@ class MusicManager(astolfoCommunityApplication: AstolfoCommunityApplication, pro
     }
 }
 
-class MusicSession(private val musicManager: MusicManager, guild: Guild, var boundChannel: MessageChannel) : AudioEventAdapterWrapped() {
+class MusicSession(private val musicManager: MusicManager, guild: Guild, var boundChannel: TextChannel) : AudioEventAdapterWrapped() {
 
     private val player = musicManager.lavaLink.getPlayer(guild)
     private val songQueue = LinkedBlockingDeque<AudioTrack>()
@@ -192,7 +197,7 @@ class MusicSession(private val musicManager: MusicManager, guild: Guild, var bou
     private interface MusicEvent
     private object NextSong : MusicEvent
     private object Shuffle : MusicEvent
-    private class QueueSong(val audioTrack: AudioTrack, val top: Boolean) : MusicEvent
+    private class QueueSongs(val member: Member, val audioTracks: List<AudioTrack>, val top: Boolean, val completableDeferred: CompletableDeferred<Int>) : MusicEvent
     private class ChangeRepeatMode(val newMode: RepeatMode) : MusicEvent
     private class TrackEnd(val audioTrack: AudioTrack, val endReason: AudioTrackEndReason) : MusicEvent
     private class SkipTracks(val amount: Int, val completableDeferred: CompletableDeferred<List<AudioTrack>>) : MusicEvent
@@ -212,9 +217,10 @@ class MusicSession(private val musicManager: MusicManager, guild: Guild, var bou
                     if (player.playingTrack != null) return
 
                     if (songQueue.isEmpty() && repeatSongQueue.isEmpty()) {
-                        boundChannel.sendMessage(embed {
-                            description("\uD83C\uDFC1 Song Queue Finished!")
-                        }).queue()
+                        if (boundChannel.canTalk())
+                            boundChannel.sendMessage(embed {
+                                description("\uD83C\uDFC1 Song Queue Finished!")
+                            }).queue()
                         return
                     }
 
@@ -223,9 +229,18 @@ class MusicSession(private val musicManager: MusicManager, guild: Guild, var bou
                     player.playTrack(track)
                 }
             }
-            is QueueSong -> {
-                if (event.top) songQueue.offerFirst(event.audioTrack)
-                else songQueue.offer(event.audioTrack)
+            is QueueSongs -> {
+                var songCount = 0
+                val supportLevel = musicManager.application.donationManager.getByMember(event.member)
+                for (audioTrack in event.audioTracks) {
+                    if(songQueue.size < supportLevel.queueSize) {
+                        if (event.top) songQueue.offerFirst(audioTrack)
+                        else songQueue.offer(audioTrack)
+                        songCount++
+                    }
+                }
+                // TODO add donation check
+                event.completableDeferred.complete(songCount)
                 handleEvent(NextSong)
             }
             is Shuffle -> {
@@ -280,8 +295,13 @@ class MusicSession(private val musicManager: MusicManager, guild: Guild, var bou
                 handleEvent(NextSong)
             }
             is Connect -> {
-                if (event.voiceChannel != null) player.link.connect(event.voiceChannel)
-                else player.link.disconnect()
+                val voiceChannel = event.voiceChannel
+                if (voiceChannel != null) {
+                    // Just some insanity check
+                    if (voiceChannel.guild.selfMember.hasPermission(voiceChannel, Permission.VOICE_CONNECT)) {
+                        player.link.connect(voiceChannel)
+                    }
+                } else player.link.disconnect()
             }
         }
     }
@@ -329,7 +349,7 @@ class MusicSession(private val musicManager: MusicManager, guild: Guild, var bou
         player.addListener(this)
     }
 
-    fun queue(track: AudioTrack, top: Boolean = false) = musicActor.sendBlocking(QueueSong(track, top))
+    fun queue(member: Member, tracks: List<AudioTrack>, top: Boolean = false, completableDeferred: CompletableDeferred<Int>) = musicActor.sendBlocking(QueueSongs(member, tracks, top, completableDeferred))
 
     fun skip(amountToSkip: Int): CompletableDeferred<List<AudioTrack>> {
         val completableDeferred = CompletableDeferred<List<AudioTrack>>()
@@ -366,10 +386,10 @@ class MusicSession(private val musicManager: MusicManager, guild: Guild, var bou
         private val tasks: MutableList<MusicLoaderTask> = CopyOnWriteArrayList()
         private var destroyed = false
 
-        fun add(musicQuery: MusicUtils.MusicQuery, messageChannel: MessageChannel) {
+        fun add(member: Member, musicQuery: MusicUtils.MusicQuery, messageChannel: TextChannel) {
             synchronized(tasks) {
                 if (destroyed) return
-                tasks.add(MusicLoaderTask(musicQuery, messageChannel))
+                tasks.add(MusicLoaderTask(member, musicQuery, messageChannel))
             }
         }
 
@@ -380,7 +400,9 @@ class MusicSession(private val musicManager: MusicManager, guild: Guild, var bou
             }
         }
 
-        inner class MusicLoaderTask(val query: MusicUtils.MusicQuery, private val messageChannel: MessageChannel) {
+        inner class MusicLoaderTask(val member: Member,
+                                    val query: MusicUtils.MusicQuery,
+                                    private val messageChannel: TextChannel) {
 
             private val message = messageChannel.sendMessage(embed("\uD83D\uDD0E Loading **${query.query}** to queue...")).sendCached()
             private val loaderJob = launch {
@@ -391,14 +413,45 @@ class MusicSession(private val musicManager: MusicManager, guild: Guild, var bou
                     // If the track returned is a normal audio track
                     val audioTrack: AudioTrack = audioItem
                     boundChannel = messageChannel
-                    queue(audioTrack)
-                    message.editMessage(embed("[${audioTrack.info.title}](${audioTrack.info.uri}) has been added to the queue"))
+                    val completableDeferred = CompletableDeferred<Int>()
+                    queue(member, listOf(audioTrack), false, completableDeferred)
+                    withTimeout(1, TimeUnit.MINUTES) {
+                        if (completableDeferred.await() == 0) {
+                            message.editMessage(embed{
+                                description("[${audioTrack.info.title}](${audioTrack.info.uri}) couldn't be added to the queue since the queue is full! " +
+                                        "To increase the size of the queue consider donating to our [patreon](https://www.patreon.com/theprimedtnt)")
+                                color(Color.RED)
+                            })
+                        } else {
+                            message.editMessage(embed("[${audioTrack.info.title}](${audioTrack.info.uri}) has been added to the queue"))
+                        }
+                    }
                 } else if (audioItem != null && audioItem is AudioPlaylist) {
                     val audioPlaylist: AudioPlaylist = audioItem
                     // If the tracks are from directly from a url
                     boundChannel = messageChannel
-                    audioPlaylist.tracks.forEach { queue(it) }
-                    message.editMessage(embed("The playlist [${audioPlaylist.name}](${query.query}) has been added to the queue"))
+                    val completableDeferred = CompletableDeferred<Int>()
+                    val tracks = audioPlaylist.tracks
+                    queue(member, tracks, false, completableDeferred)
+                    withTimeout(1, TimeUnit.MINUTES) {
+                        val amountAdded = completableDeferred.await()
+                        when {
+                            amountAdded == 0 ->
+                                message.editMessage(embed{
+                                    description("No songs from the playlist [${audioPlaylist.name}](${query.query}) could be added to the queue since the queue is full! " +
+                                            "To increase the size of the queue consider donating to our [patreon](https://www.patreon.com/theprimedtnt)")
+                                    color(Color.RED)
+                                })
+                            amountAdded < tracks.size ->
+                                message.editMessage(embed{
+                                    description("Only **$amountAdded** of **${tracks.size}** songs from the playlist [${audioPlaylist.name}](${query.query}) could be added to the queue since the queue is full! " +
+                                            "To increase the size of the queue consider donating to our [patreon](https://www.patreon.com/theprimedtnt)")
+                                    color(Color.RED)
+                                })
+                            else ->
+                                message.editMessage(embed("The playlist [${audioPlaylist.name}](${query.query}) has been added to the queue"))
+                        }
+                    }
                 } else if (exception != null) {
                     message.editMessage("Failed due to an error: **${exception.message}**")
                 } else {

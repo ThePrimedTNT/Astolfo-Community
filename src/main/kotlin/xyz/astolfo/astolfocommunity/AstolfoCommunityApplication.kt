@@ -24,6 +24,7 @@ import org.springframework.web.servlet.HandlerExceptionResolver
 import xyz.astolfo.astolfocommunity.commands.CommandHandler
 import xyz.astolfo.astolfocommunity.games.GameHandler
 import xyz.astolfo.astolfocommunity.messages.MessageCache
+import xyz.astolfo.astolfocommunity.modules.admin.JoinLeaveManager
 import xyz.astolfo.astolfocommunity.modules.music.MusicManager
 import xyz.astolfo.astolfocommunity.support.DonationManager
 import java.util.concurrent.TimeUnit
@@ -55,7 +56,8 @@ class AstolfoCommunityApplication(val astolfoRepositories: AstolfoRepositories,
                 .setToken(properties.token)
                 .setStatus(OnlineStatus.DO_NOT_DISTURB)
                 .setGame(Game.watching("myself boot"))
-                .addEventListeners(commandHandler, statsListener, musicManager.lavaLink, musicManager.musicManagerListener)
+                .addEventListeners(commandHandler, statsListener, musicManager.lavaLink, musicManager.musicManagerListener, JoinLeaveManager(this).listener)
+                .setEnableShutdownHook(false)
                 .setShardsTotal(properties.shard_count)
         if (properties.custom_gateway_enabled) shardManagerBuilder.setSessionController(AstolfoSessionController(properties.custom_gateway_url, properties.custom_gateway_delay))
         shardManager = shardManagerBuilder.build()

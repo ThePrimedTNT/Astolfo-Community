@@ -10,7 +10,6 @@ import xyz.astolfo.astolfocommunity.commands.argsIterator
 import xyz.astolfo.astolfocommunity.commands.next
 import xyz.astolfo.astolfocommunity.menus.*
 import xyz.astolfo.astolfocommunity.modules.ModuleBuilder
-import xyz.astolfo.astolfocommunity.modules.command
 
 internal fun ModuleBuilder.permissionCommand() = command("permissions") {
     permission(Permission.ADMINISTRATOR)

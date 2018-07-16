@@ -44,7 +44,7 @@ class BotListManager(private val application: AstolfoCommunityApplication,
                 while (isActive) {
                     val shards = application.shardManager.shards.filterNotNull()
                     val jda = shards.firstOrNull()
-                    if (jda?.selfUser != null && jda.shardInfo.shardTotal == shards.size) {
+                    if (jda?.selfUser != null) {
                         discordBotList.setStats(jda.selfUser.id, shards.map { it.shardInfo.shardId.toString() to it.guilds.size }.toMap())
                         delay(5, TimeUnit.MINUTES)
                     } else {

@@ -68,7 +68,8 @@ class Paginator(private val commandExecution: CommandExecution, val titleProvide
     val providedContent: List<String>
         get() {
             val content = provider.provider.invoke()
-            return content.subList(max(0, currentPage * provider.perPage), min(content.size, (currentPage + 1) * provider.perPage))
+            return content.subList((currentPage * provider.perPage).coerceIn(content.indices),
+                    ((currentPage + 1) * provider.perPage).coerceIn(content.indices))
         }
 
     val providedString: String
@@ -119,7 +120,7 @@ class Paginator(private val commandExecution: CommandExecution, val titleProvide
 
     fun destroy() {
         // Clean Up
-        if(isDestroyed) return
+        if (isDestroyed) return
         isDestroyed = true
         commandExecution.session.removeListener(destroyListener)
         commandExecution.event.jda.removeEventListener(listener)

@@ -1,15 +1,15 @@
 package xyz.astolfo.astolfocommunity.modules.admin
 
 import net.dv8tion.jda.core.Permission
+import xyz.astolfo.astolfocommunity.menus.memberSelectionBuilder
 import xyz.astolfo.astolfocommunity.messages.description
 import xyz.astolfo.astolfocommunity.messages.embed
 import xyz.astolfo.astolfocommunity.messages.field
-import xyz.astolfo.astolfocommunity.menus.memberSelectionBuilder
-import xyz.astolfo.astolfocommunity.modules.command
-import xyz.astolfo.astolfocommunity.modules.module
 import xyz.astolfo.astolfocommunity.messages.title
+import xyz.astolfo.astolfocommunity.modules.module
 
 fun createAdminModule() = module("Admin") {
+    createJoinLeaveCommands()
     command("settings") {
         permission(Permission.ADMINISTRATOR)
         action {

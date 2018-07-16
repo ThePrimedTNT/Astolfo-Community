@@ -3,12 +3,14 @@ package xyz.astolfo.astolfocommunity
 import com.github.salomonbrys.kotson.fromJson
 import com.google.gson.Gson
 import com.google.gson.JsonSyntaxException
+import kotlinx.coroutines.experimental.CompletableDeferred
 import kotlinx.coroutines.experimental.Deferred
-import kotlinx.coroutines.experimental.async
 import kotlinx.coroutines.experimental.delay
 import kotlinx.coroutines.experimental.launch
-import okhttp3.OkHttpClient
-import okhttp3.Request
+import net.dv8tion.jda.core.Permission
+import net.dv8tion.jda.core.entities.TextChannel
+import okhttp3.*
+import java.io.IOException
 import java.text.NumberFormat
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.TimeUnit
@@ -16,20 +18,42 @@ import java.util.concurrent.TimeUnit
 val ASTOLFO_GSON = Gson()
 val ASTOLFO_HTTP_CLIENT = OkHttpClient()
 
-suspend inline fun <reified T : Any> webJson(url: String, accept: String? = "application/json"): T? {
-    val json = web(url, accept)
-    try {
-        return ASTOLFO_GSON.fromJson(json)
-    } catch (e: JsonSyntaxException) {
-        println(json)
-        throw e
+inline fun <reified T : Any> webJson(url: String, accept: String? = "application/json"): CompletableDeferred<T> {
+    val result = CompletableDeferred<T>()
+    val request = web(url, accept)
+    request.invokeOnCompletion {
+        if (it != null) result.completeExceptionally(it)
+        else {
+            val json = request.getCompleted()
+            try {
+                result.complete(ASTOLFO_GSON.fromJson(json))
+            } catch (e: JsonSyntaxException) {
+                println(json)
+                result.completeExceptionally(e)
+            }
+        }
     }
+    return result
 }
 
-suspend inline fun web(url: String, accept: String? = null): String {
+fun web(url: String, accept: String? = null): CompletableDeferred<String> {
     val requestBuilder = Request.Builder().url(url)
     if (accept != null) requestBuilder.header("Accept", accept)
-    return async { ASTOLFO_HTTP_CLIENT.newCall(requestBuilder.build()).execute() }.await().use { String(it.body()!!.bytes()) }
+    val completableDeferred = CompletableDeferred<String>()
+    val call = ASTOLFO_HTTP_CLIENT.newCall(requestBuilder.build())
+    call.enqueue(object : Callback {
+        override fun onResponse(call: Call, response: Response) {
+            response.body()!!.use { body ->
+                completableDeferred.complete(body.string())
+            }
+        }
+
+        override fun onFailure(call: Call, e: IOException) {
+            completableDeferred.completeExceptionally(e)
+        }
+    })
+    completableDeferred.invokeOnCompletion { call.cancel() }
+    return completableDeferred
 }
 
 class RateLimiter<K>(
@@ -148,3 +172,5 @@ inline fun <T> synchronized2(lock1: Any, lock2: Any, block: () -> T): T =
                 block()
             }
         }
+
+fun TextChannel.hasPermission(vararg permissions: Permission) = guild.selfMember.hasPermission(this, *permissions)

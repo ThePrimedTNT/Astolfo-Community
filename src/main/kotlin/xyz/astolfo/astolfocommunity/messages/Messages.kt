@@ -2,10 +2,9 @@ package xyz.astolfo.astolfocommunity.messages
 
 import net.dv8tion.jda.core.EmbedBuilder
 import net.dv8tion.jda.core.MessageBuilder
+import net.dv8tion.jda.core.Permission
 import net.dv8tion.jda.core.entities.Message
 import net.dv8tion.jda.core.entities.MessageEmbed
-import net.dv8tion.jda.core.requests.restaction.MessageAction
-import net.dv8tion.jda.core.utils.Promise
 import java.awt.Color
 
 fun embed(text: String) = embed { description(text) }
@@ -37,3 +36,5 @@ fun EmbedBuilder.thumbnail(imageUrl: String) = setThumbnail(imageUrl)!!
 fun EmbedBuilder.image(imageUrl: String) = setImage(imageUrl)!!
 fun EmbedBuilder.author(name: String, uri: String? = null, icon: String? = null) = setAuthor(name, uri, icon)!!
 fun EmbedBuilder.footer(text: String, icon: String? = null) = setFooter(text, icon)!!
+
+fun Message.hasPermission(vararg permissions: Permission): Boolean = guild.selfMember.hasPermission(textChannel, *permissions)

@@ -6,7 +6,7 @@ import xyz.astolfo.astolfocommunity.messages.embed
 import java.net.MalformedURLException
 import java.net.URL
 
-fun createStaffModule() = module("Developer", true) {
+fun createStaffModule() = module("Developer", hidden = true) {
     command("staff") {
         inheritedAction {
             if (!application.staffMemberIds.contains(event.author.idLong)) {
