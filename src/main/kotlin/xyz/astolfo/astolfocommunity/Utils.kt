@@ -3,10 +3,9 @@ package xyz.astolfo.astolfocommunity
 import com.github.salomonbrys.kotson.fromJson
 import com.google.gson.Gson
 import com.google.gson.JsonSyntaxException
-import kotlinx.coroutines.experimental.CompletableDeferred
-import kotlinx.coroutines.experimental.Deferred
-import kotlinx.coroutines.experimental.delay
-import kotlinx.coroutines.experimental.launch
+import kotlinx.coroutines.experimental.*
+import kotlinx.coroutines.experimental.sync.Mutex
+import kotlinx.coroutines.experimental.sync.withLock
 import net.dv8tion.jda.core.Permission
 import net.dv8tion.jda.core.entities.TextChannel
 import okhttp3.*
@@ -66,19 +65,24 @@ class RateLimiter<K>(
          */
         val timeout: Long) {
 
+    companion object {
+        private val rateLimitContext = newFixedThreadPoolContext(10, "Rate Limiter Context")
+    }
+
     /**
      * Backing map of which the rate-limiter keeps track of the keys.
      */
     private val map = ConcurrentHashMap<K, MutableList<Long>>()
+    private val mapMutex = Mutex()
 
-    fun add(key: K) {
-        synchronized(map) {
-            val data = map.computeIfAbsent(key, { mutableListOf() })
+    suspend fun add(key: K) {
+        mapMutex.withLock {
+            val data = map.computeIfAbsent(key) { mutableListOf() }
             val timestamp = System.currentTimeMillis()
             data.add(timestamp)
-            launch {
+            launch(rateLimitContext) {
                 delay(timeout, TimeUnit.SECONDS)
-                synchronized(map) {
+                mapMutex.withLock {
                     data.remove(timestamp)
                     if (data.isEmpty()) map.remove(key)
                 }
@@ -86,9 +90,18 @@ class RateLimiter<K>(
         }
     }
 
-    fun remainingTime(key: K) = map[key]?.takeLast(threshold)?.firstOrNull()?.let { (timeout * 1000) - (System.currentTimeMillis() - it) }
+    suspend fun remainingTime(key: K): Long? {
+        mapMutex.withLock {
+            return map[key]?.takeLast(threshold)?.firstOrNull()
+                    ?.let { (timeout * 1000) - (System.currentTimeMillis() - it) }
+        }
+    }
 
-    fun isLimited(key: K) = (map[key]?.count() ?: 0) >= threshold
+    suspend fun isLimited(key: K): Boolean {
+        mapMutex.withLock {
+            return (map[key]?.count() ?: return false) >= threshold
+        }
+    }
 
 }
 
@@ -162,6 +175,42 @@ fun String.splitFirst(delimiter: String) =
 fun String.splitLast(delimiter: String) =
         if (contains(delimiter)) substringBeforeLast(delimiter).trim() to substringAfterLast(delimiter).trim()
         else this to ""
+
+fun String.levenshteinDistance(t: String, ignoreCase: Boolean = false): Int {
+    // degenerate cases
+    if (this.equals(t, ignoreCase)) return 0
+    if (this.isEmpty()) return t.length
+    if (t.isEmpty()) return this.length
+
+    // create two work vectors of integer distances
+    val v0 = IntArray(t.length + 1)
+    val v1 = IntArray(t.length + 1)
+
+    // initialize v0 (the previous row of distances)
+    // this row is A[0][i]: edit distance for an empty s
+    // the distance is just the number of characters to delete from t
+    for (i in v0.indices)
+        v0[i] = i
+
+    for (i in 0 until this.length) {
+        // calculate v1 (current row distances) from the previous row v0
+
+        // first element of v1 is A[i+1][0]
+        // edit distance is delete (i+1) chars from s to match empty t
+        v1[0] = i + 1
+
+        // use formula to fill in the rest of the row
+        for (j in 0 until t.length) {
+            val cost = if (this[i].equals(t[j], ignoreCase)) 0 else 1
+            v1[j + 1] = minOf(v1[j] + 1, v0[j + 1] + 1, v0[j] + cost)
+        }
+
+        // copy v1 (current row) to v0 (previous row) for next iteration
+        System.arraycopy(v1, 0, v0, 0, v0.size)
+    }
+
+    return v1[t.length]
+}
 
 val <T> Deferred<T>.value: T?
     get() = if (isCompleted && !isCompletedExceptionally) getCompleted() else null

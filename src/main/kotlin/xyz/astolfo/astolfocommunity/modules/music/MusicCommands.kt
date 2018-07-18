@@ -1,5 +1,6 @@
 package xyz.astolfo.astolfocommunity.modules.music
 
+import com.sedmelluq.discord.lavaplayer.tools.FriendlyException
 import com.sedmelluq.discord.lavaplayer.track.AudioPlaylist
 import com.sedmelluq.discord.lavaplayer.track.AudioTrack
 import kotlinx.coroutines.experimental.CompletableDeferred
@@ -17,7 +18,7 @@ import xyz.astolfo.astolfocommunity.menus.selectionBuilder
 import xyz.astolfo.astolfocommunity.messages.*
 import xyz.astolfo.astolfocommunity.modules.module
 import xyz.astolfo.astolfocommunity.support.SupportLevel
-import xyz.astolfo.astolfocommunity.support.supportBuilder
+import java.awt.Color
 import java.util.concurrent.TimeUnit
 
 
@@ -38,27 +39,30 @@ fun createMusicModule() = module("Music") {
             }
             if (!searchQuery.search) {
                 val musicSession = application.musicManager.getMusicSession(guild)!!
-                musicSession.musicLoader.add(event.member, searchQuery, event.textChannel)
+                musicSession.musicLoader.load(event.member, searchQuery.query, event.textChannel)
                 return@musicAction
             }
             runWhileSessionActive {
-                val trackResponse = tempMessage(message { embed("\uD83D\uDD0E Searching for **$args**...") }) {
-                    application.musicManager.audioPlayerManager.loadItemSync(searchQuery.query)
-                }
-                val audioPlaylist = trackResponse.first as AudioPlaylist?
-                val exception = trackResponse.second
-                if (audioPlaylist != null && audioPlaylist.isSearchResult) {
+                val audioPlaylist = try {
+                    tempMessage(message { embed("\uD83D\uDD0E Searching for **$args**...") }) {
+                        application.musicManager.audioPlayerManager.loadItemSync(searchQuery.query).await()
+                    }
+                } catch (e: Throwable) {
+                    when (e) {
+                        is FriendlyException -> messageAction("Failed due to an error: **${e.message}**").queue()
+                        is MusicNoMatchException -> messageAction("No matches found for **${searchQuery.query}**").queue()
+                        else -> throw e
+                    }
+                    return@runWhileSessionActive
+                } as AudioPlaylist
+                if (audioPlaylist.isSearchResult) {
                     // If the track returned is a list of tracks and are from a ytsearch: or scsearch:
                     val selectedTrack = selectMusic(audioPlaylist.tracks).execute() ?: return@runWhileSessionActive
                     application.musicManager.getMusicSession(guild)?.let {
                         it.boundChannel = event.message.textChannel
                         it.queue(event.member, listOf(selectedTrack), false, CompletableDeferred())
                     }
-                    messageAction(embed { description("[${selectedTrack.info.title}](${selectedTrack.info.uri}) has been added to the queue") }).queue()
-                } else if (exception != null) {
-                    messageAction("Failed due to an error: **${exception.message}**").queue()
-                } else {
-                    messageAction("No matches found for **$args**").queue()
+                    messageAction(embed("[${selectedTrack.info.title}](${selectedTrack.info.uri}) has been added to the queue")).queue()
                 }
             }
         }
@@ -88,19 +92,24 @@ fun createMusicModule() = module("Music") {
                         }
                     }.execute() ?: return@musicAction
 
-            val (audioItem, audioException) = tempMessage(message { embed("\uD83D\uDD0E Loading radio **${selectedRadio.name}**...") }) {
-                application.musicManager.audioPlayerManager.loadItemSync(selectedRadio.url)
+            val audioItem = try {
+                tempMessage(message { embed("\uD83D\uDD0E Loading radio **${selectedRadio.name}**...") }) {
+                    application.musicManager.audioPlayerManager.loadItemSync(selectedRadio.url).await()
+                }
+            } catch (e: Throwable) {
+                when (e) {
+                    is FriendlyException -> messageAction("Radio failed to load due to an error: **${e.message}**").queue()
+                    is MusicNoMatchException -> messageAction("Audio Player found no matches found for the radio **${selectedRadio.name}**").queue()
+                    else -> throw e
+                }
+                return@musicAction
             }
-            if (audioItem != null && audioItem is AudioTrack) {
+            if (audioItem is AudioTrack) {
                 application.musicManager.getMusicSession(guild)?.let {
                     it.boundChannel = event.message.textChannel
                     it.queue(event.member, listOf(audioItem), false, CompletableDeferred())
                 }
                 messageAction(embed { description("**${selectedRadio.name}** has been added to the queue") }).queue()
-            } else if (audioException != null) {
-                messageAction("Failed due to an error: **${audioException.message}**").queue()
-            } else {
-                messageAction("Unknown error occurred while loading **${selectedRadio.name}** radio station").queue()
             }
         }
     }
@@ -172,9 +181,18 @@ fun createMusicModule() = module("Music") {
         }
     }
     command("volume", "v") {
-        supportBuilder {
-            upvote(2).longTermUpvoteMessage("Due to performance reasons, you must upvote the bot to use this feature!")
-            supportLevel(SupportLevel.SUPPORTER)
+        val supportLevel = SupportLevel.SUPPORTER
+        inheritedAction {
+            val donationEntry = application.donationManager.getByMember(event.member)
+            if (donationEntry.ordinal >= supportLevel.ordinal)
+                return@inheritedAction true // Allow Feature
+            messageAction(embed {
+                description("\uD83D\uDD12 Due to performance reasons volume changing is locked!" +
+                        " You can unlock this feature by becoming a [patreon.com/theprimedtnt](https://www.patreon.com/theprimedtnt)" +
+                        " and getting at least the **${supportLevel.rewardName}** Tier.")
+                color(Color.RED)
+            }).queue()
+            return@inheritedAction false // Deny Feature
         }
         musicAction(activeSession = true) {
             val musicSession = application.musicManager.getMusicSession(event.guild)!!

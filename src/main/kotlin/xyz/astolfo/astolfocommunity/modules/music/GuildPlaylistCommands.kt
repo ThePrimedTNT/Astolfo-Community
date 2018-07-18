@@ -1,5 +1,6 @@
 package xyz.astolfo.astolfocommunity.modules.music
 
+import com.sedmelluq.discord.lavaplayer.tools.FriendlyException
 import com.sedmelluq.discord.lavaplayer.track.AudioPlaylist
 import com.sedmelluq.discord.lavaplayer.track.AudioTrack
 import kotlinx.coroutines.experimental.CompletableDeferred
@@ -114,12 +115,19 @@ internal fun ModuleBuilder.createGuildPlaylistCommands() {
                     messageAction("I couldn't find a playlist with that name!").queue()
                     return@action
                 }
-                val trackResponse = tempMessage(message { embed("\uD83D\uDD0E Searching for **$searchQuery**...") }) {
-                    application.musicManager.audioPlayerManager.loadItemSync(searchQuery.query)
+                val audioItem = try {
+                    tempMessage(message { embed("\uD83D\uDD0E Searching for **$searchQuery**...") }) {
+                        application.musicManager.audioPlayerManager.loadItemSync(searchQuery.query).await()
+                    }
+                } catch (e: Throwable) {
+                    when (e) {
+                        is FriendlyException -> messageAction("Failed due to an error: **${e.message}**").queue()
+                        is MusicNoMatchException -> messageAction("No matches found for **${searchQuery.query}**").queue()
+                        else -> throw e
+                    }
+                    return@action
                 }
-                val audioItem = trackResponse.first
-                val exception = trackResponse.second
-                if (audioItem != null && audioItem is AudioTrack?) {
+                if (audioItem is AudioTrack) {
                     // If the track returned is a normal audio track
                     val audioTrack: AudioTrack = audioItem
 
@@ -129,7 +137,7 @@ internal fun ModuleBuilder.createGuildPlaylistCommands() {
                     application.astolfoRepositories.guildPlaylistRepository.save(playlist)
 
                     messageAction(embed { description("[${audioTrack.info.title}](${audioTrack.info.uri}) has been added to the playlist **${playlist.name}**") }).queue()
-                } else if (audioItem != null && audioItem is AudioPlaylist?) {
+                } else if (audioItem is AudioPlaylist) {
                     // If the track returned is a list of tracks
                     val audioPlaylist: AudioPlaylist = audioItem
                     if (audioPlaylist.isSearchResult) {
@@ -181,10 +189,6 @@ internal fun ModuleBuilder.createGuildPlaylistCommands() {
 
                         messageAction(embed { setDescription("The playlist [${audioPlaylist.name}]($searchQuery) has been added to the playlist **${playlist.name}**") }).queue()
                     }
-                } else if (exception != null) {
-                    messageAction("Failed due to an error: **${exception.message}**").queue()
-                } else {
-                    messageAction("No matches found for **$args**").queue()
                 }
             }
         }

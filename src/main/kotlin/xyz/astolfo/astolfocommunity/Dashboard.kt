@@ -17,7 +17,7 @@ class Dashboard(val application: AstolfoCommunityApplication) {
         module.name to module.commands.map { command ->
             commands(command)
         }.flatten().toMap()
-    })
+    }.reversed())
 
     fun commands(command: Command): List<Pair<String, CommandData>> =
             listOf(command.name to CommandData(command.description, command.usage.joinToString(separator = "\n")),

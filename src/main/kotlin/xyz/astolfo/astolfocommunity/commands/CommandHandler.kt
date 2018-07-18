@@ -11,7 +11,6 @@ import com.github.salomonbrys.kotson.fromJson
 import com.google.common.cache.CacheBuilder
 import com.google.common.cache.CacheLoader
 import io.sentry.Sentry
-import io.sentry.event.EventBuilder
 import kotlinx.coroutines.experimental.launch
 import kotlinx.coroutines.experimental.newFixedThreadPoolContext
 import net.dv8tion.jda.core.Permission
@@ -102,7 +101,7 @@ class CommandHandler(val application: AstolfoCommunityApplication) : ListenerAda
         }
     }
 
-    private fun processRateLimit(event: MessageReceivedEvent): Boolean {
+    private suspend fun processRateLimit(event: MessageReceivedEvent): Boolean {
         val user = event.author.idLong
         val wasLimited = rateLimiter.isLimited(user)
         rateLimiter.add(user)

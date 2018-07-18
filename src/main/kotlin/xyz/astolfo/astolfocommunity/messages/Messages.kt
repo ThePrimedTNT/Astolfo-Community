@@ -37,4 +37,10 @@ fun EmbedBuilder.image(imageUrl: String) = setImage(imageUrl)!!
 fun EmbedBuilder.author(name: String, uri: String? = null, icon: String? = null) = setAuthor(name, uri, icon)!!
 fun EmbedBuilder.footer(text: String, icon: String? = null) = setFooter(text, icon)!!
 
+// Helpers
+fun errorEmbed(text: String) = errorEmbed { description(text) }
+inline fun errorEmbed(builder: EmbedBuilder.() -> Unit) = embed {
+    color(Color.RED)
+    builder(this)
+}
 fun Message.hasPermission(vararg permissions: Permission): Boolean = guild.selfMember.hasPermission(textChannel, *permissions)

@@ -27,8 +27,18 @@ class Command(
 class CommandBuilder(val path: String, val name: String, val alts: List<String>) {
     private val subCommands = mutableListOf<Command>()
     private var action: suspend CommandExecution.() -> Unit = {
+        val (commandName, commandContent) = args.splitFirst(" ")
+
+        val distances = subCommands.map { listOf(it.name, *it.alts.toTypedArray()) }.flatten()
+                .map { it to it.levenshteinDistance(commandName, true) }.toMap()
+        val bestMatch = distances.keys.sortedBy { distances[it]!! }.firstOrNull()
         val guildPrefix = getGuildSettings().getEffectiveGuildPrefix(application)
-        messageAction("Unknown command! Type **$guildPrefix$commandPath help** for a list of commands.").queue()
+        if (bestMatch == null) {
+            messageAction("Unknown command! Type **$guildPrefix$commandPath help** for a list of commands.").queue()
+        } else {
+            val recreated = "$guildPrefix$commandPath $bestMatch $commandContent".trim()
+            messageAction("Unknown command! Did you mean **$recreated**?").queue()
+        }
     }
     private var inheritedActions = mutableListOf<suspend CommandExecution.() -> Boolean>()
     private var permission = AstolfoPermission(path, name)

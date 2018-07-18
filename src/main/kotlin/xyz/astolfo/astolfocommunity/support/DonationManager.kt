@@ -211,7 +211,6 @@ class DonationManager(private val application: AstolfoCommunityApplication,
 
     fun getByDiscordId(discordId: Long) = synchronized(entries) { entries.find { it.discord_id == discordId } }
 
-
 }
 
 enum class SupportLevel(val rewardId: Long?, val rewardName: String, val upvote: Boolean, val cost: Long, val queueSize: Long) {

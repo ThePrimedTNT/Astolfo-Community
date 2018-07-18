@@ -14,11 +14,15 @@ class MusicNowPlayingMessage(private val musicSession: MusicSession) {
         private val nowPlayingContext = newFixedThreadPoolContext(20, "Now Playing Message")
     }
 
-    private val parent = Job()
-    private val messageActor = actor<AudioTrack>(context = nowPlayingContext, parent = parent, capacity = Channel.UNLIMITED) {
+    private var destroyed = false
+
+    private val messageActor = actor<AudioTrack>(context = nowPlayingContext, capacity = Channel.UNLIMITED) {
         for (track in channel) {
+            if(destroyed) continue
             updateInternal(track)
         }
+        nowPlayingMessage?.delete()
+        nowPlayingMessage = null
     }
 
     private var internalTrack: AudioTrack? = null
@@ -56,8 +60,8 @@ class MusicNowPlayingMessage(private val musicSession: MusicSession) {
     }
 
     fun dispose() {
+        destroyed = true
         messageActor.close()
-        parent.cancel()
     }
 
 }

@@ -25,6 +25,11 @@ class SupportBuilder(private val commandBuilder: CommandBuilder) {
             // Check if user has valid support role
             val donationEntry = application.donationManager.getByDiscordId(event.author.idLong)
             if (donationEntry != null && donationEntry.supportLevel.ordinal >= supportLevel!!.ordinal) return@inheritedAction true
+            if(upvoteDays <= 0) {
+                messageAction(embed("You can unlock this feature by becoming a [patreon](https://www.patreon.com/theprimedtnt)" +
+                        " and getting at least the **${supportLevel!!.rewardName}** Reward.")).queue()
+                return@inheritedAction false
+            }
         }
         if (upvoteDays > 0) {
             // Check upvote status if they havent donated
@@ -41,7 +46,6 @@ class SupportBuilder(private val commandBuilder: CommandBuilder) {
                 stringBuilder.append(" You can also unlock this feature by becoming a [patreon](https://www.patreon.com/theprimedtnt)" +
                         " and getting at least the **${supportLevel!!.rewardName}** Reward.")
             }
-            messageAction(embed(stringBuilder.toString())).queue()
             return@inheritedAction false
         }
         true
