@@ -1,11 +1,17 @@
 package xyz.astolfo.astolfocommunity.commands
 
+import io.sentry.Sentry
 import kotlinx.coroutines.experimental.*
+import kotlinx.coroutines.experimental.channels.Channel
+import kotlinx.coroutines.experimental.channels.actor
+import kotlinx.coroutines.experimental.channels.sendBlocking
+import kotlinx.coroutines.experimental.sync.Mutex
+import kotlinx.coroutines.experimental.sync.withLock
 import net.dv8tion.jda.core.events.message.MessageReceivedEvent
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.CopyOnWriteArrayList
+import java.util.concurrent.LinkedBlockingDeque
 import java.util.concurrent.TimeUnit
-import kotlin.concurrent.fixedRateTimer
 
 class CommandSessionManager {
 
@@ -13,8 +19,15 @@ class CommandSessionManager {
     private val commandProcessorContext = newFixedThreadPoolContext(100, "Command Session Processor")
 
     init {
-        fixedRateTimer(name = "Command Session Manager Clean Up", period = TimeUnit.MINUTES.toMillis(5)){
-            cleanUp()
+        launch(commandProcessorContext) {
+            while (isActive) {
+                try {
+                    cleanUp()
+                } catch (e: Exception) {
+                    Sentry.capture(e)
+                }
+                delay(5, TimeUnit.MINUTES)
+            }
         }
     }
 
@@ -30,7 +43,7 @@ class CommandSessionManager {
         return sessionMap[key]
     }
 
-    fun session(event: MessageReceivedEvent, commandPath: String, sessionThread: suspend (CommandSession) -> Unit) {
+    suspend fun session(event: MessageReceivedEvent, commandPath: String, sessionThread: suspend (CommandSession) -> Unit) {
         val key = SessionKey(event)
         worker.add(key) {
             invalidateNow(key)
@@ -46,8 +59,8 @@ class CommandSessionManager {
         }
     }
 
-    fun invalidate(event: MessageReceivedEvent) = invalidate(SessionKey(event))
-    fun invalidate(key: SessionKey) {
+    suspend fun invalidate(event: MessageReceivedEvent) = invalidate(SessionKey(event))
+    suspend fun invalidate(key: SessionKey) {
         worker.add(key) { invalidateNow(key) }
     }
 
@@ -56,8 +69,8 @@ class CommandSessionManager {
         sessionJobs.remove(key)?.join()
     }
 
-    private fun cleanUp() {
-        sessionMap.toMap().forEach { key, session ->
+    private suspend fun cleanUp() {
+        for ((key, session) in sessionMap.toMap()) {
             worker.add(key) {
                 val job = sessionJobs[key]
                 if (job?.isCompleted != false && session.getListeners().isEmpty())
@@ -69,66 +82,104 @@ class CommandSessionManager {
     /**
      * This workers task is to make sure only one job is running for each user.
      */
-    class Worker(threadCount: Int = 100) {
-        private val tasks = hashMapOf<SessionKey, WorkerTask>()
-        private val context = newFixedThreadPoolContext(threadCount, "Command Session Worker")
+    class Worker {
 
-        private fun updateTasks() {
-            synchronized(tasks) {
-                val taskIterator = tasks.iterator()
-                while (taskIterator.hasNext()) {
-                    val task = taskIterator.next().value
-                    task.update()
-                    if (task.isDone) taskIterator.remove()
+        companion object {
+            private val workerContext = newFixedThreadPoolContext(100, "Command Session Worker")
+        }
+
+        private val tasks = hashMapOf<SessionKey, WorkerTask>()
+
+        private interface TaskEvent
+        private class AddTaskEvent(val key: SessionKey, val task: suspend () -> Unit) : TaskEvent
+        private object UpdateTaskEvent : TaskEvent
+
+        private val taskActor = actor<TaskEvent>(context = workerContext, capacity = Channel.UNLIMITED) {
+            for (event in channel) {
+                handleEvent(event)
+            }
+        }
+
+        private suspend fun handleEvent(event: TaskEvent) {
+            when (event) {
+                is AddTaskEvent -> {
+                    handleEvent(UpdateTaskEvent)
+                    val task = tasks.computeIfAbsent(event.key) { WorkerTask() }
+                    task.add(event.task)
+                }
+                is UpdateTaskEvent -> {
+                    val taskIterator = tasks.iterator()
+                    while (taskIterator.hasNext()) {
+                        val task = taskIterator.next().value
+                        if (task.isDone()) {
+                            task.destroy()
+                            taskIterator.remove()
+                        }
+                    }
                 }
             }
         }
 
-        fun add(key: SessionKey, job: suspend () -> Unit) {
-            synchronized(tasks) {
-                val task = tasks.computeIfAbsent(key, { WorkerTask() })
-                task.add(launch(context, start = CoroutineStart.LAZY) { job.invoke() })
-            }
-            updateTasks()
-        }
-
-        suspend fun <T> add(key: SessionKey, job: suspend () -> T): T {
-            val future = async(context, start = CoroutineStart.LAZY) { job.invoke() }
-            synchronized(tasks) {
-                val jobList = tasks.computeIfAbsent(key, { WorkerTask() })
-                jobList.add(future)
-            }
-            updateTasks()
-            return future.await()
+        suspend fun <T> add(key: SessionKey, task: suspend () -> T): CompletableDeferred<T> {
+            val future = CompletableDeferred<T>()
+            taskActor.send(AddTaskEvent(key, {
+                try {
+                    future.complete(task())
+                } catch (e: Throwable) {
+                    future.completeExceptionally(e)
+                }
+            }))
+            return future
         }
 
         class WorkerTask {
-            private val queuedJobs = mutableListOf<Job>()
-            private var runningJobs: Job? = null
 
-            val isDone
-                get() = queuedJobs.isEmpty() && runningJobs?.isCompleted != false
+            private var destroyed = false
 
-            fun add(job: Job): Boolean {
-                synchronized(queuedJobs) {
-                    return queuedJobs.add(job)
+            private interface WorkerEvent
+            private class AddTaskEvent(val task: suspend () -> Unit) : WorkerEvent
+            private object UpdateTaskEvent : WorkerEvent
+
+            private val taskQueue = LinkedBlockingDeque<suspend () -> Unit>()
+            private val taskMutex = Mutex()
+            private var runningJob: Job? = null
+
+            private val workerActor = actor<WorkerEvent>(context = workerContext, capacity = Channel.UNLIMITED) {
+                for (event in channel) {
+                    if (destroyed) continue
+                    taskMutex.withLock {
+                        handleEvent(event)
+                    }
                 }
             }
 
-            fun update() {
-                synchronized(queuedJobs) {
-                    // Ignore since job is still running
-                    if (runningJobs?.isCompleted == false) return
-                    // Ignore if there are no more jobs left
-                    if (queuedJobs.isEmpty()) return
-                    val newJob = queuedJobs.removeAt(0)
-                    newJob.invokeOnCompletion {
-                        runningJobs = null
-                        update()
+            private suspend fun handleEvent(event: WorkerEvent) {
+                when (event) {
+                    is AddTaskEvent -> {
+                        taskQueue.add(event.task)
+                        handleEvent(UpdateTaskEvent)
                     }
-                    runningJobs = newJob
-                    newJob.start()
+                    is UpdateTaskEvent -> {
+                        if (runningJob?.isActive == true) return // discard event if job is still running
+                        // get next task to run
+                        val nextTask = taskQueue.poll() ?: return
+                        // start it
+                        runningJob = launch(context = workerContext) { nextTask() }
+                        // register a update task so next job starts right after this one
+                        runningJob!!.invokeOnCompletion { workerActor.sendBlocking(UpdateTaskEvent) }
+                    }
                 }
+            }
+
+            suspend fun isDone() = taskMutex.withLock {
+                taskQueue.isEmpty() && runningJob?.isCompleted != false
+            }
+
+            suspend fun add(task: suspend () -> Unit) = workerActor.send(AddTaskEvent(task))
+
+            fun destroy() {
+                destroyed = true
+                workerActor.close()
             }
         }
     }

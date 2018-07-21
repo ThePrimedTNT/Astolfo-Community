@@ -157,7 +157,7 @@ class CommandHandler(val application: AstolfoCommunityApplication) : ListenerAda
         if (!command.inheritedActions.all { it.invoke(createExecution(InheritedCommandSession(newCommandPath))) }) return true
 
         if (!processCommand(null, event, timeIssued, command.subCommands, newCommandPath, commandContent)) {
-            fun runNewSession() {
+            suspend fun runNewSession() {
                 application.statsDClient.incrementCounter("commandExecuteCount", "command:$newCommandPath")
                 commandSessionManager.session(event, newCommandPath, { session ->
                     command.action.invoke(createExecution(session))
