@@ -1,8 +1,11 @@
 package xyz.astolfo.astolfocommunity.games
 
 import kotlinx.coroutines.experimental.Job
+import kotlinx.coroutines.experimental.channels.Channel
+import kotlinx.coroutines.experimental.channels.actor
 import kotlinx.coroutines.experimental.delay
 import kotlinx.coroutines.experimental.launch
+import kotlinx.coroutines.experimental.newFixedThreadPoolContext
 import net.dv8tion.jda.core.EmbedBuilder
 import net.dv8tion.jda.core.entities.Member
 import net.dv8tion.jda.core.entities.TextChannel
@@ -13,234 +16,255 @@ import xyz.astolfo.astolfocommunity.messages.title
 import java.awt.Point
 import java.util.*
 import java.util.concurrent.TimeUnit
+import kotlin.math.max
+import kotlin.math.min
 import kotlin.math.roundToInt
 
-class TetrisGame(gameHandler: GameHandler, member: Member, channel: TextChannel) : ReactionGame(gameHandler, member, channel, listOf(ROTATE_ANTICLOCKWISE_EMOTE, LEFT_EMOTE, QUICK_FALL_EMOTE, RIGHT_EMOTE, ROTATE_CLOCKWISE_EMOTE)) {
+class TetrisGame(member: Member, channel: TextChannel) : ReactionGame(member, channel, listOf(ROTATE_ANTICLOCKWISE_EMOTE, LEFT_EMOTE, QUICK_FALL_EMOTE, RIGHT_EMOTE, ROTATE_CLOCKWISE_EMOTE)) {
 
     companion object {
-        const val MAP_WIDTH = 7
-        const val MAP_HEIGHT = 14
-        const val UPDATE_SPEED = 2L
+        private const val MAP_WIDTH = 7
+        private const val MAP_HEIGHT = 14
+        private const val UPDATE_SPEED = 2L
         private val random = Random()
 
-        const val ROTATE_ANTICLOCKWISE_EMOTE = "↪"
-        const val ROTATE_CLOCKWISE_EMOTE = "↩"
-        const val LEFT_EMOTE = "⬅"
-        const val RIGHT_EMOTE = "➡"
-        const val QUICK_FALL_EMOTE = "⬇"
+        private const val ROTATE_ANTICLOCKWISE_EMOTE = "↪"
+        private const val ROTATE_CLOCKWISE_EMOTE = "↩"
+        private const val LEFT_EMOTE = "⬅"
+        private const val RIGHT_EMOTE = "➡"
+        private const val QUICK_FALL_EMOTE = "⬇"
+
+        private val tetrisContext = newFixedThreadPoolContext(30, "Tetris")
+
+        private val pieces = listOf(
+                mutableListOf(Point(0, 0), Point(1, 0), Point(2, 0), Point(3, 0)) to "\uD83D\uDCD8",
+                mutableListOf(Point(0, 0), Point(1, 0), Point(2, 0), Point(2, 1)) to "\uD83D\uDCD4",
+                mutableListOf(Point(0, 1), Point(0, 0), Point(1, 0), Point(2, 0)) to "\uD83D\uDCD9",
+                mutableListOf(Point(0, 0), Point(0, 1), Point(1, 0), Point(1, 1)) to "\uD83D\uDCD2",
+                mutableListOf(Point(0, 1), Point(1, 1), Point(1, 0), Point(2, 0)) to "\uD83D\uDCD7",
+                mutableListOf(Point(0, 0), Point(1, 0), Point(1, 1), Point(2, 0)) to "\uD83D\uDCD3",
+                mutableListOf(Point(0, 0), Point(1, 0), Point(1, 1), Point(2, 1)) to "\uD83D\uDCD5"
+        )
     }
 
-    private val tetrominos = mutableListOf<Tetromino>()
+    private val stationaryBlocks = mutableListOf<Block>()
     private var score = 0
 
-    private var fallingTetromino: Tetromino? = null
+    private lateinit var fallingTetromino: Tetromino
 
     private lateinit var updateJob: Job
 
-    override fun onGenericMessageReaction(event: GenericMessageReactionEvent) {
-        when (event.reactionEmote.name) {
-            ROTATE_ANTICLOCKWISE_EMOTE -> rotate(false)
-            ROTATE_CLOCKWISE_EMOTE -> rotate(true)
-            LEFT_EMOTE -> move(-1)
-            RIGHT_EMOTE -> move(1)
-            QUICK_FALL_EMOTE -> while (fallingTetromino != null && checkGravity(fallingTetromino!!, false));
+    private var gameEnded = false
+
+    private interface TetrisEvent
+    private object StartEvent : TetrisEvent
+    private object DestroyEvent : TetrisEvent
+    private object UpdateEvent : TetrisEvent
+    private class PlaceEvent(val first: Boolean) : TetrisEvent
+    private class MoveEvent(val moveType: String) : TetrisEvent
+
+    private val tetrisActor = actor<TetrisEvent>(context = tetrisContext, capacity = Channel.UNLIMITED) {
+        for (event in this.channel) {
+            if (destroyed) continue
+            handleEvent(event)
         }
+
+        handleEvent(DestroyEvent)
     }
 
-    private fun move(amount: Int) {
-        val canMove = fallingTetromino!!.blocks.none { fallingBlock ->
-            val newLocation = Point(fallingBlock.x + amount, fallingBlock.y)
-            if (newLocation.x < 0 || newLocation.x == MAP_WIDTH) true
-            else tetrominos.any { it != fallingTetromino && it.blocks.any { it == newLocation } }
-        }
-        if (canMove) fallingTetromino!!.blocks.forEach { it.x += amount }
-    }
-
-    private fun rotate(clockwise: Boolean) {
-        val blocks = fallingTetromino?.blocks?.map { Point(it.x, it.y) } ?: return
-        val rotateAroundWidth = blocks.map { it.x }.average()
-        val rotateAroundHeight = blocks.map { it.y }.average()
-        blocks.forEach {
-            var x = it.x - rotateAroundWidth
-            var y = it.y - rotateAroundHeight
-            val x2 = x
-            if (clockwise) {
-                x = -y
-                y = x2
-            } else {
-                x = y
-                y = -x2
-            }
-            it.x = (x + rotateAroundWidth).roundToInt()
-            it.y = (y + rotateAroundHeight).roundToInt()
-        }
-        while (blocks.map { it.x }.max() ?: 0 >= MAP_WIDTH) blocks.forEach { it.x-- }
-        while (blocks.map { it.x }.min() ?: 0 < 0) blocks.forEach { it.x++ }
-
-        val canMove = blocks.none { fallingBlock ->
-            tetrominos.any { it != fallingTetromino && it.blocks.any { it == fallingBlock } }
-        }
-
-        if (canMove) fallingTetromino!!.blocks = blocks.toMutableList()
-    }
-
-    override fun start() {
-        super.start()
-
-        updateJob = launch {
-            while (isActive) {
-                update()
-                delay(UPDATE_SPEED, TimeUnit.SECONDS)
-            }
-        }
-    }
-
-    private fun update() {
-        if (currentMessage != null) {
-            checkGravity(true)
-            var rowsCleared = 0
-            while (checkFullRows()) rowsCleared++
-
-            val amountOfTetris = rowsCleared / 4
-            val normalLines = rowsCleared % 4
-
-            score += normalLines * 100
-
-            if (amountOfTetris == 1) {
-                score += 800
-            } else if (amountOfTetris > 1) {
-                score += amountOfTetris * 1200
-            }
-
-            checkIncompleteTetromino()
-            while (checkGravity(false));
-        }
-
-        if (fallingTetromino == null) {
-            val pieces = listOf(
-                    mutableListOf(Point(0, 0), Point(1, 0), Point(2, 0), Point(3, 0)) to "\uD83D\uDCD8",
-                    mutableListOf(Point(0, 0), Point(1, 0), Point(2, 0), Point(2, 1)) to "\uD83D\uDCD4",
-                    mutableListOf(Point(0, 1), Point(0, 0), Point(1, 0), Point(2, 0)) to "\uD83D\uDCD9",
-                    mutableListOf(Point(0, 0), Point(0, 1), Point(1, 0), Point(1, 1)) to "\uD83D\uDCD2",
-                    mutableListOf(Point(0, 1), Point(1, 1), Point(1, 0), Point(2, 0)) to "\uD83D\uDCD7",
-                    mutableListOf(Point(0, 0), Point(1, 0), Point(1, 1), Point(2, 0)) to "\uD83D\uDCD3",
-                    mutableListOf(Point(0, 0), Point(1, 0), Point(1, 1), Point(2, 1)) to "\uD83D\uDCD5"
-            ).map { p ->
-                p to (0 until (MAP_WIDTH - p.first.map { it.x }.max()!!)).filter { x ->
-                    p.first.all { pb ->
-                        val pointToCheck = Point(x + pb.x, pb.y)
-                        tetrominos.none { it.blocks.any { it == pointToCheck } }
+    private suspend fun handleEvent(event: TetrisEvent) {
+        when (event) {
+            is StartEvent -> {
+                handleEvent(PlaceEvent(true))
+                updateJob = launch {
+                    while (isActive) {
+                        tetrisActor.send(UpdateEvent)
+                        delay(UPDATE_SPEED, TimeUnit.SECONDS)
                     }
                 }
-            }.filter { it.second.isNotEmpty() }
-
-            if (pieces.isEmpty()) {
-                setContent(embed { render(true) })
-                endGame()
-                return
             }
+            is UpdateEvent -> {
+                if (currentMessage != null) {
+                    if (!fallingTetromino.canMove(0, 1)) {
+                        handleEvent(PlaceEvent(false))
+                    } else {
+                        fallingTetromino.move(0, 1)
+                    }
+                    val rowsCleared = checkFullRows()
 
-            val piece = pieces[random.nextInt(pieces.size)]
-            val (tetrominoPoints, tetrominoEmote) = piece.first
-            val validLocations = piece.second
+                    val amountOfTetris = rowsCleared / 4
+                    val normalLines = rowsCleared % 4
 
-            val spawnLocation = validLocations[random.nextInt(validLocations.size)]
-            tetrominoPoints.forEach { it.x += spawnLocation }
-            fallingTetromino = Tetromino(tetrominoPoints, tetrominoEmote)
-            tetrominos.add(fallingTetromino!!)
+                    score += normalLines * 100
+
+                    if (amountOfTetris == 1) {
+                        score += 800
+                    } else if (amountOfTetris > 1) {
+                        score += amountOfTetris * 1200
+                    }
+                }
+                if (!gameEnded) setContent(embed { render(false) })
+            }
+            is MoveEvent -> {
+                when (event.moveType) {
+                    ROTATE_ANTICLOCKWISE_EMOTE -> fallingTetromino.rotate(false)
+                    ROTATE_CLOCKWISE_EMOTE -> fallingTetromino.rotate(true)
+                    LEFT_EMOTE -> fallingTetromino.move(-1, 0)
+                    RIGHT_EMOTE -> fallingTetromino.move(1, 0)
+                    QUICK_FALL_EMOTE -> while (fallingTetromino.move(0, 1));
+                    else -> return
+                }
+                if (!gameEnded) setContent(embed { render(false) })
+            }
+            is PlaceEvent -> {
+                // Check if valid
+                if (!event.first) {
+                    // if the tetromino isnt at bottom yet
+                    if (fallingTetromino.canMove(0, 1)) return
+
+                    stationaryBlocks.addAll(fallingTetromino.blocks)
+                }
+
+                val configurations = pieces.map { p ->
+                    p to (0 until (MAP_WIDTH - p.first.map { it.x }.max()!!)).filter { x ->
+                        p.first.all { pb ->
+                            val pointToCheck = Point(x + pb.x, pb.y)
+                            stationaryBlocks.none { it.location == pointToCheck }
+                        }
+                    }
+                }.filter { it.second.isNotEmpty() }
+
+                if (configurations.isEmpty()) {
+                    setContent(embed { render(true) })
+                    gameEnded = true
+                    endGame()
+                    return
+                }
+
+                val piece = configurations[random.nextInt(configurations.size)]
+                val (tetrominoPoints, tetrominoEmote) = piece.first
+                val validLocations = piece.second
+
+                val spawnLocation = validLocations[random.nextInt(validLocations.size)]
+                fallingTetromino = Tetromino(tetrominoPoints.map { Block(Point(it.x + spawnLocation, it.y), tetrominoEmote) })
+            }
+            is DestroyEvent -> {
+                updateJob.cancel()
+            }
         }
+    }
 
-        setContent(embed { render() })
+    override suspend fun onGenericMessageReaction(event: GenericMessageReactionEvent) {
+        tetrisActor.send(MoveEvent(event.reactionEmote.name))
+    }
+
+    override suspend fun start() {
+        super.start()
+        tetrisActor.send(StartEvent)
     }
 
     private fun EmbedBuilder.render(dead: Boolean = false) {
-        val quickFallTetromino = fallingTetromino?.let {
-            val newTetromino = Tetromino(it.blocks.map { Point(it.x, it.y) }.toMutableList(), "❌")
-            while (checkGravity(newTetromino, true));
+        val quickFallTetromino = fallingTetromino.let {
+            val newTetromino = Tetromino(it.blocks.map { Block(Point(it.location), "❌") })
+            while (newTetromino.move(0, 1));
             newTetromino
         }
         title("${member.effectiveName}'s Tetris Game - Score: $score" + if (dead) " - Topped out!" else "")
         description((0 until MAP_HEIGHT).joinToString(separator = "\n") { y ->
             (0 until MAP_WIDTH).joinToString(separator = "") { x ->
                 val point = Point(x, y)
-                val tetromino = tetrominos.find { it.blocks.any { it == point } } ?: quickFallTetromino?.takeIf { it.blocks.any { it == point } }
-                tetromino?.emote ?: "\u2B1B"
+                val block = stationaryBlocks.find { it.location == point }
+                        ?: fallingTetromino.blocks.find { it.location == point }
+                        ?: quickFallTetromino.blocks.find { it.location == point }
+                block?.emote ?: "\u2B1B"
             }
         } + if (dead) "\n**You have topped out!**" else "")
     }
 
-    private fun checkFullRows(): Boolean {
-        (0 until MAP_HEIGHT).reversed().forEach { y ->
-            val shouldRemove = (0 until MAP_WIDTH).all { x ->
+    private fun checkFullRows(): Int {
+        var rowsCleared = 0
+        for (y in 0 until MAP_HEIGHT) {
+            val rowFull = (0 until MAP_WIDTH).all { x ->
                 val point = Point(x, y)
-                tetrominos.find { it != fallingTetromino && it.blocks.any { it == point } } != null
+                stationaryBlocks.any { it.location == point }
             }
-            if (shouldRemove) {
-                (0 until MAP_WIDTH).forEach { x ->
-                    val point = Point(x, y)
-                    tetrominos.forEach { it.blocks.remove(point) }
-                }
-                return true
+            if (!rowFull) continue
+
+            rowsCleared++
+            // Remove row
+            stationaryBlocks.removeIf { it.location.y == y }
+            // Move all rows down
+            stationaryBlocks.filter { it.location.y < y }.forEach {
+                it.location.y++
             }
         }
-        return false
+        return rowsCleared
     }
 
-    private val checkLocations = listOf(Point(0, 1), Point(0, -1), Point(1, 0), Point(-1, 0))
-
-    private fun checkIncompleteTetromino() {
-        tetrominos.toList().forEach { tetromino ->
-            if (tetromino == fallingTetromino) return@forEach
-            if (tetromino.blocks.isEmpty()) {
-                tetrominos.remove(tetromino)
-                return@forEach
-            }
-            if (tetromino.blocks.size == 1) return@forEach
-            tetromino.blocks.toList().forEach { toCheck ->
-                val shouldBreak = checkLocations.none { relativePoint ->
-                    val atPoint = Point(toCheck.x + relativePoint.x, toCheck.y + relativePoint.y)
-                    tetromino.blocks.any { it == atPoint }
-                }
-                if (shouldBreak) {
-                    tetrominos.add(Tetromino(mutableListOf(toCheck), tetromino.emote))
-                    tetromino.blocks.remove(toCheck)
-                }
-            }
-            if (tetromino.blocks.isEmpty()) tetrominos.remove(tetromino)
-        }
-    }
-
-    private fun checkGravity(checkFalling: Boolean): Boolean {
-        tetrominos.forEach { tetromino ->
-            if (!checkFalling && tetromino == fallingTetromino) return@forEach
-            if (checkGravity(tetromino, false)) return true
-        }
-        return false
-    }
-
-    private fun checkGravity(tetromino: Tetromino, ignoreFalling: Boolean): Boolean {
-        val canFall = tetromino.blocks.none { fallingBlock ->
-            val newLocation = Point(fallingBlock.x, fallingBlock.y + 1)
-            if (newLocation.y >= MAP_HEIGHT) true
-            else tetrominos.any {
-                if (ignoreFalling && it == fallingTetromino) false
-                else it != tetromino && it.blocks.any { it == newLocation }
-            }
-        }
-        if (canFall) {
-            tetromino.blocks.forEach { it.y++ }
-            return true
-        } else if (tetromino == fallingTetromino) {
-            fallingTetromino = null
-        }
-        return false
-    }
-
-    override fun destroy() {
-        updateJob.cancel()
+    override suspend fun destroy() {
         super.destroy()
+        tetrisActor.close()
     }
 
-    class Tetromino(var blocks: MutableList<Point>, val emote: String)
+    class Block(val location: Point, val emote: String)
+
+    inner class Tetromino(blocks: List<Block>) {
+
+        var blocks = blocks
+            private set
+
+        fun move(xa: Int, ya: Int): Boolean {
+            if (!canMove(xa, ya)) return false
+
+            blocks.forEach {
+                it.location.x += xa
+                it.location.y += ya
+            }
+            return true
+        }
+
+        fun rotate(clockwise: Boolean): Boolean {
+            val newBlocks = blocks.map { Block(Point(it.location), it.emote) }
+
+            val rotateX = newBlocks.map { it.location.x }.average()
+            val rotateY = newBlocks.map { it.location.y }.average()
+            newBlocks.forEach {
+                var x = it.location.x - rotateX
+                var y = it.location.y - rotateY
+                val x2 = x
+                if (clockwise) {
+                    x = -y
+                    y = x2
+                } else {
+                    x = y
+                    y = -x2
+                }
+                it.location.x = (x + rotateX).roundToInt()
+                it.location.y = (y + rotateY).roundToInt()
+            }
+            while (newBlocks.any { it.location.x >= MAP_WIDTH }) newBlocks.forEach { it.location.x-- }
+            while (newBlocks.any { it.location.x < 0 }) newBlocks.forEach { it.location.x++ }
+
+            if (!canMove(newBlocks.map { it.location })) return false
+
+            blocks = newBlocks
+            return true
+        }
+
+        fun canMove(xa: Int, ya: Int): Boolean {
+            for (xi in min(xa, 0)..max(xa, 0)) {
+                for (yi in min(ya, 0)..max(ya, 0)) {
+                    val canMove = canMove(blocks.map { Point(it.location.x + xi, it.location.y + yi) })
+                    if (!canMove) return false
+                }
+            }
+            return true
+        }
+
+        private fun canMove(points: List<Point>) = points.none { point ->
+            if (point.x < 0 || point.x >= MAP_WIDTH ||/* point.y < 0 || */point.y >= MAP_HEIGHT) true
+            else stationaryBlocks.any { it.location == point }
+        }
+    }
 
 }

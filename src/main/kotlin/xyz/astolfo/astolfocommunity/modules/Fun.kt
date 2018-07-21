@@ -8,6 +8,7 @@ import com.oopsjpeg.osu4j.backend.Osu
 import kotlinx.coroutines.experimental.CompletableDeferred
 import org.jsoup.Jsoup
 import xyz.astolfo.astolfocommunity.*
+import xyz.astolfo.astolfocommunity.games.GameHandler
 import xyz.astolfo.astolfocommunity.games.ShiritoriGame
 import xyz.astolfo.astolfocommunity.games.SnakeGame
 import xyz.astolfo.astolfocommunity.games.TetrisGame
@@ -201,7 +202,7 @@ fun createFunModule() = module("Fun") {
     }
     command("game") {
         inheritedAction {
-            val currentGame = application.gameHandler.getGame(event.channel.idLong, event.author.idLong)
+            val currentGame = GameHandler.get(event.channel.idLong, event.author.idLong)
             if (currentGame != null) {
                 if (args.equals("stop", true)) {
                     currentGame.endGame()
@@ -223,22 +224,19 @@ fun createFunModule() = module("Fun") {
         }
         command("snake") {
             action {
-                val gameHandler = application.gameHandler
                 messageAction("Starting the game of snake...").queue()
-                gameHandler.startGame(event.channel.idLong, event.author.idLong, SnakeGame(gameHandler, event.member, event.textChannel))
+                GameHandler.start(event.channel.idLong, event.author.idLong, SnakeGame(event.member, event.textChannel))
             }
         }
         command("tetris") {
             action {
-                val gameHandler = application.gameHandler
                 messageAction("Starting the game of tetris...").queue()
-                gameHandler.startGame(event.channel.idLong, event.author.idLong, TetrisGame(gameHandler, event.member, event.textChannel))
+                GameHandler.start(event.channel.idLong, event.author.idLong, TetrisGame(event.member, event.textChannel))
             }
         }
         command("shiritori") {
             action {
-                val gameHandler = application.gameHandler
-                if (gameHandler.getGames(event.channel.idLong).any { it is ShiritoriGame }) {
+                if (GameHandler.getAll(event.channel.idLong).any { it is ShiritoriGame }) {
                     messageAction("Only one game of Shiritori is allowed per channel!").queue()
                     return@action
                 }
@@ -251,7 +249,7 @@ fun createFunModule() = module("Fun") {
                     choosen
                 } ?: ShiritoriGame.Difficulty.NORMAL
                 messageAction("Starting the game of Shiritori with difficulty **${difficulty.name.toLowerCase().capitalize()}**...").queue()
-                gameHandler.startGame(event.channel.idLong, event.author.idLong, ShiritoriGame(gameHandler, event.member, event.textChannel, difficulty))
+                GameHandler.start(event.channel.idLong, event.author.idLong, ShiritoriGame(event.member, event.textChannel, difficulty))
             }
         }
     }

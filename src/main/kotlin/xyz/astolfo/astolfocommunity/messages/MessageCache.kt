@@ -107,7 +107,13 @@ class CachedMessage(messageDeferred: CompletableDeferred<Message>) {
             // Lock the use of the message until its created
             // TODO handle failed creations
             messageMutex.withLock {
-                message = messageDeferred.await()
+                try {
+                    withTimeout(1, TimeUnit.MINUTES) {
+                        message = messageDeferred.await()
+                    }
+                }catch (e: Throwable){
+                    isDeleted = true
+                }
                 isCreated = true
             }
         }
@@ -123,6 +129,7 @@ class CachedMessage(messageDeferred: CompletableDeferred<Message>) {
             val completableDeferred = CompletableDeferred<T>()
             launch(cachedContext) {
                 messageMutex.withLock {
+                    if(isDeleted) return@launch
                     try {
                         completableDeferred.complete(block(message))
                     } catch (e: Throwable) {
@@ -169,8 +176,8 @@ class CachedMessage(messageDeferred: CompletableDeferred<Message>) {
         internalWaitForMessage { msg ->
             if (!msg.hasPermission(Permission.MESSAGE_READ)) return@internalWaitForMessage
             msg.delete().queue()
+            isDeleted = true
         }
-        isDeleted = true
     }
 
     inner class EditManager {

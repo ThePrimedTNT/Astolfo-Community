@@ -13,11 +13,11 @@ class Dashboard(val application: AstolfoCommunityApplication) {
     fun stats() = Stats(application.shardManager.guildCache.size(), application.shardManager.userCache.size())
 
     @RequestMapping("/commands")
-    fun commands() = CommandModuleMap(modules.map { module ->
+    fun commands() = CommandModuleMap(modules.filterNot { it.hidden || it.nsfw }.map { module ->
         module.name to module.commands.map { command ->
             commands(command)
         }.flatten().toMap()
-    }.reversed())
+    })
 
     fun commands(command: Command): List<Pair<String, CommandData>> =
             listOf(command.name to CommandData(command.description, command.usage.joinToString(separator = "\n")),

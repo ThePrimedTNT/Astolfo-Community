@@ -40,7 +40,6 @@ class AstolfoCommunityApplication(val astolfoRepositories: AstolfoRepositories,
     final val donationManager = DonationManager(this, properties)
     final val musicManager = MusicManager(this, properties)
     final val weeb4J = Weeb4J.Builder().setToken(TokenType.WOLKE, properties.weeb_token).build()
-    final val gameHandler = GameHandler()
     final val commandHandler = CommandHandler(this)
     final val shardManager: ShardManager
     // TODO: Move this to a better location
