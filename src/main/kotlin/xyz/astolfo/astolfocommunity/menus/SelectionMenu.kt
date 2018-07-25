@@ -103,9 +103,11 @@ fun CommandExecution.chatInput(inputMessage: String) = ChatInputBuilder(this)
 class ChatInputBuilder(private val execution: CommandExecution) {
     private var title: String = ""
     private var description: String = "Input = Output"
+    private var responseValidator: (String) -> Boolean = { true }
 
     fun title(value: String) = apply { title = value }
     fun description(value: String) = apply { description = value }
+    fun responseValidator(value: (String) -> Boolean) = apply { responseValidator = value }
 
     suspend fun execute(): String? = with(execution) {
         val response = CompletableDeferred<String?>()
@@ -118,8 +120,14 @@ class ChatInputBuilder(private val execution: CommandExecution) {
             if (message.isDeleted) {
                 CommandSession.ResponseAction.UNREGISTER_LISTENER
             } else {
-                response.complete(args)
-                CommandSession.ResponseAction.IGNORE_AND_UNREGISTER_LISTENER
+                val result = responseValidator.invoke(args)
+                if (result) {
+                    // If the validator says its valid
+                    response.complete(args)
+                    CommandSession.ResponseAction.IGNORE_AND_UNREGISTER_LISTENER
+                } else {
+                    CommandSession.ResponseAction.IGNORE_COMMAND
+                }
             }
         }
         destroyListener { response.complete(null) }

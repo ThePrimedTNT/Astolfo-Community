@@ -3,7 +3,6 @@ package xyz.astolfo.astolfocommunity.modules.music
 import com.sedmelluq.discord.lavaplayer.tools.FriendlyException
 import com.sedmelluq.discord.lavaplayer.track.AudioPlaylist
 import com.sedmelluq.discord.lavaplayer.track.AudioTrack
-import kotlinx.coroutines.experimental.CompletableDeferred
 import net.dv8tion.jda.core.Permission
 import xyz.astolfo.astolfocommunity.GuildPlaylistEntry
 import xyz.astolfo.astolfocommunity.commands.CommandSession
@@ -117,7 +116,7 @@ internal fun ModuleBuilder.createGuildPlaylistCommands() {
                 }
                 val audioItem = try {
                     tempMessage(message { embed("\uD83D\uDD0E Searching for **$searchQuery**...") }) {
-                        application.musicManager.audioPlayerManager.loadItemSync(searchQuery.query).await()
+                        application.musicManager.audioPlayerManager.loadItemDeferred(searchQuery.query).await()
                     }
                 } catch (e: Throwable) {
                     when (e) {
@@ -194,7 +193,7 @@ internal fun ModuleBuilder.createGuildPlaylistCommands() {
         }
         command("play", "p", "queue", "q") {
             musicAction {
-                if (!joinAction()) return@musicAction
+                val musicSession = joinAction() ?: return@musicAction
                 if (args.isBlank()) {
                     messageAction("Enter a playlist name!").queue()
                     return@musicAction
@@ -205,13 +204,15 @@ internal fun ModuleBuilder.createGuildPlaylistCommands() {
                     messageAction("I couldn't find a playlist with that name!").queue()
                     return@musicAction
                 }
-                val member = event.member
-                application.musicManager.getMusicSession(event.guild)?.let { session ->
-                    session.boundChannel = event.message.textChannel
-                    // TODO add donation support
-                    session.queue(member, playlist.lavaplayerSongs, false, CompletableDeferred())
+                val audioPlaylist = object : AudioPlaylist {
+                    override fun isSearchResult(): Boolean = false
+                    override fun getName(): String = playlist.name
+                    override fun getSelectedTrack(): AudioTrack? = null
+                    override fun getTracks(): MutableList<AudioTrack> = playlist.lavaplayerSongs
                 }
-                messageAction(embed { setDescription("The guild playlist **${playlist.name}** has been added to the queue") }).queue()
+                musicSession.await().queueItem(audioPlaylist, event.textChannel, event.member, playlist.name, false, false) {
+                    messageAction(it).queue()
+                }
             }
         }
     }

@@ -55,7 +55,7 @@ class BotListManager(private val application: AstolfoCommunityApplication,
         }
     }
 
-    @RequestMapping(method = [RequestMethod.POST], value = "/discordbotlist")
+    @RequestMapping(method = [RequestMethod.POST], value = ["/discordbotlist"])
     fun discordBotList(@RequestHeader("Authorization") authorization: String,
                        @RequestBody body: DiscordBotListBody): ResponseEntity<Any> {
         if (properties.discordbotlist_password != authorization) return ResponseEntity(HttpStatus.UNAUTHORIZED)

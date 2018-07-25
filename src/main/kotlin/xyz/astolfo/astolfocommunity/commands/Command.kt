@@ -1,9 +1,7 @@
 package xyz.astolfo.astolfocommunity.commands
 
-import kotlinx.coroutines.experimental.DefaultDispatcher
-import kotlinx.coroutines.experimental.async
-import kotlinx.coroutines.experimental.launch
-import kotlinx.coroutines.experimental.withContext
+import kotlinx.coroutines.experimental.*
+import net.dv8tion.jda.core.EmbedBuilder
 import net.dv8tion.jda.core.Permission
 import net.dv8tion.jda.core.entities.Message
 import net.dv8tion.jda.core.entities.MessageEmbed
@@ -11,7 +9,6 @@ import net.dv8tion.jda.core.events.message.MessageReceivedEvent
 import xyz.astolfo.astolfocommunity.*
 import xyz.astolfo.astolfocommunity.messages.*
 import java.util.concurrent.TimeUnit
-import java.util.concurrent.atomic.AtomicReference
 
 class Command(
         val name: String,
@@ -97,17 +94,35 @@ open class CommandExecution(
         val args: CommandArgs,
         val timeIssued: Long
 ) {
-    fun messageAction(text: CharSequence) = event.channel.sendMessage(text)!!
+    @Deprecated("Create a message and then send it instead", ReplaceWith("messageAction(message(text))", "xyz.astolfo.astolfocommunity.messages.message"))
+    fun messageAction(text: String) = messageAction(message(text))
+
     fun messageAction(embed: MessageEmbed) = event.channel.sendMessage(embed)!!
     fun messageAction(msg: Message) = event.channel.sendMessage(msg)!!
+
+    suspend fun <T> tempMessage(embed: MessageEmbed, temp: suspend () -> T) = tempMessage(message { setEmbed(embed) }, temp)
     suspend fun <T> tempMessage(msg: Message, temp: suspend () -> T): T {
-        val atomicMessage = AtomicReference<CachedMessage>()
-        val future = async(parent = (session as CommandSessionImpl).parentJob) {
-            atomicMessage.set(messageAction(msg).sendCached())
-            temp.invoke()
+        val message = messageAction(msg).sendCached()
+        val job = async { temp() }
+        val dispose = {
+            synchronized(message) {
+                if(message.isDeleted) return@synchronized // discard if already deleted
+                message.delete()
+            }
         }
-        future.invokeOnCompletion { atomicMessage.get()?.delete() }
-        return future.await()
+        return suspendCancellableCoroutine { cont ->
+            // Clean up and resume when the temp is finished
+            val handle = job.invokeOnCompletion { t ->
+                dispose()
+                if (t == null) cont.resume(job.getCompleted())
+                else cont.resumeWithException(t)
+            }
+            // Clean up if this gets cancelled
+            cont.invokeOnCancellation {
+                dispose()
+                handle.dispose()
+            }
+        }
     }
 
     fun updatable(rate: Long, unit: TimeUnit = TimeUnit.SECONDS, updater: (CommandSession) -> Unit) = session.updatable(rate, unit, updater)
@@ -123,13 +138,6 @@ open class CommandExecution(
         override fun onSessionDestroyed() = destroyListener()
     })
 
-    fun runWhileSessionActive(block: suspend CommandExecution.() -> Unit) {
-        val loadJob = launch(parent = (session as CommandSessionImpl).parentJob) {
-            block.invoke(this@CommandExecution)
-        }
-        destroyListener { loadJob.cancel() }
-    }
-
     // TODO this seems odd to have here
     suspend fun getProfile() = withContext(DefaultDispatcher) { application.astolfoRepositories.getEffectiveUserProfile(event.author.idLong) }
 
@@ -143,6 +151,19 @@ open class CommandExecution(
         setGuildSettings(guildSettings)
         return result
     }
+
+    fun embed(text: String) = embed { description(text) }
+    inline fun embed(crossinline builder: EmbedBuilder.() -> Unit) = embed0 {
+        footer("Requested by ${event.author.name}")
+        builder(this)
+    }
+
+    fun errorEmbed(text: String) = errorEmbed { description(text) }
+    inline fun errorEmbed(crossinline builder: EmbedBuilder.() -> Unit) = errorEmbed0 {
+        footer("Requested by ${event.author.name}")
+        builder(this)
+    }
+
 }
 
 class StageAction<E>(private val newData: () -> E) {

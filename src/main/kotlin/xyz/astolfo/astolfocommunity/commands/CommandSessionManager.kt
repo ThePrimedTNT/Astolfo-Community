@@ -3,6 +3,7 @@ package xyz.astolfo.astolfocommunity.commands
 import io.sentry.Sentry
 import kotlinx.coroutines.experimental.*
 import kotlinx.coroutines.experimental.channels.Channel
+import kotlinx.coroutines.experimental.channels.ClosedSendChannelException
 import kotlinx.coroutines.experimental.channels.actor
 import kotlinx.coroutines.experimental.channels.sendBlocking
 import kotlinx.coroutines.experimental.sync.Mutex
@@ -66,7 +67,7 @@ class CommandSessionManager {
 
     private suspend fun invalidateNow(key: SessionKey) {
         sessionMap.remove(key)?.destroy()
-        sessionJobs.remove(key)?.join()
+        sessionJobs.remove(key)?.cancelAndJoin()
     }
 
     private suspend fun cleanUp() {
@@ -166,7 +167,15 @@ class CommandSessionManager {
                         // start it
                         runningJob = launch(context = workerContext) { nextTask() }
                         // register a update task so next job starts right after this one
-                        runningJob!!.invokeOnCompletion { workerActor.sendBlocking(UpdateTaskEvent) }
+                        runningJob!!.invokeOnCompletion {
+                            launch(workerContext) {
+                                try {
+                                    workerActor.send(UpdateTaskEvent)
+                                }catch (e: ClosedSendChannelException){
+                                    // Meh, idc
+                                }
+                            }
+                        }
                     }
                 }
             }

@@ -6,7 +6,9 @@ import com.google.gson.JsonSyntaxException
 import kotlinx.coroutines.experimental.*
 import kotlinx.coroutines.experimental.sync.Mutex
 import kotlinx.coroutines.experimental.sync.withLock
+import net.dv8tion.jda.bot.sharding.ShardManager
 import net.dv8tion.jda.core.Permission
+import net.dv8tion.jda.core.entities.Guild
 import net.dv8tion.jda.core.entities.TextChannel
 import okhttp3.*
 import java.io.IOException
@@ -38,9 +40,13 @@ inline fun <reified T : Any> webJson(url: String, accept: String? = "application
 fun web(url: String, accept: String? = null): CompletableDeferred<String> {
     val requestBuilder = Request.Builder().url(url)
     if (accept != null) requestBuilder.header("Accept", accept)
-    val completableDeferred = CompletableDeferred<String>()
     val call = ASTOLFO_HTTP_CLIENT.newCall(requestBuilder.build())
-    call.enqueue(object : Callback {
+    return call.enqueueDeferred()
+}
+
+fun Call.enqueueDeferred(): CompletableDeferred<String> {
+    val completableDeferred = CompletableDeferred<String>()
+    enqueue(object : Callback {
         override fun onResponse(call: Call, response: Response) {
             response.body()!!.use { body ->
                 completableDeferred.complete(body.string())
@@ -51,8 +57,15 @@ fun web(url: String, accept: String? = null): CompletableDeferred<String> {
             completableDeferred.completeExceptionally(e)
         }
     })
-    completableDeferred.invokeOnCompletion { call.cancel() }
+    completableDeferred.invokeOnCompletion { cancel() }
     return completableDeferred
+}
+
+fun ShardManager.getEffectiveName(userId: Long) = getEffectiveName(null, userId)
+fun ShardManager.getEffectiveName(guild: Guild?, userId: Long): String? {
+    val member = guild?.getMemberById(userId)
+    return if (member != null) member.effectiveName
+    else getUserById(userId)?.name
 }
 
 class RateLimiter<K>(

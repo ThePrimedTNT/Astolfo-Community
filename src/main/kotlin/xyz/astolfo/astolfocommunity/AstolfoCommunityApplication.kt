@@ -101,6 +101,7 @@ class AstolfoProperties {
     var patreon_url = ""
     var patreon_auth = ""
     var sentry_dsn = ""
+    var genius_token = ""
 }
 
 class StatsListener(val application: AstolfoCommunityApplication) : ListenerAdapter() {

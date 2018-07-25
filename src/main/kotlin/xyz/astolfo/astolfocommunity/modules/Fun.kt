@@ -153,12 +153,13 @@ fun createFunModule() = module("Fun") {
         val random = Random()
         action {
             val r = random.nextInt(4665) + 1
+            val imageUrl = Jsoup.parse(web("http://explosm.net/comics/$r/").await())
+                    .select("#main-comic").first()
+                    .attr("src")
+                    .let { if (it.startsWith("//")) "https:$it" else it }
             messageAction(embed {
                 title("Cyanide and Happiness")
-                image(Jsoup.parse(web("http://explosm.net/comics/$r/").await())
-                        .select("#main-comic").first()
-                        .attr("src")
-                        .let { if (it.startsWith("//")) "https:$it" else it })
+                image(imageUrl)
             }).queue()
         }
     }

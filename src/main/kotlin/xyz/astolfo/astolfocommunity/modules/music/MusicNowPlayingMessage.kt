@@ -32,6 +32,8 @@ class MusicNowPlayingMessage(private val musicSession: MusicSession) {
         val newMessage = message {
             embed {
                 author("\uD83C\uDFB6 Now Playing: ${track.info.title}", track.info.uri)
+                val requesterId = track.requesterId
+                footer("Requested by: ${musicSession.guild.getMemberById(requesterId)?.effectiveName ?: "Missing Member <$requesterId>"}")
             }
         }
 
