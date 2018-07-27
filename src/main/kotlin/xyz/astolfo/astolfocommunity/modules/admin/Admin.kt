@@ -52,24 +52,24 @@ fun createAdminModule() = module("Admin") {
             val amountToDelete = args.takeIf { it.isNotBlank() }?.let {
                 val amountNum = it.toIntOrNull()
                 if (amountNum == null) {
-                    messageAction("The amount to delete must be a whole number!").queue()
+                    messageAction(errorEmbed("The amount to delete must be a whole number!")).queue()
                     return@action
                 }
                 if (amountNum < 1) {
-                    messageAction("The amount to delete must be at least 1!").queue()
+                    messageAction(errorEmbed("The amount to delete must be at least 1!")).queue()
                     return@action
                 }
                 if (amountNum > 100) {
-                    messageAction("The amount to delete must be no more than 100!").queue()
+                    messageAction(errorEmbed("The amount to delete must be no more than 100!")).queue()
                     return@action
                 }
                 amountNum
             } ?: 2
-            val messages = event.textChannel.history.retrievePast(amountToDelete).complete()
+            val messages = event.channel.history.retrievePast(amountToDelete).complete()
             try {
-                event.textChannel.deleteMessages(messages).queue()
+                event.channel.deleteMessages(messages).queue()
             } catch (e: Exception) {
-                messageAction("You cannot delete messages that are more than 2 weeks old!").queue()
+                messageAction(errorEmbed("You cannot delete messages that are more than 2 weeks old!")).queue()
                 return@action
             }
 
@@ -105,7 +105,7 @@ fun createAdminModule() = module("Admin") {
             }
             val selectedMember = memberSelectionBuilder(query).title("Kick Selection").execute() ?: return@action
             if (!event.guild.selfMember.canInteract(selectedMember)) {
-                messageAction("I cannot kick that member!").queue()
+                messageAction(errorEmbed("I cannot kick that member!")).queue()
                 return@action
             }
             val guildController = event.guild.controller
@@ -120,13 +120,10 @@ fun createAdminModule() = module("Admin") {
         }
     }
     command("ban") {
+        permission(Permission.BAN_MEMBERS)
         action {
             if (!event.guild.selfMember.hasPermission(Permission.BAN_MEMBERS)) {
                 messageAction(embed("I need the `Ban Members` permission in order to ban people!")).queue()
-                return@action
-            }
-            if (!event.member.hasPermission(Permission.BAN_MEMBERS)) {
-                messageAction(embed("You need the `Ban Members` permission in order to ban people!")).queue()
                 return@action
             }
             val query: String
@@ -140,7 +137,7 @@ fun createAdminModule() = module("Admin") {
             }
             val selectedMember = memberSelectionBuilder(query).title("Ban Selection").execute() ?: return@action
             if (!event.guild.selfMember.canInteract(selectedMember)) {
-                messageAction("I cannot ban that member!").queue()
+                messageAction(errorEmbed("I cannot ban that member!")).queue()
                 return@action
             }
             val guildController = event.guild.controller

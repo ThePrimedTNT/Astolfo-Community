@@ -210,7 +210,7 @@ internal fun ModuleBuilder.createGuildPlaylistCommands() {
                     override fun getSelectedTrack(): AudioTrack? = null
                     override fun getTracks(): MutableList<AudioTrack> = playlist.lavaplayerSongs
                 }
-                musicSession.await().queueItem(audioPlaylist, event.textChannel, event.member, playlist.name, false, false) {
+                musicSession.await().queueItem(audioPlaylist, event.channel, event.member, playlist.name, false, false) {
                     messageAction(it).queue()
                 }
             }

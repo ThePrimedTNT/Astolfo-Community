@@ -2,7 +2,6 @@ package xyz.astolfo.astolfocommunity
 
 import com.github.salomonbrys.kotson.fromJson
 import com.google.gson.Gson
-import com.google.gson.JsonSyntaxException
 import kotlinx.coroutines.experimental.*
 import kotlinx.coroutines.experimental.sync.Mutex
 import kotlinx.coroutines.experimental.sync.withLock
@@ -19,22 +18,11 @@ import java.util.concurrent.TimeUnit
 val ASTOLFO_GSON = Gson()
 val ASTOLFO_HTTP_CLIENT = OkHttpClient()
 
-inline fun <reified T : Any> webJson(url: String, accept: String? = "application/json"): CompletableDeferred<T> {
-    val result = CompletableDeferred<T>()
-    val request = web(url, accept)
-    request.invokeOnCompletion {
-        if (it != null) result.completeExceptionally(it)
-        else {
-            val json = request.getCompleted()
-            try {
-                result.complete(ASTOLFO_GSON.fromJson(json))
-            } catch (e: JsonSyntaxException) {
-                println(json)
-                result.completeExceptionally(e)
-            }
-        }
-    }
-    return result
+inline fun <reified T : Any> webJson(
+        url: String,
+        accept: String? = "application/json"
+) = web(url, accept).wrap {
+    ASTOLFO_GSON.fromJson<T>(it)
 }
 
 fun web(url: String, accept: String? = null): CompletableDeferred<String> {
@@ -59,6 +47,24 @@ fun Call.enqueueDeferred(): CompletableDeferred<String> {
     })
     completableDeferred.invokeOnCompletion { cancel() }
     return completableDeferred
+}
+
+inline fun <T, K> CompletableDeferred<T>.wrap(crossinline wrapper: (T) -> K): CompletableDeferred<K> {
+    val resultCompletable = CompletableDeferred<K>()
+    this.invokeOnCompletion { error ->
+        try {
+            if (error != null) resultCompletable.completeExceptionally(error)
+            else {
+                val value = this@wrap.getCompleted()
+                val result = wrapper(value)
+                resultCompletable.complete(result)
+            }
+        } catch (t: Throwable) {
+            resultCompletable.completeExceptionally(t)
+        }
+    }
+    resultCompletable.invokeOnCompletion { this@wrap.cancel(it) }
+    return resultCompletable
 }
 
 fun ShardManager.getEffectiveName(userId: Long) = getEffectiveName(null, userId)
@@ -236,3 +242,5 @@ inline fun <T> synchronized2(lock1: Any, lock2: Any, block: () -> T): T =
         }
 
 fun TextChannel.hasPermission(vararg permissions: Permission) = guild.selfMember.hasPermission(this, *permissions)
+
+

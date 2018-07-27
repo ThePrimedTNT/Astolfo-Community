@@ -34,11 +34,10 @@ object ResourceManager {
             job.invokeOnCompletion(onCancelling = false, handler = { handle.dispose() })
         }
         mainJob.invokeOnCompletion { if (completableDeferred.isActive) completableDeferred.cancel() }
-        destroyListener { completableDeferred.cancel() }
         return completableDeferred.await()
     }
 
-    suspend fun CommandExecution.getImage(tag: String, explicit: Boolean, type: ResourceType): ResolvedImageObject? {
+    suspend fun getImage(tag: String, explicit: Boolean, type: ResourceType): ResolvedImageObject? {
         val processedTag = tag.toLowerCase().let {
             if (type == ResourceType.E621) it.replace("yuri", "female/female", ignoreCase = true)
             else it

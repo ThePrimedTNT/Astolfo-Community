@@ -1,11 +1,14 @@
 package xyz.astolfo.astolfocommunity.commands
 
-import kotlinx.coroutines.experimental.*
+import kotlinx.coroutines.experimental.DefaultDispatcher
+import kotlinx.coroutines.experimental.async
+import kotlinx.coroutines.experimental.suspendCancellableCoroutine
+import kotlinx.coroutines.experimental.withContext
 import net.dv8tion.jda.core.EmbedBuilder
 import net.dv8tion.jda.core.Permission
 import net.dv8tion.jda.core.entities.Message
 import net.dv8tion.jda.core.entities.MessageEmbed
-import net.dv8tion.jda.core.events.message.MessageReceivedEvent
+import net.dv8tion.jda.core.events.message.guild.GuildMessageReceivedEvent
 import xyz.astolfo.astolfocommunity.*
 import xyz.astolfo.astolfocommunity.messages.*
 import java.util.concurrent.TimeUnit
@@ -31,10 +34,10 @@ class CommandBuilder(val path: String, val name: String, val alts: List<String>)
         val bestMatch = distances.keys.sortedBy { distances[it]!! }.firstOrNull()
         val guildPrefix = getGuildSettings().getEffectiveGuildPrefix(application)
         if (bestMatch == null) {
-            messageAction("Unknown command! Type **$guildPrefix$commandPath help** for a list of commands.").queue()
+            messageAction(errorEmbed("Unknown command! Type **$guildPrefix$commandPath help** for a list of commands.")).queue()
         } else {
             val recreated = "$guildPrefix$commandPath $bestMatch $commandContent".trim()
-            messageAction("Unknown command! Did you mean **$recreated**?").queue()
+            messageAction(errorEmbed("Unknown command! Did you mean **$recreated**?")).queue()
         }
     }
     private var inheritedActions = mutableListOf<suspend CommandExecution.() -> Boolean>()
@@ -88,7 +91,7 @@ class CommandBuilder(val path: String, val name: String, val alts: List<String>)
 
 open class CommandExecution(
         val application: AstolfoCommunityApplication,
-        val event: MessageReceivedEvent,
+        val event: GuildMessageReceivedEvent,
         val session: CommandSession,
         val commandPath: String,
         val args: CommandArgs,
@@ -106,7 +109,7 @@ open class CommandExecution(
         val job = async { temp() }
         val dispose = {
             synchronized(message) {
-                if(message.isDeleted) return@synchronized // discard if already deleted
+                if (message.isDeleted) return@synchronized // discard if already deleted
                 message.delete()
             }
         }
@@ -130,7 +133,9 @@ open class CommandExecution(
     inline fun responseListener(crossinline listener: CommandExecution.() -> CommandSession.ResponseAction) =
             listener(messageListener = listener)
 
+    @Deprecated("Use suspending functions instead", ReplaceWith("listener(destroyListener = listener)"))
     inline fun destroyListener(crossinline listener: () -> Unit) = listener(destroyListener = listener)
+
     inline fun listener(
             crossinline messageListener: CommandExecution.() -> CommandSession.ResponseAction = { CommandSession.ResponseAction.NOTHING },
             crossinline destroyListener: () -> Unit = {}) = session.addListener(object : CommandSession.SessionListener() {
@@ -194,3 +199,5 @@ typealias ArgsIterator = ListIterator<String>
 fun CommandArgs.argsIterator(): ArgsIterator = words().listIterator()
 
 fun ArgsIterator.next(default: String) = if (hasNext()) next() else default
+
+fun Iterable<Command>.findByName(name: String) = find { it.name.equals(name, ignoreCase = true) || it.alts.any { it.equals(name, ignoreCase = true) } }

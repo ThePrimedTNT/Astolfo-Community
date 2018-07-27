@@ -9,7 +9,7 @@ import java.util.*
 
 fun createNSFWModule() = module("NSFW", nsfw = true) {
     inheritedAction {
-        if (!event.textChannel.isNSFW) {
+        if (!event.channel.isNSFW) {
             messageAction("The NSFW module is only allowed in NSFW enabled channels!").queue()
             return@inheritedAction false
         }

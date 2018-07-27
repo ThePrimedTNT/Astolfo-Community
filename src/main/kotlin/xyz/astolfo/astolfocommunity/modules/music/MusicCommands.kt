@@ -84,7 +84,7 @@ fun createMusicModule() = module("Music") {
                 return@musicAction
             }
             if (audioItem is AudioTrack) {
-                musicSession.await().queueItem(audioItem, event.textChannel, event.member, selectedRadio.name, false, false) {
+                musicSession.await().queueItem(audioItem, event.channel, event.member, selectedRadio.name, false, false) {
                     messageAction(it).queue()
                 }
                 //messageAction(embed { description("**${selectedRadio.name}** has been added to the queue") }).queue()
@@ -641,7 +641,7 @@ suspend fun CommandExecution.joinAction(forceJoinMessage: Boolean = false): Comp
     }
     val changedChannels = application.musicManager.lavaLink.getLink(vc.guild).channel != vc
     application.musicManager.lavaLink.connect(vc)
-    val session = application.musicManager.getSession(guild, event.textChannel)
+    val session = application.musicManager.getSession(guild, event.channel)
     if (changedChannels || forceJoinMessage) messageAction(embed("I have joined your voice channel!")).queue()
     return session
 }
@@ -655,7 +655,7 @@ suspend fun CommandExecution.playAction(top: Boolean, skip: Boolean) {
         return
     }
     if (!searchQuery.search) {
-        musicSession.await().musicLoader.load(event.member, searchQuery.query, event.textChannel, top, skip)
+        musicSession.await().musicLoader.load(event.member, searchQuery.query, event.channel, top, skip)
         return
     }
     val audioPlaylist = try {
@@ -675,7 +675,7 @@ suspend fun CommandExecution.playAction(top: Boolean, skip: Boolean) {
         // If the track returned is a list of tracks and are from a ytsearch: or scsearch:
         val selectedTrack = selectMusic(audioPlaylist.tracks).execute() ?: return
 
-        musicSession.await().queueItem(selectedTrack, event.textChannel, event.member, searchQuery.query, top, skip) {
+        musicSession.await().queueItem(selectedTrack, event.channel, event.member, searchQuery.query, top, skip) {
             messageAction(it).queue()
         }
     }

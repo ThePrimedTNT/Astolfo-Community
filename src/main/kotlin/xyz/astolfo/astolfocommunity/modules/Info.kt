@@ -91,7 +91,7 @@ fun createInfoModule() = module("Info") {
                     description("If you're having  trouble with anything, you can always stop by our support server!" +
                             "\nInvite Link: https://discord.gg/23RB2Wc")
                     for (module in modules) {
-                        if ((module.hidden) || (module.nsfw && !this@action.event.textChannel.isNSFW)) continue
+                        if ((module.hidden) || (module.nsfw && !this@action.event.channel.isNSFW)) continue
                         val commandNames = module.commands.joinToString(" ") { "`${it.name}` " }
                         field("${module.name} Commands", commandNames, false)
                     }

@@ -21,8 +21,7 @@ import org.springframework.boot.web.servlet.ServletContextInitializer
 import org.springframework.cache.annotation.EnableCaching
 import org.springframework.context.annotation.Bean
 import org.springframework.web.servlet.HandlerExceptionResolver
-import xyz.astolfo.astolfocommunity.commands.CommandHandler
-import xyz.astolfo.astolfocommunity.games.GameHandler
+import xyz.astolfo.astolfocommunity.commands.MessageListener
 import xyz.astolfo.astolfocommunity.messages.MessageCache
 import xyz.astolfo.astolfocommunity.modules.admin.JoinLeaveManager
 import xyz.astolfo.astolfocommunity.modules.music.MusicManager
@@ -40,7 +39,7 @@ class AstolfoCommunityApplication(val astolfoRepositories: AstolfoRepositories,
     final val donationManager = DonationManager(this, properties)
     final val musicManager = MusicManager(this, properties)
     final val weeb4J = Weeb4J.Builder().setToken(TokenType.WOLKE, properties.weeb_token).build()
-    final val commandHandler = CommandHandler(this)
+    final val messageListener = MessageListener(this)
     final val shardManager: ShardManager
     // TODO: Move this to a better location
     final val staffMemberIds = properties.staffMemberIds.split(",").mapNotNull { it.toLongOrNull() }
@@ -55,7 +54,7 @@ class AstolfoCommunityApplication(val astolfoRepositories: AstolfoRepositories,
                 .setToken(properties.token)
                 .setStatus(OnlineStatus.DO_NOT_DISTURB)
                 .setGame(Game.watching("myself boot"))
-                .addEventListeners(commandHandler, statsListener, musicManager.lavaLink, musicManager.musicManagerListener, JoinLeaveManager(this).listener)
+                .addEventListeners(messageListener.listener, statsListener, musicManager.lavaLink, musicManager.musicManagerListener, JoinLeaveManager(this).listener)
                 .setEnableShutdownHook(false)
                 .setShardsTotal(properties.shard_count)
         if (properties.custom_gateway_enabled) shardManagerBuilder.setSessionController(AstolfoSessionController(properties.custom_gateway_url, properties.custom_gateway_delay))
