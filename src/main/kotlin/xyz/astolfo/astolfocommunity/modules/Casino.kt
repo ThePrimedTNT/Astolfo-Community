@@ -1,11 +1,14 @@
 package xyz.astolfo.astolfocommunity.modules
 
-import kotlinx.coroutines.experimental.delay
 import net.dv8tion.jda.core.entities.MessageEmbed
-import xyz.astolfo.astolfocommunity.*
+import xyz.astolfo.astolfocommunity.Emotes
+import xyz.astolfo.astolfocommunity.RateLimiter
+import xyz.astolfo.astolfocommunity.Utils
 import xyz.astolfo.astolfocommunity.menus.paginator
 import xyz.astolfo.astolfocommunity.menus.provider
-import xyz.astolfo.astolfocommunity.messages.*
+import xyz.astolfo.astolfocommunity.messages.color
+import xyz.astolfo.astolfocommunity.messages.description
+import xyz.astolfo.astolfocommunity.messages.sendCached
 import java.awt.Color
 import java.util.*
 import java.util.concurrent.TimeUnit
@@ -68,7 +71,7 @@ fun createCasinoModule() = module("Casino") {
 
         action {
             if (slotsRateLimiter.isLimited(event.author.idLong)) {
-                event.channel.sendMessage("Please cool down! (**${Utils.formatDuration(slotsRateLimiter.remainingTime(event.author.idLong)!!)}** seconds left)").queue()
+                messageAction(errorEmbed("Please cool down! (**${Utils.formatDuration(slotsRateLimiter.remainingTime(event.author.idLong)!!)}** seconds left)")).queue()
                 return@action
             }
             slotsRateLimiter.add(event.author.idLong)
@@ -78,17 +81,17 @@ fun createCasinoModule() = module("Casino") {
             val bidAmount = args.takeIf { it.isNotBlank() }?.let {
                 val amountNum = it.toBigIntegerOrNull()?.toLong()
                 if (amountNum == null) {
-                    messageAction("The bid amount must be a whole number!").queue()
+                    messageAction(errorEmbed("The bid amount must be a whole number!")).queue()
                     return@action
                 }
                 if (amountNum < 10) {
-                    messageAction("The bid amount must be at least 10 credits!").queue()
+                    messageAction(errorEmbed("The bid amount must be at least 10 credits!")).queue()
                     return@action
                 }
                 amountNum
             } ?: 10
             if (bidAmount > userProfile.credits) {
-                messageAction("You don't have enough credits to bid this amount!").queue()
+                messageAction(errorEmbed("You don't have enough credits to bid this amount!")).queue()
                 return@action
             }
 

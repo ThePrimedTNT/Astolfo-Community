@@ -5,17 +5,19 @@ import com.github.natanbc.weeb4j.image.HiddenMode
 import com.github.natanbc.weeb4j.image.NsfwFilter
 import com.oopsjpeg.osu4j.backend.EndpointUsers
 import com.oopsjpeg.osu4j.backend.Osu
-import kotlinx.coroutines.experimental.CompletableDeferred
 import org.jsoup.Jsoup
-import xyz.astolfo.astolfocommunity.*
 import xyz.astolfo.astolfocommunity.games.GameHandler
 import xyz.astolfo.astolfocommunity.games.ShiritoriGame
 import xyz.astolfo.astolfocommunity.games.SnakeGame
 import xyz.astolfo.astolfocommunity.games.TetrisGame
 import xyz.astolfo.astolfocommunity.menus.memberSelectionBuilder
 import xyz.astolfo.astolfocommunity.messages.*
+import xyz.astolfo.astolfocommunity.web
+import xyz.astolfo.astolfocommunity.webJson
+import xyz.astolfo.astolfocommunity.words
 import java.math.BigInteger
 import java.util.*
+import kotlin.coroutines.experimental.suspendCoroutine
 
 fun createFunModule() = module("Fun") {
     command("osu") {
@@ -45,8 +47,8 @@ fun createFunModule() = module("Fun") {
                 val user = try {
                     osu.users.query(EndpointUsers.ArgumentsBuilder(args).build())
                 } catch (e: Exception) {
-                    messageAction(":mag: I looked for `$args`, but couldn't find them!" +
-                            "\n Try using the sig command instead.").queue()
+                    messageAction(errorEmbed(":mag: I looked for `$args`, but couldn't find them!" +
+                            "\n Try using the sig command instead.")).queue()
                     return@action
                 }
                 messageAction(embed {
@@ -69,19 +71,19 @@ fun createFunModule() = module("Fun") {
     }
     command("cat", "cats") {
         action {
-            messageAction(webJson<Cat>("http://aws.random.cat/meow", null).await().file!!).queue()
+            messageAction(message(webJson<Cat>("http://aws.random.cat/meow", null).await().file!!)).queue()
         }
     }
     command("catgirl", "neko", "catgirls") {
         action {
-            messageAction(webJson<Neko>("https://nekos.life/api/neko").await().neko!!).queue()
+            messageAction(message(webJson<Neko>("https://nekos.life/api/neko").await().neko!!)).queue()
         }
     }
     command("coinflip", "flip", "coin") {
         val random = Random()
         action {
-            val flipMessage = messageAction("Flipping a coin for you...").sendCached()
-            flipMessage.editMessage("Coin landed on **${if (random.nextBoolean()) "Heads" else "Tails"}**", 1L)
+            val flipMessage = messageAction(embed("Flipping a coin for you...")).sendCached()
+            flipMessage.editMessage(embed("Coin landed on **${if (random.nextBoolean()) "Heads" else "Tails"}**"), 1L)
         }
     }
     command("roll", "die", "dice") {
@@ -100,13 +102,13 @@ fun createFunModule() = module("Fun") {
                 }
                 2 -> parts[0].toBigIntegerOrNull() to parts[1].toBigIntegerOrNull()
                 else -> {
-                    messageAction("Invalid roll format! Accepted Formats: *<max>*, *<min> <max>*").queue()
+                    messageAction(errorEmbed("Invalid roll format! Accepted Formats: *<max>*, *<min> <max>*")).queue()
                     return@action
                 }
             }
 
             if (bound1 == null || bound2 == null) {
-                messageAction("Only whole numbers are allowed for bounds!").queue()
+                messageAction(errorEmbed("Only whole numbers are allowed for bounds!")).queue()
                 return@action
             }
 
@@ -122,8 +124,8 @@ fun createFunModule() = module("Fun") {
 
             randomNum += lowerBound
 
-            val rollingMessage = messageAction(":game_die: Rolling a dice for you...").sendCached()
-            rollingMessage.editMessage("Dice landed on **$randomNum**", 1)
+            val rollingMessage = messageAction(embed(":game_die: Rolling a dice for you...")).sendCached()
+            rollingMessage.editMessage(embed("Dice landed on **$randomNum**"), 1)
         }
     }
     command("8ball") {
@@ -207,9 +209,9 @@ fun createFunModule() = module("Fun") {
             if (currentGame != null) {
                 if (args.equals("stop", true)) {
                     currentGame.endGame()
-                    messageAction("Current game has stopped!").queue()
+                    messageAction(embed("Current game has stopped!")).queue()
                 } else {
-                    messageAction("To stop the current game you're in, type `?game stop`").queue()
+                    messageAction(errorEmbed("To stop the current game you're in, type `?game stop`")).queue()
                 }
                 false
             } else true
@@ -225,31 +227,31 @@ fun createFunModule() = module("Fun") {
         }
         command("snake") {
             action {
-                messageAction("Starting the game of snake...").queue()
+                messageAction(embed("Starting the game of snake...")).queue()
                 GameHandler.start(event.channel.idLong, event.author.idLong, SnakeGame(event.member, event.textChannel))
             }
         }
         command("tetris") {
             action {
-                messageAction("Starting the game of tetris...").queue()
+                messageAction(embed("Starting the game of tetris...")).queue()
                 GameHandler.start(event.channel.idLong, event.author.idLong, TetrisGame(event.member, event.textChannel))
             }
         }
         command("shiritori") {
             action {
                 if (GameHandler.getAll(event.channel.idLong).any { it is ShiritoriGame }) {
-                    messageAction("Only one game of Shiritori is allowed per channel!").queue()
+                    messageAction(errorEmbed("Only one game of Shiritori is allowed per channel!")).queue()
                     return@action
                 }
                 val difficulty = args.takeIf { it.isNotBlank() }?.let { string ->
                     val choosen = ShiritoriGame.Difficulty.values().find { string.equals(it.name, true) }
                     if (choosen == null) {
-                        messageAction("Unknown difficulty! Valid difficulties: **Easy**, **Normal**, **Hard**, **Impossible**").queue()
+                        messageAction(errorEmbed("Unknown difficulty! Valid difficulties: **Easy**, **Normal**, **Hard**, **Impossible**")).queue()
                         return@action
                     }
                     choosen
                 } ?: ShiritoriGame.Difficulty.NORMAL
-                messageAction("Starting the game of Shiritori with difficulty **${difficulty.name.toLowerCase().capitalize()}**...").queue()
+                messageAction(errorEmbed("Starting the game of Shiritori with difficulty **${difficulty.name.toLowerCase().capitalize()}**...")).queue()
                 GameHandler.start(event.channel.idLong, event.author.idLong, ShiritoriGame(event.member, event.textChannel, difficulty))
             }
         }
@@ -264,8 +266,6 @@ class Cat(val file: String?)
 class Neko(val neko: String?)
 class DadJoke(val id: String?, val status: Int?, var joke: String?)
 
-suspend inline fun <E> PendingRequest<E>.await(): E {
-    val future = CompletableDeferred<E>()
-    async({ future.complete(it) }, { future.completeExceptionally(it) })
-    return future.await()
+suspend inline fun <E> PendingRequest<E>.await() = suspendCoroutine<E> { cont ->
+    async({ cont.resume(it) }, { cont.resumeWithException(it) })
 }
