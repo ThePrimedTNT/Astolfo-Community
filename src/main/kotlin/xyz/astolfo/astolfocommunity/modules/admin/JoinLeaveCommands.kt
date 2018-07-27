@@ -11,7 +11,6 @@ import xyz.astolfo.astolfocommunity.JoinLeaveSetting
 import xyz.astolfo.astolfocommunity.commands.CommandExecution
 import xyz.astolfo.astolfocommunity.menus.textChannelSelectionBuilder
 import xyz.astolfo.astolfocommunity.messages.description
-import xyz.astolfo.astolfocommunity.messages.embed
 import xyz.astolfo.astolfocommunity.messages.field
 import xyz.astolfo.astolfocommunity.messages.title
 import xyz.astolfo.astolfocommunity.modules.ModuleBuilder
@@ -27,14 +26,14 @@ private fun ModuleBuilder.createCommand(join: Boolean) = command(if (join) "join
         description("Enables the ${if (join) "Join" else "Leave"} message")
         action {
             withJoinLeaveSetting(join) { it.enabled = true }
-            messageAction("The ${if (join) "Join" else "Leave"} message has been enabled!").queue()
+            messageAction(embed("The ${if (join) "Join" else "Leave"} message has been enabled!")).queue()
         }
     }
     command("disable") {
         description("Disables the ${if (join) "Join" else "Leave"} message")
         action {
             withJoinLeaveSetting(join) { it.enabled = false }
-            messageAction("The ${if (join) "Join" else "Leave"} message has been disabled!").queue()
+            messageAction(embed("The ${if (join) "Join" else "Leave"} message has been disabled!")).queue()
         }
     }
     command("info") {
@@ -66,7 +65,7 @@ private fun ModuleBuilder.createCommand(join: Boolean) = command(if (join) "join
         action {
             withJoinLeaveSetting(join) {
                 it.message = args
-                messageAction("The ${if (join) "Join" else "Leave"} message has been changed to: ```\n${it.effectiveMessage(join)}\n```").queue()
+                messageAction(embed("The ${if (join) "Join" else "Leave"} message has been changed to: ```\n${it.effectiveMessage(join)}\n```")).queue()
             }
         }
     }
@@ -75,7 +74,7 @@ private fun ModuleBuilder.createCommand(join: Boolean) = command(if (join) "join
         action {
             val channel = textChannelSelectionBuilder(args).execute() ?: return@action
             withJoinLeaveSetting(join) { it.channelId = channel.idLong }
-            messageAction("The announce channel for ${if (join) "Join" else "Leave"} message has been changed to: **${channel.asMention}**").queue()
+            messageAction(embed("The announce channel for ${if (join) "Join" else "Leave"} message has been changed to: **${channel.asMention}**")).queue()
         }
     }
 }
@@ -91,7 +90,7 @@ class JoinLeaveManager(val application: AstolfoCommunityApplication) {
         val setting = getSetting(guild, join)
         if (!setting.enabled) return
         val textChannel = guild.getTextChannelById(setting.channelId) ?: return
-        if(!textChannel.canTalk()) return
+        if (!textChannel.canTalk()) return
         val message = setting.effectiveMessage(join).takeIf { it.isNotBlank() } ?: return
         val processedMessage = processMessage(guild, member, message)
         textChannel.sendMessage(processedMessage).queue()

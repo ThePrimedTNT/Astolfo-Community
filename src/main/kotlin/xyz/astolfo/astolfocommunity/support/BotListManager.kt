@@ -22,7 +22,10 @@ class BotListManager(private val application: AstolfoCommunityApplication,
                      private val properties: AstolfoProperties) {
 
     init {
-        val discordBotList = DiscordBotListAPI.Builder().token(properties.discordbotlist_token).build()
+        val discordBotList = DiscordBotListAPI.Builder()
+                .botId(properties.bot_user_id)
+                .token(properties.discordbotlist_token)
+                .build()
         launch {
             while (application.shardManager.shardsQueued > 0) delay(10, TimeUnit.MILLISECONDS)
             launch {
@@ -43,10 +46,13 @@ class BotListManager(private val application: AstolfoCommunityApplication,
             launch {
                 while (isActive) {
                     val shards = application.shardManager.shards.filterNotNull()
-                    val jda = shards.firstOrNull()
-                    if (jda?.selfUser != null) {
-                        discordBotList.setStats((0 until (jda.shardInfo.shardTotal))
-                                .map { id -> shards.find { it.shardInfo.shardId == id }?.guilds?.size })
+                    val jda1 = shards.firstOrNull()
+                    if (jda1?.selfUser != null) {
+                        val counts = (0 until jda1.shardInfo.shardTotal).map { id ->
+                            val jda = shards.find { it.shardInfo.shardId == id } ?: return@map 0
+                            jda.guilds.size
+                        }
+                        discordBotList.setStats(counts)
                         delay(5, TimeUnit.MINUTES)
                     } else {
                         delay(5, TimeUnit.SECONDS)

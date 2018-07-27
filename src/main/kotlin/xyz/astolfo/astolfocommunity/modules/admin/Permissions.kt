@@ -51,7 +51,7 @@ internal fun ModuleBuilder.permissionCommand() = command("permissions") {
                 withPermissions { permissions ->
                     permissions[PermissionSetting(role.idLong, channel?.idLong ?: 0, permission)] = true
                 }
-                messageAction("You have granted the permission **$permission** to the role **${role.name.let { if (it.startsWith("@")) it.substring(1) else it }}** under the ${if (channel == null) "guild" else "channel ${channel.asMention}"} scope").queue()
+                messageAction(embed("You have granted the permission **$permission** to the role **${role.name.let { if (it.startsWith("@")) it.substring(1) else it }}** under the ${if (channel == null) "guild" else "channel ${channel.asMention}"} scope")).queue()
             }
         }
     }
@@ -66,7 +66,7 @@ internal fun ModuleBuilder.permissionCommand() = command("permissions") {
                 withPermissions { permissions ->
                     permissions[PermissionSetting(role.idLong, channel?.idLong ?: 0, permission)] = false
                 }
-                messageAction("You have denied the permission **$permission** to the role **${role.name.let { if (it.startsWith("@")) it.substring(1) else it }}** under the ${if (channel == null) "guild" else "channel ${channel.asMention}"} scope").queue()
+                messageAction(embed("You have denied the permission **$permission** to the role **${role.name.let { if (it.startsWith("@")) it.substring(1) else it }}** under the ${if (channel == null) "guild" else "channel ${channel.asMention}"} scope")).queue()
             }
         }
     }
@@ -81,7 +81,7 @@ internal fun ModuleBuilder.permissionCommand() = command("permissions") {
                 withPermissions { permissions ->
                     permissions.remove(PermissionSetting(role.idLong, channel?.idLong ?: 0, permission))
                 }
-                messageAction("You have defaulted the permission **$permission** to the role **${role.name.let { if (it.startsWith("@")) it.substring(1) else it }}** under the ${if (channel == null) "guild" else "channel ${channel.asMention}"} scope").queue()
+                messageAction(embed("You have defaulted the permission **$permission** to the role **${role.name.let { if (it.startsWith("@")) it.substring(1) else it }}** under the ${if (channel == null) "guild" else "channel ${channel.asMention}"} scope")).queue()
             }
         }
     }

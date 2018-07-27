@@ -64,7 +64,7 @@ class MessageListener(val application: AstolfoCommunityApplication) {
                     // Remove if its older then 10 minutes
                     if (deltaTime > TimeUnit.MINUTES.toSeconds(10)) {
                         value.listener.dispose()
-                        println("REMOVE GUILDLISTENER: $key")
+                        //println("REMOVE GUILDLISTENER: $key")
                         expiredListeners.add(key)
                     }
                 }
@@ -75,7 +75,7 @@ class MessageListener(val application: AstolfoCommunityApplication) {
                 val guildId = messageData.messageReceivedEvent.guild.idLong
                 val entry = guildListeners.computeIfAbsent(guildId) {
                     // Create if it doesn't exist
-                    println("CREATE GUILDLISTENER: $guildId")
+                    //println("CREATE GUILDLISTENER: $guildId")
                     CacheEntry(GuildListener(application, this, messageData.messageReceivedEvent.guild), System.currentTimeMillis())
                 }
                 entry.lastUsed = System.currentTimeMillis()

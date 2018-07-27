@@ -3,7 +3,6 @@ package xyz.astolfo.astolfocommunity.modules.admin
 import net.dv8tion.jda.core.Permission
 import xyz.astolfo.astolfocommunity.menus.memberSelectionBuilder
 import xyz.astolfo.astolfocommunity.messages.description
-import xyz.astolfo.astolfocommunity.messages.embed
 import xyz.astolfo.astolfocommunity.messages.field
 import xyz.astolfo.astolfocommunity.messages.title
 import xyz.astolfo.astolfocommunity.modules.module

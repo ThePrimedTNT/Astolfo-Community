@@ -220,7 +220,7 @@ class SessionListener(
 
     fun dispose() {
         destroyed = true
-        println("SESSION ${guild.idLong}/${channel.idLong}/${member.user.idLong} DISPOSE")
+        sessionActor.close()
     }
 
 }

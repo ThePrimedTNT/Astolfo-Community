@@ -34,7 +34,7 @@ dependencies {
     compile 'com.github.natanbc:weeb4j:3.3' // weeb
     compile 'ai.api:libai:1.6.12' // dialogflow chat bot
     compile 'com.jagrosh:jda-utilities:2.1'
-    compile 'com.github.DiscordBotList:DBL-Java-Library:master-SNAPSHOT'
+    compile 'com.github.DiscordBotList:DBL-Java-Library:304b5461208076d27f932608a361cd051ea0ad33'
     compile 'com.datadoghq:java-dogstatsd-client:2.5'
     compile 'org.apache.commons:commons-text:1.4'
 

@@ -227,13 +227,13 @@ fun createFunModule() = module("Fun") {
         }
         command("snake") {
             action {
-                messageAction("Starting the game of snake...").queue()
+                messageAction(embed("Starting the game of snake...")).queue()
                 GameHandler.start(event.channel.idLong, event.author.idLong, SnakeGame(event.member, event.channel))
             }
         }
         command("tetris") {
             action {
-                messageAction("Starting the game of tetris...").queue()
+                messageAction(embed("Starting the game of tetris...")).queue()
                 GameHandler.start(event.channel.idLong, event.author.idLong, TetrisGame(event.member, event.channel))
             }
         }
@@ -251,7 +251,7 @@ fun createFunModule() = module("Fun") {
                     }
                     choosen
                 } ?: ShiritoriGame.Difficulty.NORMAL
-                messageAction("Starting the game of Shiritori with difficulty **${difficulty.name.toLowerCase().capitalize()}**...").queue()
+                messageAction(embed("Starting the game of Shiritori with difficulty **${difficulty.name.toLowerCase().capitalize()}**...")).queue()
                 GameHandler.start(event.channel.idLong, event.author.idLong, ShiritoriGame(event.member, event.channel, difficulty))
             }
         }

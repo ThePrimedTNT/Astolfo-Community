@@ -57,7 +57,7 @@ class GuildListener(
                     // Remove if its older then 10 minutes
                     if (deltaTime > TimeUnit.MINUTES.toSeconds(10)) {
                         value.listener.dispose()
-                        println("REMOVE CHANNELLISTENER: ${guild.idLong}/$key")
+                       // println("REMOVE CHANNELLISTENER: ${guild.idLong}/$key")
                         expiredListeners.add(key)
                     }
                 }
@@ -88,7 +88,7 @@ class GuildListener(
                 // Process the message as if it was a command
                 val entry = channelListeners.computeIfAbsent(channel.idLong) {
                     // Create channel listener if it doesn't exist
-                    println("CREATE CHANNELLISTENER: ${guild.idLong}/${channel.idLong}")
+                    //println("CREATE CHANNELLISTENER: ${guild.idLong}/${channel.idLong}")
                     CacheEntry(ChannelListener(application, this, guild, channel), System.currentTimeMillis())
                 }
                 entry.lastUsed = System.currentTimeMillis()

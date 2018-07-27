@@ -54,7 +54,7 @@ class ChannelListener(
                     // Remove if its older then 10 minutes
                     if (deltaTime > TimeUnit.MINUTES.toSeconds(10)) {
                         value.listener.dispose()
-                        println("REMOVE SESSIONLISTENER: ${guild.idLong}/${channel.idLong}/$key")
+                        //println("REMOVE SESSIONLISTENER: ${guild.idLong}/${channel.idLong}/$key")
                         expiredListeners.add(key)
                     }
                 }
@@ -74,7 +74,7 @@ class ChannelListener(
 
                 val entry = sessionListeners.computeIfAbsent(member.user.idLong) {
                     // Create session listener if it doesn't exist
-                    println("CREATE SESSIONLISTENER: ${guild.idLong}/${channel.idLong}/${member.user.idLong}")
+                    //println("CREATE SESSIONLISTENER: ${guild.idLong}/${channel.idLong}/${member.user.idLong}")
                     CacheEntry(SessionListener(application, this, guild, channel, member), System.currentTimeMillis())
                 }
                 entry.lastUsed = System.currentTimeMillis()

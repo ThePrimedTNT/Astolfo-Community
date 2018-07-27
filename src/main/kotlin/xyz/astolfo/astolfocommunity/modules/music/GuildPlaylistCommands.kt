@@ -19,20 +19,20 @@ internal fun ModuleBuilder.createGuildPlaylistCommands() {
             permission(Permission.MANAGE_SERVER)
             action {
                 if (args.isBlank()) {
-                    messageAction("Enter a name to give the playlist!").queue()
+                    messageAction(errorEmbed("Enter a name to give the playlist!")).queue()
                     return@action
                 }
                 val effectiveName = args.replace(Regex("\\s+"), "-")
                 if (application.astolfoRepositories.guildPlaylistRepository.findByGuildIdAndNameIgnoreCase(event.guild.idLong, effectiveName) != null) {
-                    messageAction("Playlist by that name already exists!").queue()
+                    messageAction(errorEmbed("Playlist by that name already exists!")).queue()
                     return@action
                 }
                 if (effectiveName.length > 20) {
-                    messageAction("Max name length is 20 characters!").queue()
+                    messageAction(errorEmbed("Max name length is 20 characters!")).queue()
                     return@action
                 }
                 val playlist = application.astolfoRepositories.guildPlaylistRepository.save(GuildPlaylistEntry(name = effectiveName, guildId = event.guild.idLong))
-                messageAction("Playlist **${playlist.name}** (*${playlist.playlistKey!!}*) has been created!").queue()
+                messageAction(embed("Playlist **${playlist.name}** (*${playlist.playlistKey!!}*) has been created!")).queue()
             }
         }
         command("list") {
@@ -44,7 +44,7 @@ internal fun ModuleBuilder.createGuildPlaylistCommands() {
                 } else {
                     val playlist = application.astolfoRepositories.guildPlaylistRepository.findByGuildIdAndNameIgnoreCase(event.guild.idLong, args)
                     if (playlist == null) {
-                        messageAction("That playlist doesn't exist!").queue()
+                        messageAction(errorEmbed("That playlist doesn't exist!")).queue()
                         return@action
                     }
                     paginator("\uD83C\uDFBC __**${playlist.name} Playlist:**__") {
@@ -57,28 +57,28 @@ internal fun ModuleBuilder.createGuildPlaylistCommands() {
             permission(Permission.MANAGE_SERVER)
             action {
                 if (args.isBlank()) {
-                    messageAction("Enter a playlist name!").queue()
+                    messageAction(errorEmbed("Enter a playlist name!")).queue()
                     return@action
                 }
                 val playlist = application.astolfoRepositories.guildPlaylistRepository.findByGuildIdAndNameIgnoreCase(event.guild.idLong, args)
                 if (playlist == null) {
-                    messageAction("I couldn't find a playlist with that name!").queue()
+                    messageAction(errorEmbed("I couldn't find a playlist with that name!")).queue()
                     return@action
                 }
                 application.astolfoRepositories.guildPlaylistRepository.delete(playlist)
-                messageAction("I have deleted the playlist **${playlist.name}** (*${playlist.playlistKey}*)").queue()
+                messageAction(embed("I have deleted the playlist **${playlist.name}** (*${playlist.playlistKey}*)")).queue()
             }
         }
         command("info") {
             action {
                 if (args.isBlank()) {
-                    messageAction("Enter a playlist name!").queue()
+                    messageAction(errorEmbed("Enter a playlist name!")).queue()
                     return@action
                 }
                 val playlist = application.astolfoRepositories.guildPlaylistRepository.findByGuildIdAndNameIgnoreCase(event.guild.idLong, args)
                         ?: application.astolfoRepositories.guildPlaylistRepository.findByPlaylistKey(args)
                 if (playlist == null) {
-                    messageAction("I couldn't find a playlist with that name!").queue()
+                    messageAction(errorEmbed("I couldn't find a playlist with that name!")).queue()
                     return@action
                 }
                 messageAction(embed {
@@ -96,22 +96,22 @@ internal fun ModuleBuilder.createGuildPlaylistCommands() {
             action {
                 val (playlistName, songQuery) = args.splitFirst(" ")
                 if (playlistName.isBlank()) {
-                    messageAction("Enter a playlist name!").queue()
+                    messageAction(errorEmbed("Enter a playlist name!")).queue()
                     return@action
                 }
                 if (songQuery.isBlank()) {
-                    messageAction("Enter a song/playlist to add!").queue()
+                    messageAction(errorEmbed("Enter a song/playlist to add!")).queue()
                     return@action
                 }
                 val searchQuery = MusicUtils.getEffectiveSearchQuery(songQuery)
                 if (searchQuery == null) {
-                    messageAction("Either im not allowed to play music from that website or I do not support it!").queue()
+                    messageAction(errorEmbed("Either im not allowed to play music from that website or I do not support it!")).queue()
                     return@action
                 }
                 val playlist = application.astolfoRepositories.guildPlaylistRepository.findByGuildIdAndNameIgnoreCase(event.guild.idLong, playlistName)
                         ?: application.astolfoRepositories.guildPlaylistRepository.findByPlaylistKey(playlistName)
                 if (playlist == null) {
-                    messageAction("I couldn't find a playlist with that name!").queue()
+                    messageAction(errorEmbed("I couldn't find a playlist with that name!")).queue()
                     return@action
                 }
                 val audioItem = try {
@@ -120,8 +120,8 @@ internal fun ModuleBuilder.createGuildPlaylistCommands() {
                     }
                 } catch (e: Throwable) {
                     when (e) {
-                        is FriendlyException -> messageAction("Failed due to an error: **${e.message}**").queue()
-                        is MusicNoMatchException -> messageAction("No matches found for **${searchQuery.query}**").queue()
+                        is FriendlyException -> messageAction(errorEmbed("Failed due to an error: **${e.message}**")).queue()
+                        is MusicNoMatchException -> messageAction(errorEmbed("No matches found for **${searchQuery.query}**")).queue()
                         else -> throw e
                     }
                     return@action
@@ -160,7 +160,7 @@ internal fun ModuleBuilder.createGuildPlaylistCommands() {
                             } else if (args.matches("\\d+".toRegex())) {
                                 val numSelection = args.toBigInteger().toInt()
                                 if (numSelection < 1 || numSelection > audioPlaylist.tracks.size) {
-                                    messageAction("Unknown Selection").queue()
+                                    messageAction(errorEmbed("Unknown Selection")).queue()
                                     return@responseListener CommandSession.ResponseAction.IGNORE_COMMAND
                                 }
                                 val selectedTrack = audioPlaylist.tracks[numSelection - 1]
@@ -195,13 +195,13 @@ internal fun ModuleBuilder.createGuildPlaylistCommands() {
             musicAction {
                 val musicSession = joinAction() ?: return@musicAction
                 if (args.isBlank()) {
-                    messageAction("Enter a playlist name!").queue()
+                    messageAction(errorEmbed("Enter a playlist name!")).queue()
                     return@musicAction
                 }
                 val playlist = application.astolfoRepositories.guildPlaylistRepository.findByGuildIdAndNameIgnoreCase(event.guild.idLong, args)
                         ?: application.astolfoRepositories.guildPlaylistRepository.findByPlaylistKey(args)
                 if (playlist == null) {
-                    messageAction("I couldn't find a playlist with that name!").queue()
+                    messageAction(errorEmbed("I couldn't find a playlist with that name!")).queue()
                     return@musicAction
                 }
                 val audioPlaylist = object : AudioPlaylist {

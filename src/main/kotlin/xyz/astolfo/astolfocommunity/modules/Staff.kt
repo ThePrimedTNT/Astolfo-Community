@@ -2,15 +2,14 @@ package xyz.astolfo.astolfocommunity.modules
 
 import xyz.astolfo.astolfocommunity.RadioEntry
 import xyz.astolfo.astolfocommunity.messages.description
-import xyz.astolfo.astolfocommunity.messages.embed
 import java.net.MalformedURLException
 import java.net.URL
 
 fun createStaffModule() = module("Developer", hidden = true) {
-    command("staff") {
+    command("dev") {
         inheritedAction {
             if (!application.staffMemberIds.contains(event.author.idLong)) {
-                messageAction("You're not allowed to use staff commands, please contact a staff member if you want to use them!").queue()
+                messageAction(errorEmbed("You're not allowed to use developer commands, please contact a staff member if you want to use them!")).queue()
                 false
             } else true
         }
@@ -39,21 +38,21 @@ fun createStaffModule() = module("Developer", hidden = true) {
                 try {
                     URL(urlString)
                 } catch (e: MalformedURLException) {
-                    messageAction("That's not a valid url!").queue()
+                    messageAction(errorEmbed("That's not a valid url!")).queue()
                     return@action
                 }
                 if (name.isBlank()) {
-                    messageAction("Please give the radio station a name!").queue()
+                    messageAction(errorEmbed("Please give the radio station a name!")).queue()
                     return@action
                 }
                 val radioEntry = application.astolfoRepositories.radioRepository.save(RadioEntry(name = name, url = urlString))
-                messageAction("Radio station #${radioEntry.id!!} **${radioEntry.name}** has been added!").queue()
+                messageAction(embed("Radio station #${radioEntry.id!!} **${radioEntry.name}** has been added!")).queue()
             }
         }
         command("removeRadio") {
             action {
                 application.astolfoRepositories.radioRepository.deleteById(args.toLong())
-                messageAction("Deleted!").queue()
+                messageAction(embed("Deleted!")).queue()
             }
         }
     }
