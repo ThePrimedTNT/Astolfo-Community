@@ -49,7 +49,7 @@ fun Call.enqueueDeferred(): CompletableDeferred<String> {
     return completableDeferred
 }
 
-inline fun <T, K> CompletableDeferred<T>.wrap(crossinline wrapper: (T) -> K): CompletableDeferred<K> {
+fun <T, K> CompletableDeferred<T>.wrap(wrapper: (T) -> K): CompletableDeferred<K> {
     val resultCompletable = CompletableDeferred<K>()
     this.invokeOnCompletion { error ->
         try {
