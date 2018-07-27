@@ -2,6 +2,7 @@ package xyz.astolfo.astolfocommunity.menus
 
 import com.jagrosh.jdautilities.commons.utils.FinderUtil
 import kotlinx.coroutines.experimental.CompletableDeferred
+import kotlinx.coroutines.experimental.suspendCancellableCoroutine
 import net.dv8tion.jda.core.entities.Member
 import net.dv8tion.jda.core.entities.Message
 import net.dv8tion.jda.core.entities.Role
@@ -56,7 +57,7 @@ class SelectionMenuBuilder<E>(private val execution: CommandExecution) {
 
     suspend fun execute(): E? = with(execution) {
         if (results.isEmpty()) {
-            messageAction(noResultsMessage).queue()
+            messageAction(errorEmbed(noResultsMessage)).queue()
             return null
         }
 
@@ -88,12 +89,23 @@ class SelectionMenuBuilder<E>(private val execution: CommandExecution) {
                 } else CommandSession.ResponseAction.RUN_COMMAND
             }
         }
-        destroyListener { response.complete(null) }
-        response.invokeOnCompletion {
-            menu.destroy()
-            errorMessage.get()?.delete()
+        val dispose = {
+            synchronized(menu) {
+                if (!menu.isDestroyed) menu.destroy()
+            }
+            errorMessage.getAndSet(null)?.delete()
         }
-        return response.await()
+        return suspendCancellableCoroutine { cont ->
+            val handle = response.invokeOnCompletion { t ->
+                dispose()
+                if (t == null) cont.resume(response.getCompleted())
+                else cont.resumeWithException(t)
+            }
+            cont.invokeOnCancellation {
+                dispose()
+                handle.dispose()
+            }
+        }
     }
 }
 

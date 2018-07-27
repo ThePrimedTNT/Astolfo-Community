@@ -10,7 +10,7 @@ fun createInfoModule() = module("Info") {
         val format = DecimalFormat("#0.###")
         action {
             val pingStartTime = System.nanoTime()
-            messageAction("pinging").queue { message ->
+            messageAction(message("pinging")).queue { message ->
                 val pingEndTime = System.nanoTime()
                 val pingTimeDifference = pingEndTime - pingStartTime
                 val processTime = pingStartTime - timeIssued
