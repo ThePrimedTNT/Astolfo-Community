@@ -8,15 +8,13 @@ import kotlinx.coroutines.experimental.channels.sendBlocking
 import net.dv8tion.jda.core.entities.Member
 import net.dv8tion.jda.core.entities.Message
 import okhttp3.Request
-import okhttp3.Response
 import okhttp3.WebSocket
 import okhttp3.WebSocketListener
 import xyz.astolfo.astolfocommunity.*
 import xyz.astolfo.astolfocommunity.messages.message
-import java.util.concurrent.TimeUnit
 
 class DonationManager(private val application: AstolfoCommunityApplication,
-                      private val properties: AstolfoProperties) {
+                      properties: AstolfoProperties) {
 
     class PatreonEntry(val id: Long,
                        val discord_id: Long?,
@@ -41,7 +39,34 @@ class DonationManager(private val application: AstolfoCommunityApplication,
         }
     }
 
+    private val wsListener = object : WebSocketListener() {
+        override fun onMessage(webSocket: WebSocket, text: String) {
+            val json = ASTOLFO_GSON.fromJson<JsonObject>(text)
+            val t = json["t"].asString!!
+            val d = json["d"]!!
+
+            //println("Patreon WS: $text")
+            when (t) {
+                "READY" -> {
+                    val entries = ASTOLFO_GSON.fromJson<List<PatreonEntry>>(d)
+                    wsActor.sendBlocking(ReadyEvent(entries))
+                }
+                "CREATE", "UPDATE" -> {
+                    val entry = ASTOLFO_GSON.fromJson<PatreonEntry>(d)
+                    wsActor.sendBlocking(ConsumeEvent(entry))
+                }
+                "DELETE" -> {
+                    val entryId = ASTOLFO_GSON.fromJson<Long>(d)
+                    wsActor.sendBlocking(DeleteEvent(entryId))
+                }
+                else -> TODO("Unsupported trigger: $t")
+            }
+        }
+    }
+
     private val entries = mutableSetOf<PatreonEntry>()
+
+    fun entries() = entries.toSet()
 
     private interface WSEvent
     private class ReadyEvent(val entries: List<PatreonEntry>) : WSEvent
@@ -155,52 +180,10 @@ class DonationManager(private val application: AstolfoCommunityApplication,
             canSendAll = false
             canSendList = properties.patreon_users.split(",").mapNotNull { it.trim().toLongOrNull() }
         }
-        connect()
-    }
 
-    private fun connect() {
-        val wsRequest = Request.Builder()
+        AstolfoWebSocketClient("Patreon", Request.Builder()
                 .url(properties.patreon_url)
-                .header("Authorization", properties.patreon_auth)
-                .build()
-
-        ASTOLFO_HTTP_CLIENT.newWebSocket(wsRequest, object : WebSocketListener() {
-            override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) {
-                reconnect()
-            }
-
-            override fun onClosed(webSocket: WebSocket, code: Int, reason: String) {
-                reconnect()
-            }
-
-            override fun onMessage(webSocket: WebSocket, text: String) {
-                val json = ASTOLFO_GSON.fromJson<JsonObject>(text)
-                val t = json["t"].asString!!
-                val d = json["d"]!!
-
-                //println("Patreon WS: $text")
-                when (t) {
-                    "READY" -> {
-                        val entries = ASTOLFO_GSON.fromJson<List<PatreonEntry>>(d)
-                        wsActor.sendBlocking(ReadyEvent(entries))
-                    }
-                    "CREATE", "UPDATE" -> {
-                        val entry = ASTOLFO_GSON.fromJson<PatreonEntry>(d)
-                        wsActor.sendBlocking(ConsumeEvent(entry))
-                    }
-                    "DELETE" -> {
-                        val entryId = ASTOLFO_GSON.fromJson<Long>(d)
-                        wsActor.sendBlocking(DeleteEvent(entryId))
-                    }
-                    else -> TODO("Unsupported trigger: $t")
-                }
-            }
-        })
-    }
-
-    private fun reconnect() {
-        Thread.sleep(TimeUnit.SECONDS.toMillis(30))
-        connect()
+                .header("Authorization", properties.patreon_auth), wsListener).start()
     }
 
     fun getByMember(member: Member): SupportLevel {
@@ -224,10 +207,14 @@ enum class SupportLevel(val rewardId: Long?, val rewardName: String, val upvote:
     fun max(other: SupportLevel) = if (ordinal < other.ordinal) other else this
 
     companion object {
-        fun toLevel(rewardId: Long?, hasUpvoted: Boolean): SupportLevel = when {
-            rewardId != null -> values().first { it.rewardId == rewardId }
-            hasUpvoted -> UPVOTER
-            else -> DEFAULT
+        fun toLevel(rewardId: Long?, hasUpvoted: Boolean): SupportLevel {
+            var level: SupportLevel? = null
+            if (rewardId != null) level = values().find { it.rewardId == rewardId }
+            if (level == null) {
+                level = if (hasUpvoted) UPVOTER
+                else DEFAULT
+            }
+            return level
         }
     }
 }

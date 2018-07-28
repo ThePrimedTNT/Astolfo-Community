@@ -1,11 +1,11 @@
 package xyz.astolfo.astolfocommunity.modules.music
 
 import com.github.salomonbrys.kotson.fromJson
+import com.google.common.net.UrlEscapers
 import com.google.gson.JsonElement
 import com.sedmelluq.discord.lavaplayer.tools.FriendlyException
 import com.sedmelluq.discord.lavaplayer.track.AudioPlaylist
 import com.sedmelluq.discord.lavaplayer.track.AudioTrack
-import com.sun.deploy.net.URLEncoder
 import kotlinx.coroutines.experimental.CompletableDeferred
 import kotlinx.coroutines.experimental.delay
 import net.dv8tion.jda.core.Permission
@@ -436,7 +436,7 @@ fun createMusicModule() = module("Music") {
                 args
             }
             val response = tempMessage(message { embed("Searching lyrics for **$title**...") }) {
-                val requestBuilder = Request.Builder().url("https://api.genius.com/search?q=${URLEncoder.encode(title, Charsets.UTF_8.name())}")
+                val requestBuilder = Request.Builder().url("https://api.genius.com/search?q=${UrlEscapers.urlFormParameterEscaper().escape(title)}")
                 requestBuilder.header("Authorization", "Bearer ${application.properties.genius_token}")
                 val call = ASTOLFO_HTTP_CLIENT.newCall(requestBuilder.build())
                 ASTOLFO_GSON.fromJson<LyricsSearch>(call.enqueueDeferred().await())

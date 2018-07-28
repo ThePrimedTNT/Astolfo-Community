@@ -68,7 +68,8 @@ class Paginator(private val commandExecution: CommandExecution, val titleProvide
     val providedContent: List<String>
         get() {
             val content = provider.provider.invoke()
-            return content.subList((currentPage * provider.perPage).coerceIn(content.indices),
+            return if (content.isEmpty()) emptyList()
+            else content.subList((currentPage * provider.perPage).coerceIn(content.indices),
                     ((currentPage + 1) * provider.perPage).coerceIn(0..content.size))
         }
 

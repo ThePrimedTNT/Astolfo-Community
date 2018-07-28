@@ -5,7 +5,11 @@ import com.sedmelluq.discord.lavaplayer.track.AudioPlaylist
 import com.sedmelluq.discord.lavaplayer.track.AudioTrack
 import net.dv8tion.jda.core.Permission
 import xyz.astolfo.astolfocommunity.GuildPlaylistEntry
+import xyz.astolfo.astolfocommunity.commands.CommandExecution
 import xyz.astolfo.astolfocommunity.commands.CommandSession
+import xyz.astolfo.astolfocommunity.commands.argsIterator
+import xyz.astolfo.astolfocommunity.commands.next
+import xyz.astolfo.astolfocommunity.menus.chatInput
 import xyz.astolfo.astolfocommunity.menus.paginator
 import xyz.astolfo.astolfocommunity.menus.provider
 import xyz.astolfo.astolfocommunity.menus.renderer
@@ -16,6 +20,8 @@ import xyz.astolfo.astolfocommunity.splitFirst
 internal fun ModuleBuilder.createGuildPlaylistCommands() {
     command("guildplaylist", "gpl") {
         command("create", "c") {
+            description("Creates a new guild playlist using the given name")
+            usage("[name]")
             permission(Permission.MANAGE_SERVER)
             action {
                 if (args.isBlank()) {
@@ -36,6 +42,8 @@ internal fun ModuleBuilder.createGuildPlaylistCommands() {
             }
         }
         command("list") {
+            description("Lists the playlists in the guild or the songs within a playlist")
+            usage("", "[name]")
             action {
                 if (args.isBlank()) {
                     paginator("\uD83C\uDFBC __**Guild Playlists:**__") {
@@ -54,6 +62,8 @@ internal fun ModuleBuilder.createGuildPlaylistCommands() {
             }
         }
         command("delete") {
+            description("Deletes a guildplaylist in the guild")
+            usage("[name]")
             permission(Permission.MANAGE_SERVER)
             action {
                 if (args.isBlank()) {
@@ -70,6 +80,8 @@ internal fun ModuleBuilder.createGuildPlaylistCommands() {
             }
         }
         command("info") {
+            description("Gives you information about a guildplaylist")
+            usage("[name]")
             action {
                 if (args.isBlank()) {
                     messageAction(errorEmbed("Enter a playlist name!")).queue()
@@ -92,6 +104,8 @@ internal fun ModuleBuilder.createGuildPlaylistCommands() {
             }
         }
         command("add") {
+            description("Adds a song/playlist to a guildplaylist")
+            usage("[name] [song/playlist]")
             permission(Permission.MANAGE_SERVER)
             action {
                 val (playlistName, songQuery) = args.splitFirst(" ")
@@ -192,28 +206,104 @@ internal fun ModuleBuilder.createGuildPlaylistCommands() {
             }
         }
         command("play", "p", "queue", "q") {
+            description("Queues a guildplaylist to be played")
+            usage("[name]")
             musicAction {
-                val musicSession = joinAction() ?: return@musicAction
+                playAction(false)
+            }
+        }
+        command("playshuffled", "psh", "queueshuffle", "qsh") {
+            description("Queues a shuffled guildplaylist to be played")
+            usage("[name]")
+            musicAction {
+                playAction(true)
+            }
+        }
+        command("remove") {
+            action {
                 if (args.isBlank()) {
                     messageAction(errorEmbed("Enter a playlist name!")).queue()
-                    return@musicAction
+                    return@action
                 }
-                val playlist = application.astolfoRepositories.guildPlaylistRepository.findByGuildIdAndNameIgnoreCase(event.guild.idLong, args)
+                val argsIterator = args.argsIterator()
+
+                val playlist = application.astolfoRepositories.guildPlaylistRepository.findByGuildIdAndNameIgnoreCase(event.guild.idLong, argsIterator.next())
                         ?: application.astolfoRepositories.guildPlaylistRepository.findByPlaylistKey(args)
                 if (playlist == null) {
                     messageAction(errorEmbed("I couldn't find a playlist with that name!")).queue()
-                    return@musicAction
+                    return@action
                 }
-                val audioPlaylist = object : AudioPlaylist {
-                    override fun isSearchResult(): Boolean = false
-                    override fun getName(): String = playlist.name
-                    override fun getSelectedTrack(): AudioTrack? = null
-                    override fun getTracks(): MutableList<AudioTrack> = playlist.lavaplayerSongs
+
+                suspend fun getIndex(title: String, arg: String): Int? {
+                    return if (arg.isEmpty()) {
+                        chatInput(title)
+                                .responseValidator {
+                                    if (it.toBigIntegerOrNull() == null) {
+                                        messageAction(errorEmbed("Index must be a whole number!")).queue()
+                                        false
+                                    } else true
+                                }
+                                .execute()?.toBigIntegerOrNull() ?: return null
+                    } else {
+                        val index = arg.toBigIntegerOrNull()
+                        if (index == null) {
+                            messageAction(errorEmbed("Index must be a whole number!")).queue()
+                            return null
+                        }
+                        index
+                    }.toInt()
                 }
-                musicSession.await().queueItem(audioPlaylist, event.channel, event.member, playlist.name, false, false) {
-                    messageAction(it).queue()
+
+                val removeIndex = getIndex("Provide the index of the song you want to remove:", argsIterator.next(""))
+                        ?: return@action
+
+                if (removeIndex < 1) {
+                    messageAction(errorEmbed("A index cannot be lower then 1")).queue()
+                    return@action
                 }
+
+                val removeAt = removeIndex - 1
+
+                val songs = playlist.lavaplayerSongs
+                val track = if (removeAt in songs.indices) {
+                    songs.removeAt(removeAt)
+                } else null
+                playlist.lavaplayerSongs = songs
+                application.astolfoRepositories.guildPlaylistRepository.save(playlist)
+
+                if (track == null) {
+                    messageAction(errorEmbed("No song found at index $removeIndex in **${playlist.name}** (*${playlist.playlistKey}*)")).queue()
+                    return@action
+                }
+
+                messageAction(embed("Removed **${track.info.title}** from the guild playlist **${playlist.name}** (*${playlist.playlistKey}*)")).queue()
             }
         }
+    }
+}
+
+private suspend fun CommandExecution.playAction(shuffle: Boolean) {
+    val musicSession = joinAction() ?: return
+    if (args.isBlank()) {
+        messageAction(errorEmbed("Enter a playlist name!")).queue()
+        return
+    }
+    val playlist = application.astolfoRepositories.guildPlaylistRepository.findByGuildIdAndNameIgnoreCase(event.guild.idLong, args)
+            ?: application.astolfoRepositories.guildPlaylistRepository.findByPlaylistKey(args)
+    if (playlist == null) {
+        messageAction(errorEmbed("I couldn't find a playlist with that name!")).queue()
+        return
+    }
+    val internalTracks = playlist.lavaplayerSongs.let {
+        if (shuffle) it.shuffled() else it
+    }
+    val audioPlaylist = object : AudioPlaylist {
+        override fun isSearchResult(): Boolean = false
+        override fun getName(): String = playlist.name
+        override fun getSelectedTrack(): AudioTrack? = null
+        override fun getTracks(): List<AudioTrack> = internalTracks
+    }
+    musicSession.await().queueItem(audioPlaylist, event.channel, event.member, playlist.name, false, false) {
+        messageAction(it).queue()
     }
 }

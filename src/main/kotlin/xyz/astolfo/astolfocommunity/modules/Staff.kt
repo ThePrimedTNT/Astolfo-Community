@@ -1,6 +1,8 @@
 package xyz.astolfo.astolfocommunity.modules
 
 import xyz.astolfo.astolfocommunity.RadioEntry
+import xyz.astolfo.astolfocommunity.menus.paginator
+import xyz.astolfo.astolfocommunity.menus.provider
 import xyz.astolfo.astolfocommunity.messages.description
 import java.net.MalformedURLException
 import java.net.URL
@@ -53,6 +55,18 @@ fun createStaffModule() = module("Developer", hidden = true) {
             action {
                 application.astolfoRepositories.radioRepository.deleteById(args.toLong())
                 messageAction(embed("Deleted!")).queue()
+            }
+        }
+        command("patreon") {
+            action {
+                paginator("Astolfo Patreon") {
+                    provider(8, application.donationManager.entries().map {
+                        val discordId = it.discord_id
+                        val user = if (discordId != null) application.shardManager.getUserById(discordId) else null
+                        val name = if (user != null) "${user.name}#${user.discriminator}" else "Unknown"
+                        "$name *- ${it.supportLevel.rewardName}*"
+                    })
+                }
             }
         }
     }

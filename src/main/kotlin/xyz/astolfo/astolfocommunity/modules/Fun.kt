@@ -5,6 +5,8 @@ import com.github.natanbc.weeb4j.image.HiddenMode
 import com.github.natanbc.weeb4j.image.NsfwFilter
 import com.oopsjpeg.osu4j.backend.EndpointUsers
 import com.oopsjpeg.osu4j.backend.Osu
+import kotlinx.coroutines.experimental.sync.Mutex
+import kotlinx.coroutines.experimental.sync.withLock
 import org.jsoup.Jsoup
 import xyz.astolfo.astolfocommunity.games.GameHandler
 import xyz.astolfo.astolfocommunity.games.ShiritoriGame
@@ -70,8 +72,25 @@ fun createFunModule() = module("Fun") {
         }
     }
     command("cat", "cats") {
+        val catMutex = Mutex()
+        val validCats = mutableListOf<String>()
+        val random = Random()
         action {
-            messageAction(message(webJson<Cat>("http://aws.random.cat/meow", null).await().file!!)).queue()
+            val cat = try {
+                val newCat = webJson<Cat>("http://aws.random.cat/meow", null).await().file!!
+                catMutex.withLock {
+                    if (!validCats.contains(newCat)) validCats.add(newCat)
+                    if(validCats.size > 500) validCats.removeAt(0) // max of 500 cats in memory
+                }
+                newCat
+            } catch (e: Throwable) {
+                // idc
+                catMutex.withLock {
+                    if (validCats.isEmpty()) return@action
+                    validCats.let { it[random.nextInt(it.size)] }
+                }
+            }
+            messageAction(message(cat)).queue()
         }
     }
     command("catgirl", "neko", "catgirls") {
