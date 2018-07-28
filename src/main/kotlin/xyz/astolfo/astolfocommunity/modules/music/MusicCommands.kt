@@ -7,7 +7,6 @@ import com.sedmelluq.discord.lavaplayer.tools.FriendlyException
 import com.sedmelluq.discord.lavaplayer.track.AudioPlaylist
 import com.sedmelluq.discord.lavaplayer.track.AudioTrack
 import kotlinx.coroutines.experimental.CompletableDeferred
-import kotlinx.coroutines.experimental.delay
 import net.dv8tion.jda.core.Permission
 import net.dv8tion.jda.core.utils.PermissionUtil
 import okhttp3.Request
@@ -660,7 +659,6 @@ suspend fun CommandExecution.playAction(top: Boolean, skip: Boolean) {
     }
     val audioPlaylist = try {
         tempMessage(embed("\uD83D\uDD0E Searching for **$args**...")) {
-            delay(10, TimeUnit.SECONDS)
             application.musicManager.audioPlayerManager.loadItemDeferred(searchQuery.query).await()
         }
     } catch (e: Throwable) {

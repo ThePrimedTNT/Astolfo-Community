@@ -169,7 +169,11 @@ data class GuildSettings(@Id val guildId: Long = 0L,
                          @LazyCollection(LazyCollectionOption.FALSE)
                          @CollectionTable(name = "guild_settings_joinleavemessage", joinColumns = [(JoinColumn(name = "guildId"))])
                          @MapKeyColumn(name = "isjoinsmg")
-                         var joinLeaveMessage: Map<Boolean, JoinLeaveSetting> = mutableMapOf()) {
+                         var joinLeaveMessage: Map<Boolean, JoinLeaveSetting> = mutableMapOf(),
+                         @ElementCollection
+                         @LazyCollection(LazyCollectionOption.FALSE)
+                         @CollectionTable(name = "guild_settings_blacklist_channels", joinColumns = [(JoinColumn(name = "guildId"))])
+                         var blacklistedChannels: List<Long> = mutableListOf()) {
     fun getEffectiveGuildPrefix(application: AstolfoCommunityApplication) = prefix.takeIf { it.isNotBlank() }
             ?: application.properties.default_prefix
 }

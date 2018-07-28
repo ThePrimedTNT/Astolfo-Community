@@ -10,6 +10,7 @@ import net.dv8tion.jda.core.Permission
 import net.dv8tion.jda.core.entities.Guild
 import net.dv8tion.jda.core.entities.TextChannel
 import okhttp3.*
+import org.apache.commons.lang3.StringUtils
 import java.io.IOException
 import java.text.NumberFormat
 import java.util.concurrent.ConcurrentHashMap
@@ -243,4 +244,8 @@ inline fun <T> synchronized2(lock1: Any, lock2: Any, block: () -> T): T =
 
 fun TextChannel.hasPermission(vararg permissions: Permission) = guild.selfMember.hasPermission(this, *permissions)
 
-
+fun String.smartParseBoolean() = when {
+    StringUtils.equalsAnyIgnoreCase(this, "enable", "enabled", "on", "true", "yes") -> true
+    StringUtils.equalsAnyIgnoreCase(this, "disable", "disabled", "off", "false", "no") -> false
+    else -> null
+}
