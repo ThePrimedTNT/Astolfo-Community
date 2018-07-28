@@ -65,6 +65,7 @@ class ChannelListener(
                 val guildMessageData = event.guildMessageData
                 val user = guildMessageData.messageReceivedEvent.author!!
                 val sessionEntry = sessionListeners[user.idLong] ?: return // Ignore if session is invalid
+                sessionEntry.lastUsed = System.currentTimeMillis()
                 sessionEntry.listener.addMessage(guildMessageData)
             }
             is CommandEvent -> {
