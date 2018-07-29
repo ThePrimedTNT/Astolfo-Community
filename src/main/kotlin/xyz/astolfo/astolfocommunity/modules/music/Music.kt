@@ -39,6 +39,7 @@ import xyz.astolfo.astolfocommunity.messages.description
 import xyz.astolfo.astolfocommunity.messages.embed
 import xyz.astolfo.astolfocommunity.messages.errorEmbed
 import xyz.astolfo.astolfocommunity.messages.sendCached
+import xyz.astolfo.astolfocommunity.support.SupportLevel
 import xyz.astolfo.astolfocommunity.synchronized2
 import java.io.File
 import java.net.MalformedURLException
@@ -83,6 +84,15 @@ class MusicManager(val application: AstolfoCommunityApplication, properties: Ast
                 // Create new music session
                 val session = MusicSession(this@MusicManager, event.guild, event.textChannel)
                 musicSessionMap[event.guild] = session
+
+                // Set up default volume
+                val donationEntry = application.donationManager.getByMember(event.guild.owner)
+                if (donationEntry >= SupportLevel.SUPPORTER) {
+                    // only if owner is a supporter or greater
+                    val defaultVolume = application.astolfoRepositories.getEffectiveGuildSettings(event.guild.idLong).defaultMusicVolume
+                    session.volume = defaultVolume // ez
+                }
+
                 event.callback.complete(session) // send newly created session back
             }
             is DeleteMusicEvent -> {
@@ -221,7 +231,7 @@ class MusicManager(val application: AstolfoCommunityApplication, properties: Ast
     suspend fun stopSession(guild: Guild) = musicActor.send(DeleteMusicEvent(guild))
 }
 
-class MusicSession(private val musicManager: MusicManager, val guild: Guild, var boundChannel: TextChannel) : AudioEventAdapterWrapped() {
+class MusicSession(val musicManager: MusicManager, val guild: Guild, var boundChannel: TextChannel) : AudioEventAdapterWrapped() {
 
     companion object {
         private val musicContext = newFixedThreadPoolContext(100, "Music Session")
@@ -241,7 +251,8 @@ class MusicSession(private val musicManager: MusicManager, val guild: Guild, var
     private interface MusicEvent
     private object NextSong : MusicEvent
     private object Shuffle : MusicEvent
-    private class QueueSongs(val member: Member, val audioTracks: List<AudioTrack>, val top: Boolean, val skip: Boolean, val completableDeferred: CompletableDeferred<Int>) : MusicEvent
+    private class QueueSongs(val member: Member, val audioTracks: List<AudioTrack>, val top: Boolean, val skip: Boolean, val completableDeferred: CompletableDeferred<QueueSongsResponse>) : MusicEvent
+    class QueueSongsResponse(val songsQueued: Int, val queueMax: Boolean, val userLimit: Boolean, val queuedDups: Boolean)
     private class ChangeRepeatMode(val newMode: RepeatMode) : MusicEvent
     private class TrackEnd(val audioTrack: AudioTrack, val endReason: AudioTrackEndReason) : MusicEvent
     private class SkipTracks(val amount: Int, val completableDeferred: CompletableDeferred<List<AudioTrack>>) : MusicEvent
@@ -289,17 +300,34 @@ class MusicSession(private val musicManager: MusicManager, val guild: Guild, var
                 }
             }
             is QueueSongs -> {
-                var songCount = 0
+                val guildSettings = musicManager.application.astolfoRepositories.getEffectiveGuildSettings(guild.idLong)
                 val supportLevel = musicManager.application.donationManager.getByMember(event.member)
+                val userLimitAmount = guildSettings.maxUserSongs
+                val dupPrevention = guildSettings.dupSongPrevention
+
+                var songCount = 0
+                var currentUserSongCount = songQueue.count { it.requesterId == event.member.user.idLong }
+
+                var hitQueueMax = false
+                var hitUserLimit = false
+                var queuedDups = false
+
                 for (audioTrack in event.audioTracks) {
-                    if (songQueue.size < supportLevel.queueSize) {
+                    if (userLimitAmount in 1..currentUserSongCount) hitUserLimit = true
+                    if (songQueue.size >= supportLevel.queueSize) hitQueueMax = true
+                    if (!hitQueueMax && !hitUserLimit) {
+                        if (dupPrevention && songQueue.any { it.info.uri == audioTrack.info.uri }) {
+                            queuedDups = true
+                            continue
+                        }
                         audioTrack.requesterId = event.member.user.idLong
                         if (event.top) songQueue.offerFirst(audioTrack)
                         else songQueue.offer(audioTrack)
+                        currentUserSongCount++
                         songCount++
                     }
                 }
-                event.completableDeferred.complete(songCount)
+                event.completableDeferred.complete(QueueSongsResponse(songCount, hitQueueMax, hitUserLimit, queuedDups))
                 if (event.skip && songQueue.isNotEmpty()) {
                     // Skip the current track if its a playskip command
                     handleEvent(SkipTracks(0, CompletableDeferred()))
@@ -499,41 +527,48 @@ class MusicSession(private val musicManager: MusicManager, val guild: Guild, var
         player.addListener(this)
     }
 
-    suspend fun queue(member: Member, tracks: List<AudioTrack>, top: Boolean = false, skip: Boolean = false, completableDeferred: CompletableDeferred<Int>) = musicActor.send(QueueSongs(member, tracks, top, skip, completableDeferred))
+    suspend fun queue(member: Member, tracks: List<AudioTrack>, top: Boolean = false, skip: Boolean = false, completableDeferred: CompletableDeferred<QueueSongsResponse>) = musicActor.send(QueueSongs(member, tracks, top, skip, completableDeferred))
 
     suspend fun queueItem(audioItem: AudioItem, textChannel: TextChannel, member: Member, query: String, top: Boolean, skip: Boolean, messageCallback: (MessageEmbed) -> Unit) {
         if (audioItem is AudioTrack) {
             // If the track returned is a normal audio track
             val audioTrack: AudioTrack = audioItem
             boundChannel = textChannel
-            val completableDeferred = CompletableDeferred<Int>()
+            val completableDeferred = CompletableDeferred<QueueSongsResponse>()
             queue(member, listOf(audioTrack), top, skip, completableDeferred)
             withTimeout(1, TimeUnit.MINUTES) {
-                if (completableDeferred.await() == 0) {
-                    messageCallback(errorEmbed("❗ [${audioTrack.info.title}](${audioTrack.info.uri}) couldn't be added to the queue since the queue is full! " +
+                val response = completableDeferred.await()
+                when {
+                    response.queueMax -> messageCallback(errorEmbed("❗ [${audioTrack.info.title}](${audioTrack.info.uri}) couldn't be added to the queue since the queue is full! " +
                             "To increase the size of the queue consider donating to our [patreon.com/theprimedtnt](https://www.patreon.com/theprimedtnt)"))
-                } else {
-                    messageCallback(embed("\uD83D\uDCDD [${audioTrack.info.title}](${audioTrack.info.uri}) has been added to the queue"))
+                    response.userLimit -> messageCallback(errorEmbed("❗ [${audioTrack.info.title}](${audioTrack.info.uri}) couldn't be added to the queue since you hit the user song limit!"))
+                    response.queuedDups -> messageCallback(errorEmbed("❗ [${audioTrack.info.title}](${audioTrack.info.uri}) couldn't be added to the queue since it was a duplicate and duplicate song prevention is enabled!"))
+                    else -> messageCallback(embed("\uD83D\uDCDD [${audioTrack.info.title}](${audioTrack.info.uri}) has been added to the queue"))
                 }
             }
         } else if (audioItem is AudioPlaylist) {
             val audioPlaylist: AudioPlaylist = audioItem
             // If the tracks are from directly from a url
             boundChannel = textChannel
-            val completableDeferred = CompletableDeferred<Int>()
+            val completableDeferred = CompletableDeferred<QueueSongsResponse>()
             val tracks = audioPlaylist.tracks
             queue(member, tracks, top, skip, completableDeferred)
             withTimeout(1, TimeUnit.MINUTES) {
-                val amountAdded = completableDeferred.await()
+                val response = completableDeferred.await()
+                val amountAdded = response.songsQueued
                 when {
-                    amountAdded == 0 ->
-                        messageCallback(errorEmbed("❗ No songs from the playlist [${audioPlaylist.name}]($query) could be added to the queue since the queue is full! " +
-                                "To increase the size of the queue consider donating to our [patreon.com/theprimedtnt](https://www.patreon.com/theprimedtnt)"))
-                    amountAdded < tracks.size ->
-                        messageCallback(errorEmbed("❗ Only **$amountAdded** of **${tracks.size}** songs from the playlist [${audioPlaylist.name}]($query) could be added to the queue since the queue is full! " +
-                                "To increase the size of the queue consider donating to our [patreon.com/theprimedtnt](https://www.patreon.com/theprimedtnt)"))
-                    else ->
-                        messageCallback(embed("\uD83D\uDCDD The playlist [${audioPlaylist.name}]($query) has been added to the queue"))
+                    response.queueMax -> if (amountAdded == 0) messageCallback(errorEmbed("❗ No songs from the playlist [${audioPlaylist.name}]($query) could be added to the queue since the queue is full! " +
+                            "To increase the size of the queue consider donating to our [patreon.com/theprimedtnt](https://www.patreon.com/theprimedtnt)"))
+                    else messageCallback(errorEmbed("❗ Only **$amountAdded** of **${tracks.size}** songs from the playlist [${audioPlaylist.name}]($query) could be added to the queue since the queue is full! " +
+                            "To increase the size of the queue consider donating to our [patreon.com/theprimedtnt](https://www.patreon.com/theprimedtnt)"))
+
+                    response.userLimit -> if (amountAdded == 0) messageCallback(errorEmbed("❗ No songs from the playlist [${audioPlaylist.name}]($query) could be added to the queue since you hit the user song limit!"))
+                    else messageCallback(errorEmbed("❗ Only **$amountAdded** of **${tracks.size}** songs from the playlist [${audioPlaylist.name}]($query) could be added to the queue since you hit the user song limit!"))
+
+                    response.queuedDups -> if (amountAdded == 0) messageCallback(errorEmbed("❗ No songs from the playlist [${audioPlaylist.name}]($query) could be added to the queue since they where all duplicates and duplicate song prevention is enabled!"))
+                    else messageCallback(errorEmbed("❗ Only **$amountAdded** of **${tracks.size}** songs from the playlist [${audioPlaylist.name}]($query) could be added to the queue since some where duplicates and duplicate song prevention is enabled!"))
+
+                    else -> messageCallback(embed("\uD83D\uDCDD The playlist [${audioPlaylist.name}]($query) has been added to the queue"))
                 }
             }
         }

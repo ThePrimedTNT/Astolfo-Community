@@ -68,6 +68,18 @@ fun createStaffModule() = module("Developer", hidden = true) {
                     })
                 }
             }
+            command("give") {
+                action {
+                    application.donationManager.give(event.member.user.idLong)
+                    messageAction(embed("Done!")).queue()
+                }
+            }
+            command("take") {
+                action {
+                    application.donationManager.remove(event.member.user.idLong)
+                    messageAction(embed("Done!")).queue()
+                }
+            }
         }
     }
 }

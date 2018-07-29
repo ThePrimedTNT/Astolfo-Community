@@ -1,14 +1,19 @@
 package xyz.astolfo.astolfocommunity.modules.admin
 
 import net.dv8tion.jda.core.Permission
+import org.apache.commons.lang3.StringUtils
 import xyz.astolfo.astolfocommunity.GuildSettings
 import xyz.astolfo.astolfocommunity.commands.CommandBuilder
 import xyz.astolfo.astolfocommunity.commands.CommandExecution
 import xyz.astolfo.astolfocommunity.menus.textChannelSelectionBuilder
+import xyz.astolfo.astolfocommunity.messages.color
 import xyz.astolfo.astolfocommunity.messages.description
 import xyz.astolfo.astolfocommunity.messages.field
 import xyz.astolfo.astolfocommunity.messages.title
 import xyz.astolfo.astolfocommunity.modules.ModuleBuilder
+import xyz.astolfo.astolfocommunity.smartParseBoolean
+import xyz.astolfo.astolfocommunity.support.SupportLevel
+import java.awt.Color
 
 fun ModuleBuilder.settingsCommand() = command("settings") {
     permission(Permission.ADMINISTRATOR)
@@ -48,7 +53,7 @@ fun ModuleBuilder.settingsCommand() = command("settings") {
                 val currentList = data.blacklistedChannels.toMutableList()
                 if (currentList.contains(textChannelId)) {
                     currentList.remove(textChannelId)
-                    messageAction(embed("Channel **${textChannel.name}** has been removed to the blacklist")).queue()
+                    messageAction(embed("Channel **${textChannel.name}** has been removed from the blacklist")).queue()
                 } else {
                     currentList.add(textChannelId)
                     messageAction(embed("Channel **${textChannel.name}** has been added to the blacklist")).queue()
@@ -57,7 +62,111 @@ fun ModuleBuilder.settingsCommand() = command("settings") {
                 true
             }.setMessage { _ -> }.build()
 
-    val settings = listOf(prefixSetting, blacklistChannelSetting)
+    val announceSetting = settingBuilder<Boolean>("Announce Songs")
+            .command("announcesongs")
+            .about("Changes if the bot should announce what song it is now playing.")
+            .usage("[on/off]")
+            .default { true }
+            .get { it.announceSongs }
+            .set { data, newState ->
+                val state = newState.smartParseBoolean()
+                if (state == null) {
+                    messageAction(errorEmbed("State must be **on/off** but got **$newState**")).queue()
+                    return@set false
+                }
+                data.announceSongs = state
+                true
+            }
+            .setMessage { data ->
+                if (data.announceSongs) messageAction(embed("Songs will now be announced when playing")).queue()
+                else messageAction(embed("Songs will no longer be announced when playing")).queue()
+
+            }
+            .build()
+
+    val maxUserSongs = settingBuilder<Long>("User Song Limit")
+            .command("usersonglimit")
+            .about("Applies a limit to how many songs each user can queue in a session. This is useful when you want everyone to have a chance of playing their own songs!")
+            .usage("[number/disable]")
+            .toString { if (it <= 0) "disabled" else it.toString() }
+            .default { -1 }
+            .get { it.maxUserSongs }
+            .set { data, newState ->
+                val state = newState.smartParseBoolean()
+                if (state == false) {
+                    data.maxUserSongs = -1L
+                    return@set true
+                }
+                val limitNum = newState.toBigIntegerOrNull()?.toLong()
+                if (limitNum == null) {
+                    messageAction(errorEmbed("New limit must be a whole number or disabled!")).queue()
+                    return@set false
+                }
+                data.maxUserSongs = if (limitNum <= 0) -1L else limitNum
+                true
+            }
+            .setMessage { data ->
+                if (data.maxUserSongs <= 0) messageAction(embed("The max user song limit has been removed.")).queue()
+                else messageAction(embed("The max user song limit has been set to **${data.maxUserSongs}** songs.")).queue()
+            }
+            .build()
+
+    val dupSongPreventionSetting = settingBuilder<Boolean>("Duplicate Song Prevention")
+            .command("preventduplicates")
+            .about("Automatically prevents duplicate songs from being queued.")
+            .usage("[on/off]")
+            .default { true }
+            .get { it.dupSongPrevention }
+            .set { data, newState ->
+                val state = newState.smartParseBoolean()
+                if (state == null) {
+                    messageAction(errorEmbed("State must be **on/off** but got **$newState**")).queue()
+                    return@set false
+                }
+                data.dupSongPrevention = state
+                true
+            }
+            .setMessage { data ->
+                if (data.dupSongPrevention) messageAction(embed("Duplicate songs will automatically be prevented")).queue()
+                else messageAction(embed("Duplicate song prevention is now turned off")).queue()
+            }
+            .build()
+
+    val defaultMusicVolumeSetting = settingBuilder<Int>("Default Volume")
+            .command("defaultvolume")
+            .about("Changes the volume level the music will always start at.")
+            .usage("[number/default]")
+            .default { 100 }
+            .get { it.defaultMusicVolume }
+            .set { data, newState ->
+                val reset = StringUtils.equalsAnyIgnoreCase(newState, "default", "reset", "normal", "disable")
+                if (reset) {
+                    data.defaultMusicVolume = 100
+                    return@set true
+                }
+                val level = newState.toBigIntegerOrNull()?.toInt()
+                if (level == null) {
+                    messageAction(errorEmbed("State must be a whole number or default but got **$newState**")).queue()
+                    return@set false
+                }
+                val donationEntry = application.donationManager.getByMember(event.member.guild.owner)
+                val supportLevel = SupportLevel.SUPPORTER
+                if (donationEntry.ordinal < supportLevel.ordinal) {
+                    messageAction(embed {
+                        description("\uD83D\uDD12 Due to performance reasons default volume changing is locked!" +
+                                " You can unlock this feature by asking the owner of your server to become a [patreon.com/theprimedtnt](https://www.patreon.com/theprimedtnt)" +
+                                " and getting at least the **${supportLevel.rewardName}** Tier.")
+                        color(Color.RED)
+                    }).queue()
+                    return@set false
+                }
+                data.defaultMusicVolume = level
+                true
+            }
+            .setMessage { data -> messageAction(embed("Default music volume is now set to **${data.defaultMusicVolume}%**.")).queue() }
+            .build()
+
+    val settings = listOf(prefixSetting, blacklistChannelSetting, announceSetting, maxUserSongs, dupSongPreventionSetting, defaultMusicVolumeSetting)
 
     action {
         val guildPrefix = getGuildSettings().getEffectiveGuildPrefix(application)

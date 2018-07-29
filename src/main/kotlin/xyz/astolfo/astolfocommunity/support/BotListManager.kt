@@ -73,7 +73,7 @@ class BotListManager(private val application: AstolfoCommunityApplication,
                 // Handle upvote
                 val user = application.shardManager.getUserById(body.user)
                 user?.openPrivateChannel()?.queue { privateChannel ->
-                    privateChannel.sendMessage(message("Thank you for upvoting! You now have access to the volume feature for the next two days! You also received 1000 credits for upvoting. Make sure to upvote daily! https://discordbots.org/bot/${body.bot}")).queue()
+                    privateChannel.sendMessage(message("Thank you for upvoting! You also received 1000 credits for upvoting. Make sure to upvote daily! https://discordbots.org/bot/${body.bot}")).queue()
                 }
                 val profile = application.astolfoRepositories.getEffectiveUserProfile(body.user)
                 profile.credits += 1000

@@ -72,9 +72,11 @@ class SessionListener(
                 }
             }
             is CommandEvent -> {
+                val guildSettings = application.astolfoRepositories.getEffectiveGuildSettings(guild.idLong)
+                val channelBlacklisted = guildSettings.blacklistedChannels.contains(channel.idLong)
+
                 val guildMessageData = event.guildMessageData
                 val jdaEvent = guildMessageData.messageReceivedEvent
-                if (!processRateLimit(jdaEvent)) return
 
                 val rawContent = jdaEvent.message.contentRaw!!
                 val prefixMatched = guildMessageData.prefixMatched
@@ -85,10 +87,16 @@ class SessionListener(
                 var commandNodes = resolvePath(commandMessage)
 
                 if (commandNodes == null) {
+                    if (channelBlacklisted) return // Ignore chat bot if channel is blacklisted
                     if (!isMention) return
+                    if (!processRateLimit(jdaEvent)) return
                     // Not a command but rather a chat bot message
                     if (commandMessage.isEmpty()) {
                         channel.sendMessage("Hi :D").queue()
+                        return
+                    }
+                    if(commandMessage.contains("prefix", true)){
+                        channel.sendMessage("Yahoo! My prefix in this guild is **${guildSettings.getEffectiveGuildPrefix(application)}**!").queue()
                         return
                     }
                     val chatBotManager = channelListener.guildListener.messageListener.chatBotManager
@@ -103,6 +111,12 @@ class SessionListener(
                         return
                     }
                 }
+                // Only allow Admin module if blacklisted
+                if (channelBlacklisted) {
+                    val module = commandNodes.first
+                    if (!module.name.equals("Admin", true)) return
+                }
+
                 // Process Command
                 application.statsDClient.incrementCounter("commands_executed")
 

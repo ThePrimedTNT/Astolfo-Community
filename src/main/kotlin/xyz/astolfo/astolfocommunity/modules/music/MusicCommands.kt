@@ -159,18 +159,6 @@ fun createMusicModule() = module("Music") {
     }
     command("volume", "v") {
         val supportLevel = SupportLevel.SUPPORTER
-        inheritedAction {
-            val donationEntry = application.donationManager.getByMember(event.member)
-            if (donationEntry.ordinal >= supportLevel.ordinal)
-                return@inheritedAction true // Allow Feature
-            messageAction(embed {
-                description("\uD83D\uDD12 Due to performance reasons volume changing is locked!" +
-                        " You can unlock this feature by becoming a [patreon.com/theprimedtnt](https://www.patreon.com/theprimedtnt)" +
-                        " and getting at least the **${supportLevel.rewardName}** Tier.")
-                color(Color.RED)
-            }).queue()
-            return@inheritedAction false // Deny Feature
-        }
         musicAction(activeSession = true) {
             val musicSession = application.musicManager.getSession(event.guild)!!
             val newVolume = args.takeIf { it.isNotBlank() }?.let {
@@ -193,6 +181,16 @@ fun createMusicModule() = module("Music") {
                 val currentVolume = musicSession.volume
                 messageAction(embed { description("Current volume is **$currentVolume%**!") }).queue()
             } else {
+                val donationEntry = application.donationManager.getByMember(event.member)
+                if (donationEntry.ordinal < supportLevel.ordinal) {
+                    messageAction(embed {
+                        description("\uD83D\uDD12 Due to performance reasons volume changing is locked!" +
+                                " You can unlock this feature by becoming a [patreon.com/theprimedtnt](https://www.patreon.com/theprimedtnt)" +
+                                " and getting at least the **${supportLevel.rewardName}** Tier.")
+                        color(Color.RED)
+                    }).queue()
+                    return@musicAction
+                }
                 val oldVolume = musicSession.volume
                 musicSession.volume = newVolume
                 messageAction(embed { description("${volumeIcon(newVolume)} Volume has changed from **$oldVolume%** to **$newVolume%**") }).queue()

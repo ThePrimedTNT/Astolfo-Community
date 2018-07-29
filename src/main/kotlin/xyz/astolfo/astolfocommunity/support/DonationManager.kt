@@ -194,6 +194,18 @@ class DonationManager(private val application: AstolfoCommunityApplication,
 
     fun getByDiscordId(discordId: Long) = synchronized(entries) { entries.find { it.discord_id == discordId } }
 
+    // Only for debugging
+    fun give(idLong: Long) = synchronized(entries) {
+        remove(idLong)
+        // Add new
+        entries.add(PatreonEntry(idLong, idLong, SupportLevel.SUPPORTER.rewardId,  SupportLevel.SUPPORTER.cost))
+    }
+
+    fun remove(idLong: Long) = synchronized(entries) {
+        // Remove old
+        entries.removeIf { it.discord_id == idLong }
+    }
+
 }
 
 enum class SupportLevel(val rewardId: Long?, val rewardName: String, val upvote: Boolean, val cost: Long, val queueSize: Long) {

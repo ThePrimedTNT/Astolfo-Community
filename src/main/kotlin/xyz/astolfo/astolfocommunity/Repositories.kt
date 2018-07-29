@@ -173,7 +173,15 @@ data class GuildSettings(@Id val guildId: Long = 0L,
                          @ElementCollection
                          @LazyCollection(LazyCollectionOption.FALSE)
                          @CollectionTable(name = "guild_settings_blacklist_channels", joinColumns = [(JoinColumn(name = "guildId"))])
-                         var blacklistedChannels: List<Long> = mutableListOf()) {
+                         var blacklistedChannels: List<Long> = mutableListOf(),
+                         @ColumnDefault("true")
+                         var announceSongs: Boolean = true,
+                         @ColumnDefault("-1")
+                         var maxUserSongs: Long = -1,
+                         @ColumnDefault("false")
+                         var dupSongPrevention: Boolean = false,
+                         @ColumnDefault("100")
+                         var defaultMusicVolume: Int = 100) {
     fun getEffectiveGuildPrefix(application: AstolfoCommunityApplication) = prefix.takeIf { it.isNotBlank() }
             ?: application.properties.default_prefix
 }

@@ -29,6 +29,15 @@ class MusicNowPlayingMessage(private val musicSession: MusicSession) {
     private var nowPlayingMessage: CachedMessage? = null
 
     private suspend fun updateInternal(track: AudioTrack) {
+        val guildSettings = musicSession.musicManager.application.astolfoRepositories.getEffectiveGuildSettings(musicSession.guild.idLong)
+
+        if(!guildSettings.announceSongs) {
+            // Remove if the setting changed while it was playing
+            nowPlayingMessage?.delete()
+            nowPlayingMessage = null
+            return
+        }
+
         val newMessage = message {
             embed {
                 author("\uD83C\uDFB6 Now Playing: ${track.info.title}", track.info.uri)
