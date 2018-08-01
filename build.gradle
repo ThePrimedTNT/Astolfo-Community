@@ -1,6 +1,6 @@
 buildscript {
     ext {
-        kotlinVersion = '1.2.41'
+        kotlinVersion = '1.2.51'
         springBootVersion = '2.0.1.RELEASE'
     }
     repositories {
@@ -27,14 +27,17 @@ repositories {
 
 dependencies {
     compile "net.dv8tion:JDA:3.6.0_368"
-    compile "com.github.Frederikam:Lavalink:2bb46dcd4ed93387805724cc9aba6afcc5a85355"
+    compile "com.github.Frederikam:Lavalink:9e810edfec433bea3823b674b781ef1f693ee603"
     compile "com.google.guava:guava:25.0-jre"
     compile "com.github.oopsjpeg:osu4j:2.0.0.1" // osu
     compile "com.github.salomonbrys.kotson:kotson:2.5.0"
     compile 'com.github.natanbc:weeb4j:3.3' // weeb
     compile 'ai.api:libai:1.6.12' // dialogflow chat bot
     compile 'com.jagrosh:jda-utilities:2.1'
-    compile 'com.github.DiscordBotList:DBL-Java-Wrapper:master-SNAPSHOT'
+    compile 'com.github.DiscordBotList:DBL-Java-Library:304b5461208076d27f932608a361cd051ea0ad33'
+    compile 'com.datadoghq:java-dogstatsd-client:2.5'
+    compile 'org.apache.commons:commons-text:1.4'
+    compile 'com.github.markozajc:akiwrapper:+'
 
     compile('org.springframework.boot:spring-boot-starter-data-jpa')
     //compile('org.springframework.boot:spring-boot-starter-data-redis')
@@ -43,13 +46,18 @@ dependencies {
     //compile('org.springframework.session:spring-session-data-redis')
     compile("org.jetbrains.kotlin:kotlin-stdlib-jdk8")
     compile("org.jetbrains.kotlin:kotlin-reflect")
-    runtime('com.h2database:h2')
+    runtime('com.h2database:h2:+')
     compile 'mysql:mysql-connector-java'
     compile 'org.mariadb.jdbc:mariadb-java-client'
     compileOnly('org.springframework.boot:spring-boot-configuration-processor')
     testCompile('org.springframework.boot:spring-boot-starter-test')
+    compile 'io.sentry:sentry-spring:1.7.5'
 
-    compile "org.jetbrains.kotlinx:kotlinx-coroutines-core:0.22.5"
+    compile "org.jetbrains.kotlinx:kotlinx-coroutines-core:0.23.3"
+}
+
+configurations {
+    all*.exclude group: "org.slf4j", module: "slf4j-log4j12"
 }
 
 group = 'xyz.astolfo'

@@ -1,17 +1,22 @@
 package xyz.astolfo.astolfocommunity.modules
 
+import com.github.natanbc.reliqua.request.PendingRequest
 import com.github.natanbc.weeb4j.image.HiddenMode
 import com.github.natanbc.weeb4j.image.NsfwFilter
 import com.oopsjpeg.osu4j.backend.EndpointUsers
 import com.oopsjpeg.osu4j.backend.Osu
-import net.dv8tion.jda.core.MessageBuilder
+import kotlinx.coroutines.experimental.sync.Mutex
+import kotlinx.coroutines.experimental.sync.withLock
 import org.jsoup.Jsoup
-import xyz.astolfo.astolfocommunity.*
-import xyz.astolfo.astolfocommunity.games.ShiritoriGame
-import xyz.astolfo.astolfocommunity.games.SnakeGame
-import xyz.astolfo.astolfocommunity.games.TetrisGame
+import xyz.astolfo.astolfocommunity.games.*
+import xyz.astolfo.astolfocommunity.menus.memberSelectionBuilder
+import xyz.astolfo.astolfocommunity.messages.*
+import xyz.astolfo.astolfocommunity.web
+import xyz.astolfo.astolfocommunity.webJson
+import xyz.astolfo.astolfocommunity.words
+import java.math.BigInteger
 import java.util.*
-import java.util.concurrent.TimeUnit
+import kotlin.coroutines.experimental.suspendCoroutine
 
 fun createFunModule() = module("Fun") {
     command("osu") {
@@ -37,88 +42,128 @@ fun createFunModule() = module("Fun") {
         }
         command("profile", "p", "user", "stats") {
             action {
+                val osu = Osu.getAPI(application.properties.osu_api_token)
+                val user = try {
+                    osu.users.query(EndpointUsers.ArgumentsBuilder(args).build())
+                } catch (e: Exception) {
+                    messageAction(errorEmbed(":mag: I looked for `$args`, but couldn't find them!" +
+                            "\n Try using the sig command instead.")).queue()
+                    return@action
+                }
                 messageAction(embed {
-                    val osu = Osu.getAPI(application.properties.osu_api_token)
-                    fun getUser(args: String) = osu.users.query(EndpointUsers.ArgumentsBuilder(args).build())
-                    try {
-                        val user = getUser(args)
-                        val topPlayBeatmap = user.getTopScores(1).get()[0].beatmap.get()
-                        title("Osu stats for ${user.username}", user.url.toString())
-                        description("\nProfile url: ${user.url}" +
-                                "\nCountry: **${user.country}**" +
-                                "\nGlobal Rank: **#${user.rank} (${user.pp}pp)**" +
-                                "\nAccuracy: **${user.accuracy}%**" +
-                                "\nPlay Count: **${user.playCount} (Lv${user.level})**" +
-                                "\nTop play: **$topPlayBeatmap** ${topPlayBeatmap.url}")
-
-                    } catch (e: Exception) {
-                        messageAction(":mag: I looked for `$args`, but couldn't find them!" +
-                                "\n Try using the sig command instead.").queue()
-                    }
+                    val topPlayBeatmap = user.getTopScores(1).get().first().beatmap.get()
+                    title("Osu stats for ${user.username}", user.url.toString())
+                    description("\nProfile url: ${user.url}" +
+                            "\nCountry: **${user.country}**" +
+                            "\nGlobal Rank: **#${user.rank} (${user.pp}pp)**" +
+                            "\nAccuracy: **${user.accuracy}%**" +
+                            "\nPlay Count: **${user.playCount} (Lv${user.level})**" +
+                            "\nTop play: **$topPlayBeatmap** ${topPlayBeatmap.url}")
                 }).queue()
             }
         }
     }
     command("advice") {
         action {
-            messageAction(embed("\uD83D\uDCD6 ${webJson<Advice>("http://api.adviceslip.com/advice")!!.slip!!.advice}")).queue()
+            messageAction(embed("\uD83D\uDCD6 ${webJson<Advice>("http://api.adviceslip.com/advice").await().slip!!.advice}")).queue()
         }
     }
     command("cat", "cats") {
+        val catMutex = Mutex()
+        val validCats = mutableListOf<String>()
+        val random = Random()
         action {
-            messageAction(webJson<Cat>("http://aws.random.cat/meow", null)!!.file!!).queue()
+            val cat = try {
+                val newCat = webJson<Cat>("http://aws.random.cat/meow", null).await().file!!
+                catMutex.withLock {
+                    if (!validCats.contains(newCat)) validCats.add(newCat)
+                    if(validCats.size > 500) validCats.removeAt(0) // max of 500 cats in memory
+                }
+                newCat
+            } catch (e: Throwable) {
+                // idc
+                catMutex.withLock {
+                    if (validCats.isEmpty()) return@action
+                    validCats.let { it[random.nextInt(it.size)] }
+                }
+            }
+            messageAction(message(cat)).queue()
         }
     }
     command("catgirl", "neko", "catgirls") {
         action {
-            messageAction(webJson<Neko>("https://nekos.life/api/neko")!!.neko!!).queue()
+            messageAction(message(webJson<Neko>("https://nekos.life/api/neko").await().neko!!)).queue()
         }
     }
     command("coinflip", "flip", "coin") {
         val random = Random()
         action {
-            messageAction("Flipping a coin for you...").queue {
-                it.editMessage(MessageBuilder().append("Coin landed on **${if (random.nextBoolean()) "Heads" else "Tails"}**").build()).queueAfter(1, TimeUnit.SECONDS)
-            }
+            val flipMessage = messageAction(embed("Flipping a coin for you...")).sendCached()
+            flipMessage.editMessage(embed("Coin landed on **${if (random.nextBoolean()) "Heads" else "Tails"}**"), 1L)
         }
     }
     command("roll", "die", "dice") {
         val random = Random()
+
+        val ONE = BigInteger.valueOf(1)
+        val SIX = BigInteger.valueOf(6)
+
         action {
-            val max = args.takeIf { it.isNotBlank() }?.let {
-                val int = it.toIntOrNull()
-                if (int == null) {
-                    messageAction("The die max value must be a whole number!").queue()
+            val parts = args.words()
+            val (bound1, bound2) = when (parts.size) {
+                0 -> ONE to SIX
+                1 -> {
+                    val to = parts[0].toBigIntegerOrNull()
+                    (to?.signum() ?: 1).toBigInteger() to to
+                }
+                2 -> parts[0].toBigIntegerOrNull() to parts[1].toBigIntegerOrNull()
+                else -> {
+                    messageAction(errorEmbed("Invalid roll format! Accepted Formats: *<max>*, *<min> <max>*")).queue()
                     return@action
                 }
-                int
-            } ?: 6
-
-            messageAction(":game_die: Rolling a dice for you...").queue {
-                it.editMessage(MessageBuilder().append("Dice landed on **${random.nextInt(max - 1) + 1}**").build()).queueAfter(1, TimeUnit.SECONDS)
             }
+
+            if (bound1 == null || bound2 == null) {
+                messageAction(errorEmbed("Only whole numbers are allowed for bounds!")).queue()
+                return@action
+            }
+
+            val lowerBound = bound1.min(bound2)
+            val upperBound = bound1.max(bound2)
+
+            val diffBound = upperBound - lowerBound
+
+            var randomNum: BigInteger
+            do {
+                randomNum = BigInteger(diffBound.bitLength(), random)
+            } while (randomNum < BigInteger.ZERO || randomNum > diffBound)
+
+            randomNum += lowerBound
+
+            val rollingMessage = messageAction(embed(":game_die: Rolling a dice for you...")).sendCached()
+            rollingMessage.editMessage(embed("Dice landed on **$randomNum**"), 1)
         }
     }
     command("8ball") {
         val random = Random()
         val responses = arrayOf("It is certain", "You may rely on it", "Cannot predict now", "Yes", "Reply hazy try again", "Yes definitely", "My reply is no", "Better not tell yo now", "Don't count on it", "Most likely", "Without a doubt", "As I see it, yes", "Outlook not so good", "Outlook good", "My sources say no", "Signs point to yes", "Very doubtful", "It is decidedly so", "Concentrate and ask again")
         action {
-            if (args.isEmpty()) {
+            val question = args
+            if (question.isBlank()) {
                 messageAction(embed(":exclamation: Make sure to ask a question next time. :)")).queue()
-            } else {
-                val question = args
-                messageAction(embed {
-                    title(":8ball: 8 Ball")
-                    field("Question", question, false)
-                    field("Answer", responses[random.nextInt(responses.size)], false)
-                }).queue()
+                return@action
             }
+            messageAction(embed {
+                title(":8ball: 8 Ball")
+                field("Question", question, false)
+                field("Answer", responses[random.nextInt(responses.size)], false)
+            }).queue()
         }
     }
     command("csshumor", "cssjoke", "cssh") {
         action {
             messageAction(embed("```css" +
-                    "\n${Jsoup.parse(web("https://csshumor.com/")).select(".crayon-code").text()}" +
+                    "\n${Jsoup.parse(web("https://csshumor.com/").await()).select(".crayon-code").text()}" +
                     "\n```")).queue()
         }
     }
@@ -126,53 +171,63 @@ fun createFunModule() = module("Fun") {
         val random = Random()
         action {
             val r = random.nextInt(4665) + 1
+            val imageUrl = Jsoup.parse(web("http://explosm.net/comics/$r/").await())
+                    .select("#main-comic").first()
+                    .attr("src")
+                    .let { if (it.startsWith("//")) "https:$it" else it }
             messageAction(embed {
                 title("Cyanide and Happiness")
-                image(Jsoup.parse(web("http://explosm.net/comics/$r/"))
-                        .select("#main-comic").first()
-                        .attr("src")
-                        .let { if (it.startsWith("//")) "https:$it" else it })
+                image(imageUrl)
             }).queue()
         }
     }
     command("dadjoke", "djoke", "dadjokes", "djokes") {
         action {
-            messageAction(embed("\uD83D\uDCD6 **Dadjoke:** ${webJson<DadJoke>("https://icanhazdadjoke.com/")!!.joke!!}")).queue()
+            messageAction(embed("\uD83D\uDCD6 **Dadjoke:** ${webJson<DadJoke>("https://icanhazdadjoke.com/").await().joke!!}")).queue()
         }
     }
     command("hug") {
         action {
-            selectMember("Hug Selection", args) { selectedMember ->
-                val image = application.weeb4J.imageProvider.getRandomImage("hug", HiddenMode.DEFAULT, NsfwFilter.NO_NSFW).execute()
-                messageAction(embed {
-                    description("${event.author.asMention} has hugged ${selectedMember.asMention}")
-                    image(image.url)
-                    footer("Powered by weeb.sh")
-                }).queue()
-            }
+            val selectedMember = memberSelectionBuilder(args).title("Hug Selection").execute() ?: return@action
+            val image = application.weeb4J.imageProvider.getRandomImage("hug", HiddenMode.DEFAULT, NsfwFilter.NO_NSFW).await()
+            messageAction(embed {
+                description("${event.author.asMention} has hugged ${selectedMember.asMention}")
+                image(image.url)
+                footer("Powered by weeb.sh")
+            }).queue()
         }
     }
     command("kiss") {
         action {
-            selectMember("Kiss Selection", args) { selectedMember ->
-                val image = application.weeb4J.imageProvider.getRandomImage("kiss", HiddenMode.DEFAULT, NsfwFilter.NO_NSFW).execute()
-                messageAction(embed {
-                    description("${event.author.asMention} has kissed ${selectedMember.asMention}")
-                    image(image.url)
-                    footer("Powered by weeb.sh")
-                }).queue()
-            }
+            val selectedMember = memberSelectionBuilder(args).title("Kiss Selection").execute() ?: return@action
+            val image = application.weeb4J.imageProvider.getRandomImage("kiss", HiddenMode.DEFAULT, NsfwFilter.NO_NSFW).await()
+            messageAction(embed {
+                description("${event.author.asMention} has kissed ${selectedMember.asMention}")
+                image(image.url)
+                footer("Powered by weeb.sh")
+            }).queue()
+        }
+    }
+    command("slap") {
+        action {
+            val selectedMember = memberSelectionBuilder(args).title("Slap Selection").execute() ?: return@action
+            val image = application.weeb4J.imageProvider.getRandomImage("slap", HiddenMode.DEFAULT, NsfwFilter.NO_NSFW).await()
+            messageAction(embed {
+                description("${event.author.asMention} has slapped ${selectedMember.asMention}")
+                image(image.url)
+                footer("Powered by weeb.sh")
+            }).queue()
         }
     }
     command("game") {
         inheritedAction {
-            val currentGame = application.gameHandler.getGame(event.channel.idLong, event.author.idLong)
+            val currentGame = GameHandler.get(event.channel.idLong, event.author.idLong)
             if (currentGame != null) {
                 if (args.equals("stop", true)) {
                     currentGame.endGame()
-                    messageAction("Current game has stopped!").queue()
+                    messageAction(embed("Current game has stopped!")).queue()
                 } else {
-                    messageAction("To stop the current game you're in, type `?game stop`").queue()
+                    messageAction(errorEmbed("To stop the current game you're in, type `?game stop`")).queue()
                 }
                 false
             } else true
@@ -188,44 +243,51 @@ fun createFunModule() = module("Fun") {
         }
         command("snake") {
             action {
-                val gameHandler = application.gameHandler
-                messageAction("Starting the game of snake...").queue()
-                gameHandler.startGame(event.channel.idLong, event.author.idLong, SnakeGame(gameHandler, event.member, event.textChannel))
+                messageAction(embed("Starting the game of snake...")).queue()
+                GameHandler.start(event.channel.idLong, event.author.idLong, SnakeGame(event.member, event.channel))
             }
         }
         command("tetris") {
             action {
-                val gameHandler = application.gameHandler
-                messageAction("Starting the game of tetris...").queue()
-                gameHandler.startGame(event.channel.idLong, event.author.idLong, TetrisGame(gameHandler, event.member, event.textChannel))
+                messageAction(embed("Starting the game of tetris...")).queue()
+                GameHandler.start(event.channel.idLong, event.author.idLong, TetrisGame(event.member, event.channel))
+            }
+        }
+        command("akinator") {
+            action {
+                messageAction(embed("Starting the akinator...")).queue()
+                GameHandler.start(event.channel.idLong, event.author.idLong, AkinatorGame(event.member, event.channel))
             }
         }
         command("shiritori") {
             action {
-                val gameHandler = application.gameHandler
-                if (gameHandler.getGames(event.channel.idLong).any { it is ShiritoriGame }) {
-                    messageAction("Only one game of Shiritori is allowed per channel!").queue()
+                if (GameHandler.getAll(event.channel.idLong).any { it is ShiritoriGame }) {
+                    messageAction(errorEmbed("Only one game of Shiritori is allowed per channel!")).queue()
                     return@action
                 }
                 val difficulty = args.takeIf { it.isNotBlank() }?.let { string ->
                     val choosen = ShiritoriGame.Difficulty.values().find { string.equals(it.name, true) }
                     if (choosen == null) {
-                        messageAction("Unknown difficulty! Valid difficulties: **Easy**, **Normal**, **Hard**, **Impossible**").queue()
+                        messageAction(errorEmbed("Unknown difficulty! Valid difficulties: **Easy**, **Normal**, **Hard**, **Impossible**")).queue()
                         return@action
                     }
                     choosen
                 } ?: ShiritoriGame.Difficulty.NORMAL
-                messageAction("Starting the game of Shiritori with difficulty **${difficulty.name.toLowerCase().capitalize()}**...").queue()
-                gameHandler.startGame(event.channel.idLong, event.author.idLong, ShiritoriGame(gameHandler, event.member, event.textChannel, difficulty))
+                messageAction(embed("Starting the game of Shiritori with difficulty **${difficulty.name.toLowerCase().capitalize()}**...")).queue()
+                GameHandler.start(event.channel.idLong, event.author.idLong, ShiritoriGame(event.member, event.channel, difficulty))
             }
         }
     }
 }
 
 class Advice(val slip: AdviceSlip?) {
-    inner class AdviceSlip(val advice: String?, val slip_id: String?)
+    inner class AdviceSlip(val advice: String?, @Suppress("unused") val slip_id: String?)
 }
 
 class Cat(val file: String?)
 class Neko(val neko: String?)
 class DadJoke(val id: String?, val status: Int?, var joke: String?)
+
+suspend inline fun <E> PendingRequest<E>.await() = suspendCoroutine<E> { cont ->
+    async({ cont.resume(it) }, { cont.resumeWithException(it) })
+}

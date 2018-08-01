@@ -2,6 +2,7 @@ package xyz.astolfo.astolfocommunity
 
 import com.sedmelluq.discord.lavaplayer.track.AudioTrack
 import lavalink.client.LavalinkUtil
+import org.hibernate.annotations.ColumnDefault
 import org.hibernate.annotations.GenericGenerator
 import org.hibernate.annotations.LazyCollection
 import org.hibernate.annotations.LazyCollectionOption
@@ -57,8 +58,8 @@ interface UserProfileRepository : CrudRepository<UserProfile, Long> {
 
     fun findTop50ByOrderByCreditsDesc(): List<UserProfile>
 
-    @Query("select p from UserProfile p where p.userUpvote.lastUpvote > 0 AND NOW() - p.userUpvote.lastUpvote > 17280000 AND p.userUpvote.remindedUpvote = false")
-    fun findUpvoteReminder(): List<UserProfile>
+    @Query("select p from UserProfile p where p.userUpvote.lastUpvote > 0 AND ?1 - p.userUpvote.lastUpvote > 345600000 AND p.userUpvote.remindedUpvote = false")
+    fun findUpvoteReminder(currentTime: Long): List<UserProfile>
 }
 
 @CacheConfig(cacheNames = ["radios"])
@@ -157,4 +158,42 @@ data class UserUpvote(var lastUpvote: Long = -1L, var remindedUpvote: Boolean = 
 
 @Entity
 data class GuildSettings(@Id val guildId: Long = 0L,
-                         var prefix: String = "")
+                         var prefix: String = "",
+                         @ElementCollection
+                         @LazyCollection(LazyCollectionOption.FALSE)
+                         @CollectionTable(name = "guild_settings_permissions", joinColumns = [(JoinColumn(name = "guildId"))])
+                         @MapKeyClass(PermissionSetting::class)
+                         @Column(name = "allow")
+                         var permissions: Map<PermissionSetting, Boolean> = mutableMapOf(),
+                         @ElementCollection
+                         @LazyCollection(LazyCollectionOption.FALSE)
+                         @CollectionTable(name = "guild_settings_joinleavemessage", joinColumns = [(JoinColumn(name = "guildId"))])
+                         @MapKeyColumn(name = "isjoinsmg")
+                         var joinLeaveMessage: Map<Boolean, JoinLeaveSetting> = mutableMapOf(),
+                         @ElementCollection
+                         @LazyCollection(LazyCollectionOption.FALSE)
+                         @CollectionTable(name = "guild_settings_blacklist_channels", joinColumns = [(JoinColumn(name = "guildId"))])
+                         var blacklistedChannels: List<Long> = mutableListOf(),
+                         @ColumnDefault("true")
+                         var announceSongs: Boolean = true,
+                         @ColumnDefault("-1")
+                         var maxUserSongs: Long = -1,
+                         @ColumnDefault("false")
+                         var dupSongPrevention: Boolean = false,
+                         @ColumnDefault("100")
+                         var defaultMusicVolume: Int = 100) {
+    fun getEffectiveGuildPrefix(application: AstolfoCommunityApplication) = prefix.takeIf { it.isNotBlank() }
+            ?: application.properties.default_prefix
+}
+
+@Embeddable
+class JoinLeaveSetting(@ColumnDefault("0")
+                       var channelId: Long = 0L,
+                       @ColumnDefault("false")
+                       var enabled: Boolean = false,
+                       @Column(length = 1000)
+                       @ColumnDefault("\"\"")
+                       var message: String = "")
+
+@Embeddable
+data class PermissionSetting(val role: Long = 0L, val channel: Long = 0L, @Column(length = 45) val node: String = "")

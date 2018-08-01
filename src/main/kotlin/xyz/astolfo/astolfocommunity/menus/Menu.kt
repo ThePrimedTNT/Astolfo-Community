@@ -1,16 +1,19 @@
-package xyz.astolfo.astolfocommunity
+package xyz.astolfo.astolfocommunity.menus
 
-import kotlinx.coroutines.experimental.launch
 import net.dv8tion.jda.core.entities.Message
 import net.dv8tion.jda.core.events.message.react.GenericMessageReactionEvent
 import net.dv8tion.jda.core.hooks.ListenerAdapter
+import xyz.astolfo.astolfocommunity.commands.CommandExecution
+import xyz.astolfo.astolfocommunity.commands.CommandSession
+import xyz.astolfo.astolfocommunity.messages.*
+import xyz.astolfo.astolfocommunity.value
 import kotlin.math.max
 import kotlin.math.min
 
 
 fun CommandExecution.paginator(titleProvider: String? = "", builder: PaginatorBuilder.() -> Unit) = paginator({ titleProvider }, builder)
 fun CommandExecution.paginator(titleProvider: () -> String? = { null }, builder: PaginatorBuilder.() -> Unit): Paginator {
-    val paginatorBuilder = PaginatorBuilder(this, titleProvider, PaginatorProvider(0, { listOf() }), {
+    val paginatorBuilder = PaginatorBuilder(this, titleProvider, PaginatorProvider(0) { listOf() }) {
         message {
             embed {
                 titleProvider.invoke()?.let { title(it) }
@@ -18,14 +21,16 @@ fun CommandExecution.paginator(titleProvider: () -> String? = { null }, builder:
                 footer("Page ${currentPage + 1}/${provider.pageCount}")
             }
         }
-    })
+    }
     builder.invoke(paginatorBuilder)
     return paginatorBuilder.build()
 }
 
-fun PaginatorBuilder.provider(perPage: Int, provider: List<String>) = provider(perPage, { provider })
-fun PaginatorBuilder.provider(perPage: Int, provider: () -> List<String>) {
-    this.provider = PaginatorProvider(perPage, provider)
+private const val default_extraCharactersPerLine = 20
+
+fun PaginatorBuilder.provider(perPage: Int, provider: List<String>, extraCharactersPerLine: Int = default_extraCharactersPerLine) = provider(perPage, { provider }, extraCharactersPerLine)
+fun PaginatorBuilder.provider(perPage: Int, provider: () -> List<String>, extraCharactersPerLine: Int = default_extraCharactersPerLine) {
+    this.provider = PaginatorProvider(perPage, extraCharactersPerLine, provider)
 }
 
 fun PaginatorBuilder.renderer(renderer: Paginator.() -> Message) {
@@ -36,7 +41,9 @@ class PaginatorBuilder(private val commandExecution: CommandExecution, var title
     fun build() = Paginator(commandExecution, titleProvider, provider, renderer)
 }
 
-class PaginatorProvider(val perPage: Int, provider: () -> List<String>) {
+class PaginatorProvider(val perPage: Int,
+                        val extraCharactersPerLine: Int = default_extraCharactersPerLine,
+                        provider: () -> List<String>) {
     val provider = {
         val provided = provider.invoke()
         pageCount = Math.ceil(provided.size.toDouble() / perPage).toInt()
@@ -61,21 +68,26 @@ class Paginator(private val commandExecution: CommandExecution, val titleProvide
     val providedContent: List<String>
         get() {
             val content = provider.provider.invoke()
-            return content.subList(max(0, currentPage * provider.perPage), min(content.size, (currentPage + 1) * provider.perPage))
+            return if (content.isEmpty()) emptyList()
+            else content.subList((currentPage * provider.perPage).coerceIn(content.indices),
+                    ((currentPage + 1) * provider.perPage).coerceIn(0..content.size))
         }
 
     val providedString: String
         get() {
             val indexOffset = currentPage * provider.perPage
-            return providedContent.mapIndexed { index, s -> "`${index + 1 + indexOffset}` $s" }.fold("", { a, b -> "$a\n$b" })
+            val maxTitleLength = 1024 - (provider.extraCharactersPerLine + 3) * provider.perPage
+            return providedContent.mapIndexed { index, s -> "`${index + 1 + indexOffset}` $s" }.joinToString("\n") {
+                if (it.length > maxTitleLength) "${it.substring(0, maxTitleLength)}..." else it
+            }
         }
 
-    private var message: AsyncMessage? = null
+    private var message: CachedMessage? = null
 
     private val listener = object : ListenerAdapter() {
         override fun onGenericMessageReaction(event: GenericMessageReactionEvent?) {
             if (event!!.user.idLong != commandExecution.event.author.idLong) return
-            if (message?.getIdLong() != event.messageIdLong) return
+            if (message?.idLong?.value != event.messageIdLong) return
             val name = event.reactionEmote.name
             if (name == SELECT) {
                 destroy()
@@ -92,7 +104,11 @@ class Paginator(private val commandExecution: CommandExecution, val titleProvide
         }
     }
 
-    val destroyListener = { destroy() }
+    private val destroyListener = object : CommandSession.SessionListener() {
+        override fun onSessionDestroyed() {
+            destroy()
+        }
+    }
 
     var isDestroyed = false
         private set
@@ -100,18 +116,17 @@ class Paginator(private val commandExecution: CommandExecution, val titleProvide
     init {
         commandExecution.event.jda.addEventListener(listener)
         render()
-        commandExecution.session().addDestroyListener(destroyListener)
+        commandExecution.session.addListener(destroyListener)
     }
 
     fun destroy() {
         // Clean Up
+        if (isDestroyed) return
         isDestroyed = true
-        commandExecution.session().removeDestroyListener(destroyListener)
+        commandExecution.session.removeListener(destroyListener)
         commandExecution.event.jda.removeEventListener(listener)
-        launch {
-            message?.delete()
-            message = null
-        }
+        message?.delete()
+        message = null
     }
 
     companion object {
@@ -126,7 +141,7 @@ class Paginator(private val commandExecution: CommandExecution, val titleProvide
         if (isDestroyed) return
         val newMessage = renderer.invoke(this@Paginator)
         if (message == null) {
-            message = commandExecution.messageAction(newMessage).sendAsync()
+            message = commandExecution.messageAction(newMessage).sendCached()
 
             val pageCount = provider.pageCount
             val emotes = mutableListOf<String>()

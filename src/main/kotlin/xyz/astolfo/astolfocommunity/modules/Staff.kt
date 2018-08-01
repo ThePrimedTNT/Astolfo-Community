@@ -1,14 +1,17 @@
 package xyz.astolfo.astolfocommunity.modules
 
-import xyz.astolfo.astolfocommunity.*
+import xyz.astolfo.astolfocommunity.RadioEntry
+import xyz.astolfo.astolfocommunity.menus.paginator
+import xyz.astolfo.astolfocommunity.menus.provider
+import xyz.astolfo.astolfocommunity.messages.description
 import java.net.MalformedURLException
 import java.net.URL
 
-fun createStaffModule() = module("Staff") {
-    command("staff") {
+fun createStaffModule() = module("Developer", hidden = true) {
+    command("dev") {
         inheritedAction {
             if (!application.staffMemberIds.contains(event.author.idLong)) {
-                messageAction("You're not allowed to use staff commands, please contact a staff member if you want to use them!").queue()
+                messageAction(errorEmbed("You're not allowed to use developer commands, please contact a staff member if you want to use them!")).queue()
                 false
             } else true
         }
@@ -37,21 +40,45 @@ fun createStaffModule() = module("Staff") {
                 try {
                     URL(urlString)
                 } catch (e: MalformedURLException) {
-                    messageAction("That's not a valid url!").queue()
+                    messageAction(errorEmbed("That's not a valid url!")).queue()
                     return@action
                 }
                 if (name.isBlank()) {
-                    messageAction("Please give the radio station a name!").queue()
+                    messageAction(errorEmbed("Please give the radio station a name!")).queue()
                     return@action
                 }
                 val radioEntry = application.astolfoRepositories.radioRepository.save(RadioEntry(name = name, url = urlString))
-                messageAction("Radio station #${radioEntry.id!!} **${radioEntry.name}** has been added!").queue()
+                messageAction(embed("Radio station #${radioEntry.id!!} **${radioEntry.name}** has been added!")).queue()
             }
         }
         command("removeRadio") {
             action {
                 application.astolfoRepositories.radioRepository.deleteById(args.toLong())
-                messageAction("Deleted!").queue()
+                messageAction(embed("Deleted!")).queue()
+            }
+        }
+        command("patreon") {
+            action {
+                paginator("Astolfo Patreon") {
+                    provider(8, application.donationManager.entries().map {
+                        val discordId = it.discord_id
+                        val user = if (discordId != null) application.shardManager.getUserById(discordId) else null
+                        val name = if (user != null) "${user.name}#${user.discriminator}" else "Unknown"
+                        "$name *- ${it.supportLevel.rewardName}*"
+                    })
+                }
+            }
+            command("give") {
+                action {
+                    application.donationManager.give(event.member.user.idLong)
+                    messageAction(embed("Done!")).queue()
+                }
+            }
+            command("take") {
+                action {
+                    application.donationManager.remove(event.member.user.idLong)
+                    messageAction(embed("Done!")).queue()
+                }
             }
         }
     }

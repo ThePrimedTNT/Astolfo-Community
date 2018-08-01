@@ -1,11 +1,17 @@
 package xyz.astolfo.astolfocommunity.modules
 
-import net.dv8tion.jda.core.entities.Message
-import xyz.astolfo.astolfocommunity.*
+import net.dv8tion.jda.core.entities.MessageEmbed
+import xyz.astolfo.astolfocommunity.Emotes
+import xyz.astolfo.astolfocommunity.RateLimiter
+import xyz.astolfo.astolfocommunity.Utils
+import xyz.astolfo.astolfocommunity.menus.paginator
+import xyz.astolfo.astolfocommunity.menus.provider
+import xyz.astolfo.astolfocommunity.messages.color
+import xyz.astolfo.astolfocommunity.messages.description
+import xyz.astolfo.astolfocommunity.messages.sendCached
 import java.awt.Color
 import java.util.*
 import java.util.concurrent.TimeUnit
-import java.util.concurrent.atomic.AtomicInteger
 import kotlin.math.absoluteValue
 import kotlin.math.pow
 import kotlin.math.roundToLong
@@ -32,7 +38,7 @@ fun createCasinoModule() = module("Casino") {
             val currentTime = System.currentTimeMillis()
             val timeLeft = day1 - (currentTime - userDaily.lastDaily)
             if (timeLeft > minute30) {
-                messageAction(embed("You can receive your next daily in **${Utils.formatDuration(timeLeft)}**.")).queue()
+                messageAction(embed("You can receive your next daily in **${Utils.formatDuration(timeLeft)}**. If you haven't upvoted already, you can get your daily bonus of 1000 credits! https://discordbots.org/bot/${event.jda.selfUser.idLong}")).queue()
                 return@action
             }
 
@@ -49,7 +55,8 @@ fun createCasinoModule() = module("Casino") {
         action {
             paginator("Astolfo Leaderboards") {
                 provider(8, application.astolfoRepositories.userProfileRepository.findTop50ByOrderByCreditsDesc().map { profile ->
-                    val user = application.shardManager.getUserById(profile.userId)?.let { "${it.name}#${it.discriminator}" } ?: "UNKNOWN "+profile.userId
+                    val user = application.shardManager.getUserById(profile.userId)?.let { "${it.name}#${it.discriminator}" }
+                            ?: "UNKNOWN "+profile.userId
                     "**$user** - *${profile.credits}*"
                 })
             }
@@ -64,7 +71,7 @@ fun createCasinoModule() = module("Casino") {
 
         action {
             if (slotsRateLimiter.isLimited(event.author.idLong)) {
-                event.channel.sendMessage("Please cool down! (**${Utils.formatDuration(slotsRateLimiter.remainingTime(event.author.idLong)!!)}** seconds left)").queue()
+                messageAction(errorEmbed("Please cool down! (**${Utils.formatDuration(slotsRateLimiter.remainingTime(event.author.idLong)!!)}** seconds left)")).queue()
                 return@action
             }
             slotsRateLimiter.add(event.author.idLong)
@@ -74,17 +81,17 @@ fun createCasinoModule() = module("Casino") {
             val bidAmount = args.takeIf { it.isNotBlank() }?.let {
                 val amountNum = it.toBigIntegerOrNull()?.toLong()
                 if (amountNum == null) {
-                    messageAction("The bid amount must be a whole number!").queue()
+                    messageAction(errorEmbed("The bid amount must be a whole number!")).queue()
                     return@action
                 }
                 if (amountNum < 10) {
-                    messageAction("The bid amount must be at least 10 credits!").queue()
+                    messageAction(errorEmbed("The bid amount must be at least 10 credits!")).queue()
                     return@action
                 }
                 amountNum
             } ?: 10
             if (bidAmount > userProfile.credits) {
-                messageAction("You don't have enough credits to bid this amount!").queue()
+                messageAction(errorEmbed("You don't have enough credits to bid this amount!")).queue()
                 return@action
             }
 
@@ -98,18 +105,20 @@ fun createCasinoModule() = module("Casino") {
                 else -> TODO("Um what")
             }
 
-            val slotsToShow = AtomicInteger(0)
+            userProfile.credits += result
+            application.astolfoRepositories.userProfileRepository.save(userProfile)
 
-            var response: ((Message?) -> Unit)? = null
+            var slotsToShow = 0
 
-            response = { message ->
-                val finished = slotsToShow.get() >= SLOT_COUNT
-                val newContent = embed {
+            fun isFinished() = slotsToShow >= SLOT_COUNT
+
+            fun createMessage(): MessageEmbed {
+                return embed {
                     var description = "**Bid Amount:** $bidAmount credits\n\n${slotResults.mapIndexed { index, value ->
-                        if (index <= slotsToShow.get()) value
+                        if (index <= slotsToShow) value
                         else symbols[random.nextInt(symbols.size)]
                     }.joinToString(separator = "")}"
-                    if (finished) {
+                    if (isFinished()) {
                         description += when {
                             result < 0 -> {
                                 color(Color.RED)
@@ -125,19 +134,14 @@ fun createCasinoModule() = module("Casino") {
                     }
                     description(description)
                 }
-                slotsToShow.addAndGet(3)
-                if (message == null) messageAction(newContent).queue(response)
-                else {
-                    val action = message.editMessage(newContent)
-                    if (finished) action.queueAfter(1, TimeUnit.SECONDS)
-                    else action.queueAfter(1, TimeUnit.SECONDS, response)
-                }
             }
 
-            response.invoke(null)
-
-            userProfile.credits += result
-            application.astolfoRepositories.userProfileRepository.save(userProfile)
+            val message = messageAction(createMessage()).sendCached()
+            var editDelay = 1L
+            while (!isFinished()) {
+                slotsToShow += 3
+                message.editMessage(createMessage(), editDelay++)
+            }
         }
     }
 }

@@ -1,7 +1,8 @@
 package xyz.astolfo.astolfocommunity.modules
 
 import net.dv8tion.jda.core.JDAInfo
-import xyz.astolfo.astolfocommunity.*
+import xyz.astolfo.astolfocommunity.menus.memberSelectionBuilder
+import xyz.astolfo.astolfocommunity.messages.*
 import java.text.DecimalFormat
 
 fun createInfoModule() = module("Info") {
@@ -9,7 +10,7 @@ fun createInfoModule() = module("Info") {
         val format = DecimalFormat("#0.###")
         action {
             val pingStartTime = System.nanoTime()
-            messageAction("pinging").queue { message ->
+            messageAction(message("pinging")).queue { message ->
                 val pingEndTime = System.nanoTime()
                 val pingTimeDifference = pingEndTime - pingStartTime
                 val processTime = pingStartTime - timeIssued
@@ -20,6 +21,7 @@ fun createInfoModule() = module("Info") {
         }
     }
     command("about", "info") {
+        val numberFormatter = DecimalFormat.getIntegerInstance()
         action {
             messageAction(embed {
                 title("Astolfo Community Info")
@@ -28,13 +30,13 @@ fun createInfoModule() = module("Info") {
                 val totalChannels = shardManager.textChannelCache.size() + shardManager.voiceChannelCache.size()
                 val userCount = shardManager.userCache.size()
                 description("Astolfo-Community is an open-sourced community version of Astolfo! If you want to contribute or take a look at the source code, visit our [Github](https://github.com/ThePrimedTNT/Astolfo-Community)!")
-                field("Stats", "*$guildCount* servers" +
-                        "\n*$totalChannels* channels," +
-                        "\n*$userCount* users" +
-                        "\n*${application.shardManager.shards.size}* Shards (*#${event.jda.shardInfo.shardId + 1}*)", true)
-                field("Music", "*${application.musicManager.sessionCount}* sessions" +
-                        "\n*${application.musicManager.queuedSongCount}* queued songs" +
-                        "\n*${application.musicManager.listeningCount}* listening", true)
+                field("Stats", "$guildCount *servers*" +
+                        "\n${numberFormatter.format(totalChannels)} *channels*" +
+                        "\n${numberFormatter.format(userCount)} *users*" +
+                        "\n${application.shardManager.shards.size} *Shards (#${event.jda.shardInfo.shardId + 1})*", true)
+                field("Music", "${numberFormatter.format(application.musicManager.sessionCount)} *sessions*" +
+                        "\n${numberFormatter.format(application.musicManager.queuedSongCount)} *queued songs*" +
+                        "\n${numberFormatter.format(application.musicManager.listeningCount)} *listening*", true)
                 field("Version", "v1.0.26", true) // Number of commits? idk
                 field("Library", "JDA ${JDAInfo.VERSION}", true)
                 field("Our support server", "https://discord.gg/23RB2Wc", true)
@@ -44,13 +46,12 @@ fun createInfoModule() = module("Info") {
     }
     command("avatar", "pfp") {
         action {
-            selectMember("Profile Selection", args){ selectedMember ->
-                messageAction(embed {
-                    title("Astolfo Profile Pictures", selectedMember.user.avatarUrl)
-                    description("${selectedMember.asMention} Profile Picture!")
-                    image(selectedMember.user.avatarUrl)
-                }).queue()
-            }
+            val selectedMember = memberSelectionBuilder(args).title("Profile Selection").execute() ?: return@action
+            messageAction(embed {
+                title("Astolfo Profile Pictures", selectedMember.user.avatarUrl)
+                description("${selectedMember.asMention} Profile Picture!")
+                image(selectedMember.user.effectiveAvatarUrl)
+            }).queue()
         }
     }
     command("links", "invite") {
@@ -62,7 +63,7 @@ fun createInfoModule() = module("Info") {
                         "\n**Commands**:        https://astolfo.xyz/commands" +
                         "\n**Support Server**: https://discord.gg/23RB2Wc" +
                         "\n**Donate**:                https://www.patreon.com/theprimedtnt" +
-                        "\n**Invite Astolfo**:    https://discordapp.com/oauth2/authorize?client_id=326750725084282881&scope=bot&permissions=37088334")
+                        "\n**Invite Astolfo**:    https://discordapp.com/oauth2/authorize?client_id=${event.jda.selfUser.idLong}&scope=bot&permissions=37088334")
             }).queue()
         }
     }
@@ -71,7 +72,7 @@ fun createInfoModule() = module("Info") {
             messageAction(embed("There are **${event.message.guild.members.size}** members in this guild.")).queue()
         }
     }
-    command("donate") {
+    command("donate", "patreon", "patron") {
         action {
             messageAction(embed {
                 title("As Astolfo grows, it needs to upgrade its servers.")
@@ -89,9 +90,10 @@ fun createInfoModule() = module("Info") {
                     title("Astolfo Command Help")
                     description("If you're having  trouble with anything, you can always stop by our support server!" +
                             "\nInvite Link: https://discord.gg/23RB2Wc")
-                    modules.forEach {
-                        val commandNames = it.commands.joinToString(" ") { "`${it.name}` " }
-                        field("${it.name} Commands", commandNames, false)
+                    for (module in modules) {
+                        if ((module.hidden) || (module.nsfw && !this@action.event.channel.isNSFW)) continue
+                        val commandNames = module.commands.joinToString(" ") { "`${it.name}` " }
+                        field("${module.name} Commands", commandNames, false)
                     }
                 }).queue()
             }
