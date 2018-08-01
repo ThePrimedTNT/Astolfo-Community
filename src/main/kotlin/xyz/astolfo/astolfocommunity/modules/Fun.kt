@@ -8,10 +8,7 @@ import com.oopsjpeg.osu4j.backend.Osu
 import kotlinx.coroutines.experimental.sync.Mutex
 import kotlinx.coroutines.experimental.sync.withLock
 import org.jsoup.Jsoup
-import xyz.astolfo.astolfocommunity.games.GameHandler
-import xyz.astolfo.astolfocommunity.games.ShiritoriGame
-import xyz.astolfo.astolfocommunity.games.SnakeGame
-import xyz.astolfo.astolfocommunity.games.TetrisGame
+import xyz.astolfo.astolfocommunity.games.*
 import xyz.astolfo.astolfocommunity.menus.memberSelectionBuilder
 import xyz.astolfo.astolfocommunity.messages.*
 import xyz.astolfo.astolfocommunity.web
@@ -254,6 +251,12 @@ fun createFunModule() = module("Fun") {
             action {
                 messageAction(embed("Starting the game of tetris...")).queue()
                 GameHandler.start(event.channel.idLong, event.author.idLong, TetrisGame(event.member, event.channel))
+            }
+        }
+        command("akinator") {
+            action {
+                messageAction(embed("Starting the akinator...")).queue()
+                GameHandler.start(event.channel.idLong, event.author.idLong, AkinatorGame(event.member, event.channel))
             }
         }
         command("shiritori") {

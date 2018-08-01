@@ -86,10 +86,13 @@ class SessionListener(
 
                 var commandNodes = resolvePath(commandMessage)
 
+                var checkedRateLimit = false
+
                 if (commandNodes == null) {
                     if (channelBlacklisted) return // Ignore chat bot if channel is blacklisted
                     if (!isMention) return
                     if (!processRateLimit(jdaEvent)) return
+                    checkedRateLimit = true
                     // Not a command but rather a chat bot message
                     if (commandMessage.isEmpty()) {
                         channel.sendMessage("Hi :D").queue()
@@ -116,6 +119,8 @@ class SessionListener(
                     val module = commandNodes.first
                     if (!module.name.equals("Admin", true)) return
                 }
+
+                if (!checkedRateLimit && !processRateLimit(jdaEvent)) return
 
                 // Process Command
                 application.statsDClient.incrementCounter("commands_executed")

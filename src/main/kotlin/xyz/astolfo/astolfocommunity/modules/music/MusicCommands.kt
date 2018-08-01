@@ -31,7 +31,7 @@ fun createMusicModule() = module("Music") {
     command("join", "j") {
         musicAction { joinAction(true) }
     }
-    command("play", "p", "search", "yt", "q", "queue") {
+    command("play", "p", "search", "yt") {
         musicAction {
             playAction(false, false)
         }
@@ -96,7 +96,7 @@ fun createMusicModule() = module("Music") {
             messageAction(embed("\uD83D\uDEAA I have disconnected")).queue()
         }
     }
-    command("playing", "nowplaying", "np") {
+    command("playing", "nowplaying", "np", "q", "queue") {
         musicAction(memberInVoice = false, activeSession = true) {
             val musicSession = application.musicManager.getSession(event.guild)!!
             val paginator = paginator("Astolfo-Community Music Queue") {
@@ -646,6 +646,10 @@ suspend fun CommandExecution.joinAction(forceJoinMessage: Boolean = false): Comp
 suspend fun CommandExecution.playAction(top: Boolean, skip: Boolean) {
     // Make the play command work like the join command as well
     val musicSession = joinAction() ?: return
+    if(args.isEmpty()) {
+        messageAction(errorEmbed("Give me something to search! I support youtube, soundcloud, vimeo, etc.")).queue()
+        return
+    }
     val searchQuery = MusicUtils.getEffectiveSearchQuery(args)
     if (searchQuery == null) {
         messageAction(errorEmbed("Either im not allowed to play music from that website or I do not support it!")).queue()
