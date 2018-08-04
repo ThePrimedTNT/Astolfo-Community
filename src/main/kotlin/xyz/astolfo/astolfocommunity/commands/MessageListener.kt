@@ -1,5 +1,6 @@
 package xyz.astolfo.astolfocommunity.commands
 
+import io.sentry.Sentry
 import kotlinx.coroutines.experimental.channels.Channel
 import kotlinx.coroutines.experimental.channels.actor
 import kotlinx.coroutines.experimental.channels.sendBlocking
@@ -22,7 +23,7 @@ class MessageListener(val application: AstolfoCommunityApplication) {
         override fun onGuildMessageReceived(event: GuildMessageReceivedEvent) {
             application.statsDClient.incrementCounter("messages_received")
             val timeIssued = System.nanoTime()
-            if (event.author.isBot || !event.channel.canTalk()) return
+            if (event.author.isBot || event.isWebhookMessage || !event.channel.canTalk()) return
             messageActor.sendBlocking(GuildMessageReceived(MessageData(event, timeIssued)))
         }
     }
@@ -48,7 +49,12 @@ class MessageListener(val application: AstolfoCommunityApplication) {
 
     private val messageActor = actor<MessageEvent>(context = messageProcessorContext, capacity = Channel.UNLIMITED) {
         for (event in channel) {
-            handleEvent(event)
+            try {
+                handleEvent(event)
+            }catch (e: Throwable){
+                e.printStackTrace()
+                Sentry.capture(e)
+            }
         }
     }
 

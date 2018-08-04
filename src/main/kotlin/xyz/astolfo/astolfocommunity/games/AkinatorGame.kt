@@ -200,9 +200,12 @@ class AkinatorGame(member: Member, channel: TextChannel) : Game(member, channel)
             is AkinatorEvent.NoMoreQuestions -> {
                 // No more questions, enter the iterating state
                 akiState = State.ITERATING
-                val bestGuess = getGuess()
+                // Get best guess else get guess thats above 50%
+                val bestGuess = getGuess() ?: akiWrapper.getGuessesAboveProbability(0.50)
+                        .filter { !hasGuessed.contains(it.name) }
+                        .sortedByDescending { it.probability }.firstOrNull()
 
-                if (bestGuess == null) {
+                if(bestGuess == null){
                     // No more guesses, defeat
                     channel.sendMessage("Aww, you have defeated me!").queue()
                     endGame()

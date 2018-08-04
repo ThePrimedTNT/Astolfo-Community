@@ -1,5 +1,6 @@
 package xyz.astolfo.astolfocommunity.commands
 
+import io.sentry.Sentry
 import kotlinx.coroutines.experimental.*
 import kotlinx.coroutines.experimental.channels.Channel
 import kotlinx.coroutines.experimental.channels.actor
@@ -43,7 +44,12 @@ class SessionListener(
     private val sessionActor = actor<SessionEvent>(context = sessionContext, capacity = Channel.UNLIMITED) {
         for (event in channel) {
             if (destroyed) continue
-            handleEvent(event)
+            try {
+                handleEvent(event)
+            }catch (e: Throwable){
+                e.printStackTrace()
+                Sentry.capture(e)
+            }
         }
         handleEvent(CleanUp)
     }

@@ -1,5 +1,6 @@
 package xyz.astolfo.astolfocommunity.commands
 
+import io.sentry.Sentry
 import kotlinx.coroutines.experimental.channels.Channel
 import kotlinx.coroutines.experimental.channels.actor
 import kotlinx.coroutines.experimental.delay
@@ -40,7 +41,12 @@ class GuildListener(
     private val messageActor = actor<GuildMessageEvent>(context = MessageListener.messageProcessorContext, capacity = Channel.UNLIMITED) {
         for (event in channel) {
             if (destroyed) continue
-            handleEvent(event)
+            try {
+                handleEvent(event)
+            }catch (e: Throwable){
+                e.printStackTrace()
+                Sentry.capture(e)
+            }
         }
         channelListeners.forEach { it.value.listener.dispose() }
     }
