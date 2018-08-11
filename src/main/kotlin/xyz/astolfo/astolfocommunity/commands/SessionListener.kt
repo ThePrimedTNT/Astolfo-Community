@@ -5,9 +5,6 @@ import kotlinx.coroutines.experimental.*
 import kotlinx.coroutines.experimental.channels.Channel
 import kotlinx.coroutines.experimental.channels.actor
 import net.dv8tion.jda.core.Permission
-import net.dv8tion.jda.core.entities.Guild
-import net.dv8tion.jda.core.entities.Member
-import net.dv8tion.jda.core.entities.TextChannel
 import net.dv8tion.jda.core.events.message.guild.GuildMessageReceivedEvent
 import xyz.astolfo.astolfocommunity.AstolfoCommunityApplication
 import xyz.astolfo.astolfocommunity.AstolfoPermissionUtils
@@ -20,10 +17,7 @@ import java.util.concurrent.TimeUnit
 
 class SessionListener(
         val application: AstolfoCommunityApplication,
-        val channelListener: ChannelListener,
-        val guild: Guild,
-        val channel: TextChannel,
-        val member: Member
+        val channelListener: ChannelListener
 ) {
 
     companion object {
@@ -46,7 +40,7 @@ class SessionListener(
             if (destroyed) continue
             try {
                 handleEvent(event)
-            }catch (e: Throwable){
+            } catch (e: Throwable) {
                 e.printStackTrace()
                 Sentry.capture(e)
             }
@@ -78,11 +72,13 @@ class SessionListener(
                 }
             }
             is CommandEvent -> {
-                val guildSettings = application.astolfoRepositories.getEffectiveGuildSettings(guild.idLong)
-                val channelBlacklisted = guildSettings.blacklistedChannels.contains(channel.idLong)
-
                 val guildMessageData = event.guildMessageData
                 val jdaEvent = guildMessageData.messageReceivedEvent
+                val member = jdaEvent.member
+                val channel = jdaEvent.channel
+
+                val guildSettings = application.astolfoRepositories.getEffectiveGuildSettings(jdaEvent.guild.idLong)
+                val channelBlacklisted = guildSettings.blacklistedChannels.contains(channel.idLong)
 
                 val rawContent = jdaEvent.message.contentRaw!!
                 val prefixMatched = guildMessageData.prefixMatched
@@ -97,6 +93,7 @@ class SessionListener(
                 if (commandNodes == null) {
                     if (channelBlacklisted) return // Ignore chat bot if channel is blacklisted
                     if (!isMention) return
+                    if (!checkPatreonBot(guildMessageData)) return
                     if (!processRateLimit(jdaEvent)) return
                     checkedRateLimit = true
                     // Not a command but rather a chat bot message
@@ -104,7 +101,7 @@ class SessionListener(
                         channel.sendMessage("Hi :D").queue()
                         return
                     }
-                    if(commandMessage.contains("prefix", true)){
+                    if (commandMessage.contains("prefix", true)) {
                         channel.sendMessage("Yahoo! My prefix in this guild is **${guildSettings.getEffectiveGuildPrefix(application)}**!").queue()
                         return
                     }
@@ -119,6 +116,8 @@ class SessionListener(
                         channel.sendMessage(response.response).queue()
                         return
                     }
+                } else {
+                    if (!checkPatreonBot(guildMessageData)) return
                 }
                 // Only allow Admin module if blacklisted
                 if (channelBlacklisted) {
@@ -161,7 +160,7 @@ class SessionListener(
                         hasPermission = member.hasPermission(channel, *permission.permissionDefaults)
                     // Check Astolfo permission if discord permission didn't already grant permissions
                     if (hasPermission != true)
-                        AstolfoPermissionUtils.hasPermission(member, channel, application.astolfoRepositories.getEffectiveGuildSettings(guild.idLong).permissions, permission)?.let { hasPermission = it }
+                        AstolfoPermissionUtils.hasPermission(member, channel, application.astolfoRepositories.getEffectiveGuildSettings(jdaEvent.guild.idLong).permissions, permission)?.let { hasPermission = it }
 
                     if (hasPermission == false) {
                         channel.sendMessage(errorEmbed("You are missing the astolfo **${permission.path}**${if (permission.permissionDefaults.isNotEmpty())
@@ -207,6 +206,20 @@ class SessionListener(
                 }
             }
         }
+    }
+
+    private fun checkPatreonBot(data: GuildListener.GuildMessageData): Boolean {
+        if (!application.properties.patreon_bot) return true
+        val staffIds = application.staffMemberIds
+        if (staffIds.contains(data.messageReceivedEvent.author.idLong)) return true
+        val donorGuild = application.donationManager.getByMember(data.messageReceivedEvent.guild.owner)
+        if (!donorGuild.patreonBot) {
+            data.messageReceivedEvent.channel.sendMessage(
+                    errorEmbed("In order to use the high quality patreon bot, the owner of your guild must pledge at least $10 on [patreon.com/theprimedtnt](https://www.patreon.com/theprimedtnt)")
+            ).queue()
+            return false
+        }
+        return true
     }
 
     private suspend fun processRateLimit(event: GuildMessageReceivedEvent): Boolean {

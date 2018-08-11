@@ -3,6 +3,7 @@
 !gradle/wrapper/gradle-wrapper.jar
 src/main/resources/dev.properties
 src/main/resources/astolfo.properties
+src/main/resources/patreon.properties
 tempMusic/
 patreonRefreshToken.json
 

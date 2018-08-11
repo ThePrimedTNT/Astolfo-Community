@@ -82,7 +82,7 @@ class MessageListener(val application: AstolfoCommunityApplication) {
                 val entry = guildListeners.computeIfAbsent(guildId) {
                     // Create if it doesn't exist
                     //println("CREATE GUILDLISTENER: $guildId")
-                    CacheEntry(GuildListener(application, this, messageData.messageReceivedEvent.guild), System.currentTimeMillis())
+                    CacheEntry(GuildListener(application, this), System.currentTimeMillis())
                 }
                 entry.lastUsed = System.currentTimeMillis()
                 entry.listener.addMessage(messageData)

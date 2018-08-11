@@ -5,16 +5,12 @@ import kotlinx.coroutines.experimental.channels.Channel
 import kotlinx.coroutines.experimental.channels.actor
 import kotlinx.coroutines.experimental.delay
 import kotlinx.coroutines.experimental.launch
-import net.dv8tion.jda.core.entities.Guild
-import net.dv8tion.jda.core.entities.TextChannel
 import xyz.astolfo.astolfocommunity.AstolfoCommunityApplication
 import java.util.concurrent.TimeUnit
 
 class ChannelListener(
         val application: AstolfoCommunityApplication,
-        val guildListener: GuildListener,
-        val guild: Guild,
-        val channel: TextChannel
+        val guildListener: GuildListener
 ) {
 
     private val cleanUpJob = launch(MessageListener.messageProcessorContext) {
@@ -40,7 +36,7 @@ class ChannelListener(
             if (destroyed) continue
             try {
                 handleEvent(event)
-            }catch (e: Throwable){
+            } catch (e: Throwable) {
                 e.printStackTrace()
                 Sentry.capture(e)
             }
@@ -82,7 +78,7 @@ class ChannelListener(
                 val entry = sessionListeners.computeIfAbsent(member.user.idLong) {
                     // Create session listener if it doesn't exist
                     //println("CREATE SESSIONLISTENER: ${guild.idLong}/${channel.idLong}/${member.user.idLong}")
-                    CacheEntry(SessionListener(application, this, guild, channel, member), System.currentTimeMillis())
+                    CacheEntry(SessionListener(application, this), System.currentTimeMillis())
                 }
                 entry.lastUsed = System.currentTimeMillis()
                 entry.listener.addCommand(guildMessageData)

@@ -208,13 +208,13 @@ class DonationManager(private val application: AstolfoCommunityApplication,
 
 }
 
-enum class SupportLevel(val rewardId: Long?, val rewardName: String, val upvote: Boolean, val cost: Long, val queueSize: Long) {
-    DEFAULT(null, "Default", false, 0, 200),
-    UPVOTER(null, "Upvoter", true, 0, 400),
-    SUPPORTER(2117513L, "Supporter", false, 5 * 100, 1000),
-    ADVANCED_SUPPORTER(2117519L, "Advanced Supporter", false, 10 * 100, 2000),
-    SERVANT(2117523L, "Servant", false, 20 * 100, 5000),
-    MASTER(2117526L, "Astolfo's Master", false, 40 * 100, 10000);
+enum class SupportLevel(val rewardId: Long?, val rewardName: String, val upvote: Boolean, val cost: Long, val queueSize: Long, val patreonBot: Boolean) {
+    DEFAULT(null, "Default", false, 0, 200, false),
+    UPVOTER(null, "Upvoter", true, 0, 400, false),
+    SUPPORTER(2117513L, "Supporter", false, 5 * 100, 1000, false),
+    ADVANCED_SUPPORTER(2117519L, "Advanced Supporter", false, 10 * 100, 2000, true),
+    SERVANT(2117523L, "Servant", false, 20 * 100, 5000, true),
+    MASTER(2117526L, "Astolfo's Master", false, 40 * 100, 10000, true);
 
     fun max(other: SupportLevel) = if (ordinal < other.ordinal) other else this
 
