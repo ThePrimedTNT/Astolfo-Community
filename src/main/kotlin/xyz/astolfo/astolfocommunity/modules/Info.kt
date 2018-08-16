@@ -61,9 +61,9 @@ fun createInfoModule() = module("Info") {
                 description("**Bot's Website**:   https://astolfo.xyz/" +
                         "\n**GitHub**:                https://www.github.com/theprimedtnt/astolfo-community" +
                         "\n**Commands**:        https://astolfo.xyz/commands" +
-                        "\n**Support Server**: https://discord.gg/23RB2Wc" +
-                        "\n**Donate**:                https://www.patreon.com/theprimedtnt" +
-                        "\n**Invite Astolfo**:    https://discordapp.com/oauth2/authorize?client_id=${event.jda.selfUser.idLong}&scope=bot&permissions=37088334")
+                        "\n**Support Server**: https://astolfo.xyz/support" +
+                        "\n**Donate**:                https://astolfo.xyz/donate" +
+                        "\n**Invite Astolfo**:    https://astolfo.xyz/invite")
             }).queue()
         }
     }
