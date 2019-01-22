@@ -22,7 +22,8 @@ import kotlinx.coroutines.experimental.channels.Channel
 import kotlinx.coroutines.experimental.channels.actor
 import kotlinx.coroutines.experimental.channels.sendBlocking
 import lavalink.client.LavalinkUtil
-import lavalink.client.io.Lavalink
+import lavalink.client.io.jda.JdaLavalink
+import lavalink.client.io.jda.JdaLink
 import lavalink.client.player.event.AudioEventAdapterWrapped
 import net.dv8tion.jda.core.Permission
 import net.dv8tion.jda.core.entities.*
@@ -53,9 +54,9 @@ class MusicManager(val application: AstolfoCommunityApplication, properties: Ast
 
     private val musicContext = newFixedThreadPoolContext(50, "Music Manager")
 
-    val lavaLink = Lavalink(
-            properties.bot_user_id,
-            properties.shard_count
+    val lavaLink = JdaLavalink(
+        properties.bot_user_id,
+        properties.shard_count
     ) { shardId -> application.shardManager.getShardById(shardId) }
 
     private val saveFolder = File("./tempMusic/sessions/")
@@ -63,7 +64,12 @@ class MusicManager(val application: AstolfoCommunityApplication, properties: Ast
     private val musicSessionMap = ConcurrentHashMap<Guild, MusicSession>()
 
     private interface MusicEvent
-    private class CreateMusicEvent(val guild: Guild, val textChannel: TextChannel, val callback: CompletableDeferred<MusicSession>) : MusicEvent
+    private class CreateMusicEvent(
+        val guild: Guild,
+        val textChannel: TextChannel,
+        val callback: CompletableDeferred<MusicSession>
+    ) : MusicEvent
+
     private class DeleteMusicEvent(val guild: Guild) : MusicEvent
     private object CleanUpMusicEvent : MusicEvent
 
@@ -89,7 +95,8 @@ class MusicManager(val application: AstolfoCommunityApplication, properties: Ast
                 val donationEntry = application.donationManager.getByMember(event.guild.owner)
                 if (donationEntry >= SupportLevel.SUPPORTER) {
                     // only if owner is a supporter or greater
-                    val defaultVolume = application.astolfoRepositories.getEffectiveGuildSettings(event.guild.idLong).defaultMusicVolume
+                    val defaultVolume =
+                        application.astolfoRepositories.getEffectiveGuildSettings(event.guild.idLong).defaultMusicVolume
                     session.volume = defaultVolume // ez
                 }
 
@@ -107,7 +114,8 @@ class MusicManager(val application: AstolfoCommunityApplication, properties: Ast
                     var amountCleanedUp = 0
                     for ((guild, session) in musicSessionMap.toMap()) {
                         val currentVoiceChannel = session.channel()
-                        if (currentVoiceChannel != null && currentVoiceChannel.members.any { !it.user.isBot }) session.lastSeenMember = currentTime
+                        if (currentVoiceChannel != null && guild.getVoiceChannelById(currentVoiceChannel).members.any { !it.user.isBot })
+                            session.lastSeenMember = currentTime
                         // Auto Leave if no one is in voice channel for more then 5 minutes
                         if (currentTime - session.lastSeenMember > 5 * 60 * 1000) {
                             handleEvent(DeleteMusicEvent(guild))
@@ -123,7 +131,15 @@ class MusicManager(val application: AstolfoCommunityApplication, properties: Ast
         }
     }
 
-    class MusicSessionSave(var voiceChannel: Long, var boundChannel: Long, val currentSong: String?, val currentSongPosition: Long, val songQueue: List<String>, val repeatSongQueue: List<String>, val repeatMode: MusicSession.RepeatMode)
+    class MusicSessionSave(
+        var voiceChannel: Long,
+        var boundChannel: Long,
+        val currentSong: String?,
+        val currentSongPosition: Long,
+        val songQueue: List<String>,
+        val repeatSongQueue: List<String>,
+        val repeatMode: MusicSession.RepeatMode
+    )
 
     val musicManagerListener = object : ListenerAdapter() {
         override fun onReady(event: ReadyEvent) {
@@ -161,7 +177,11 @@ class MusicManager(val application: AstolfoCommunityApplication, properties: Ast
         get() = musicSessionMap.toMap().values.map { it.songQueue().size }.sum()
     val listeningCount: Int
         get() = musicSessionMap.toMap().values.map {
-            it.channel()?.members?.filter { !it.user.isBot }?.size ?: 0
+            val channelId = it.channel()
+            if (channelId != null) {
+                it.guild.getVoiceChannelById(channelId)
+                    ?.members?.filter { !it.user.isBot }?.size ?: 0
+            } else 0
         }.sum()
 
     init {
@@ -194,14 +214,17 @@ class MusicManager(val application: AstolfoCommunityApplication, properties: Ast
                     println("Saving music sessions to ${saveFolder.absolutePath}")
                     val musicMap = mutableMapOf<Int, MutableMap<Long, MusicSessionSave>>()
                     for ((guild, musicSession) in musicSessionMap.toMap()) {
-                        musicMap.computeIfAbsent(guild.jda.shardInfo.shardId) { mutableMapOf() }[guild.idLong] = MusicSessionSave(musicSession.channel()?.idLong
-                                ?: 0,
+                        musicMap.computeIfAbsent(guild.jda.shardInfo.shardId) { mutableMapOf() }[guild.idLong] =
+                            MusicSessionSave(
+                                musicSession.channel()?.toLong()
+                                    ?: 0,
                                 musicSession.boundChannel.idLong,
                                 musicSession.playingTrack()?.let { LavalinkUtil.toMessage(it) },
                                 musicSession.trackPosition,
                                 musicSession.songQueue().map { LavalinkUtil.toMessage(it) },
                                 musicSession.repeatSongQueue().map { LavalinkUtil.toMessage(it) },
-                                musicSession.repeatMode)
+                                musicSession.repeatMode
+                            )
                         stopSession(guild)
                     }
                     if (saveFolder.exists()) FileUtils.cleanDirectory(saveFolder)
@@ -231,7 +254,8 @@ class MusicManager(val application: AstolfoCommunityApplication, properties: Ast
     suspend fun stopSession(guild: Guild) = musicActor.send(DeleteMusicEvent(guild))
 }
 
-class MusicSession(val musicManager: MusicManager, val guild: Guild, var boundChannel: TextChannel) : AudioEventAdapterWrapped() {
+class MusicSession(val musicManager: MusicManager, val guild: Guild, var boundChannel: TextChannel) :
+    AudioEventAdapterWrapped() {
 
     companion object {
         private val musicContext = newFixedThreadPoolContext(100, "Music Session")
@@ -239,7 +263,7 @@ class MusicSession(val musicManager: MusicManager, val guild: Guild, var boundCh
 
     private var destroyed = false
 
-    private val player = musicManager.lavaLink.getPlayer(guild)
+    private val player = musicManager.lavaLink.getLink(guild).player
     private val songQueue = LinkedBlockingDeque<AudioTrack>()
     private val repeatSongQueue = LinkedBlockingDeque<AudioTrack>()
     private val nowPlayingMessage = MusicNowPlayingMessage(this)
@@ -251,11 +275,26 @@ class MusicSession(val musicManager: MusicManager, val guild: Guild, var boundCh
     private interface MusicEvent
     private object NextSong : MusicEvent
     private object Shuffle : MusicEvent
-    private class QueueSongs(val member: Member, val audioTracks: List<AudioTrack>, val top: Boolean, val skip: Boolean, val completableDeferred: CompletableDeferred<QueueSongsResponse>) : MusicEvent
-    class QueueSongsResponse(val songsQueued: Int, val queueMax: Boolean, val userLimit: Boolean, val queuedDups: Boolean)
+    private class QueueSongs(
+        val member: Member,
+        val audioTracks: List<AudioTrack>,
+        val top: Boolean,
+        val skip: Boolean,
+        val completableDeferred: CompletableDeferred<QueueSongsResponse>
+    ) : MusicEvent
+
+    class QueueSongsResponse(
+        val songsQueued: Int,
+        val queueMax: Boolean,
+        val userLimit: Boolean,
+        val queuedDups: Boolean
+    )
+
     private class ChangeRepeatMode(val newMode: RepeatMode) : MusicEvent
     private class TrackEnd(val audioTrack: AudioTrack, val endReason: AudioTrackEndReason) : MusicEvent
-    private class SkipTracks(val amount: Int, val completableDeferred: CompletableDeferred<List<AudioTrack>>) : MusicEvent
+    private class SkipTracks(val amount: Int, val completableDeferred: CompletableDeferred<List<AudioTrack>>) :
+        MusicEvent
+
     private class LoadSave(val save: MusicManager.MusicSessionSave) : MusicEvent
     private class Connect(val voiceChannel: VoiceChannel?) : MusicEvent
     private object Stop : MusicEvent
@@ -263,7 +302,11 @@ class MusicSession(val musicManager: MusicManager, val guild: Guild, var boundCh
     private class LeaveCleanUp(val completableDeferred: CompletableDeferred<List<AudioTrack>>) : MusicEvent
     private class DuplicateCleanUp(val completableDeferred: CompletableDeferred<List<AudioTrack>>) : MusicEvent
     private class Remove(val removeAt: Int, val completableDeferred: CompletableDeferred<AudioTrack?>) : MusicEvent
-    private class Move(val fromIndex: Int, val toIndex: Int, val completableDeferred: CompletableDeferred<MoveResponse>) : MusicEvent
+    private class Move(
+        val fromIndex: Int,
+        val toIndex: Int,
+        val completableDeferred: CompletableDeferred<MoveResponse>
+    ) : MusicEvent
 
     // Move Helpers
     class MoveResponse(val movedTrack: AudioTrack?, val newPosition: Int)
@@ -375,7 +418,13 @@ class MusicSession(val musicManager: MusicManager, val guild: Guild, var boundCh
                 val voiceChannel = boundChannel.jda.getVoiceChannelById(save.voiceChannel) ?: return
                 handleEvent(Connect(voiceChannel))
                 synchronized(songQueue) { songQueue.addAll(save.songQueue.map { LavalinkUtil.toAudioTrack(it) }) }
-                synchronized(repeatSongQueue) { repeatSongQueue.addAll(save.repeatSongQueue.map { LavalinkUtil.toAudioTrack(it) }) }
+                synchronized(repeatSongQueue) {
+                    repeatSongQueue.addAll(save.repeatSongQueue.map {
+                        LavalinkUtil.toAudioTrack(
+                            it
+                        )
+                    })
+                }
                 handleEvent(ChangeRepeatMode(save.repeatMode))
 
                 val currentSong = save.currentSong?.let { LavalinkUtil.toAudioTrack(it) }
@@ -391,7 +440,7 @@ class MusicSession(val musicManager: MusicManager, val guild: Guild, var boundCh
                 if (voiceChannel != null) {
                     // Just some insanity check
                     if (voiceChannel.guild.selfMember.hasPermission(voiceChannel, Permission.VOICE_CONNECT)) {
-                        player.link.connect(voiceChannel)
+                        (player.link as JdaLink).connect(voiceChannel)
                     }
                 } else player.link.disconnect()
             }
@@ -407,7 +456,10 @@ class MusicSession(val musicManager: MusicManager, val guild: Guild, var boundCh
                 musicLoader.destroy()
             }
             is LeaveCleanUp -> {
-                val validRequesterIds = player.link.channel?.members?.map { it.user.idLong }
+                val channelId = player.link.channel
+                val validRequesterIds = if (channelId != null)
+                    (player.link as JdaLink).jda.getVoiceChannelById(channelId)?.members?.map { it.user.idLong }
+                else null
                 if (validRequesterIds == null) {
                     // For whatever reason we cant get the members
                     event.completableDeferred.complete(listOf())
@@ -527,9 +579,23 @@ class MusicSession(val musicManager: MusicManager, val guild: Guild, var boundCh
         player.addListener(this)
     }
 
-    suspend fun queue(member: Member, tracks: List<AudioTrack>, top: Boolean = false, skip: Boolean = false, completableDeferred: CompletableDeferred<QueueSongsResponse>) = musicActor.send(QueueSongs(member, tracks, top, skip, completableDeferred))
+    suspend fun queue(
+        member: Member,
+        tracks: List<AudioTrack>,
+        top: Boolean = false,
+        skip: Boolean = false,
+        completableDeferred: CompletableDeferred<QueueSongsResponse>
+    ) = musicActor.send(QueueSongs(member, tracks, top, skip, completableDeferred))
 
-    suspend fun queueItem(audioItem: AudioItem, textChannel: TextChannel, member: Member, query: String, top: Boolean, skip: Boolean, messageCallback: (MessageEmbed) -> Unit) {
+    suspend fun queueItem(
+        audioItem: AudioItem,
+        textChannel: TextChannel,
+        member: Member,
+        query: String,
+        top: Boolean,
+        skip: Boolean,
+        messageCallback: (MessageEmbed) -> Unit
+    ) {
         if (audioItem is AudioTrack) {
             // If the track returned is a normal audio track
             val audioTrack: AudioTrack = audioItem
@@ -539,8 +605,12 @@ class MusicSession(val musicManager: MusicManager, val guild: Guild, var boundCh
             withTimeout(1, TimeUnit.MINUTES) {
                 val response = completableDeferred.await()
                 when {
-                    response.queueMax -> messageCallback(errorEmbed("❗ [${audioTrack.info.title}](${audioTrack.info.uri}) couldn't be added to the queue since the queue is full! " +
-                            "To increase the size of the queue consider donating to our [patreon.com/theprimedtnt](https://www.patreon.com/theprimedtnt)"))
+                    response.queueMax -> messageCallback(
+                        errorEmbed(
+                            "❗ [${audioTrack.info.title}](${audioTrack.info.uri}) couldn't be added to the queue since the queue is full! " +
+                                "To increase the size of the queue consider donating to our [patreon.com/theprimedtnt](https://www.patreon.com/theprimedtnt)"
+                        )
+                    )
                     response.userLimit -> messageCallback(errorEmbed("❗ [${audioTrack.info.title}](${audioTrack.info.uri}) couldn't be added to the queue since you hit the user song limit!"))
                     response.queuedDups -> messageCallback(errorEmbed("❗ [${audioTrack.info.title}](${audioTrack.info.uri}) couldn't be added to the queue since it was a duplicate and duplicate song prevention is enabled!"))
                     else -> messageCallback(embed("\uD83D\uDCDD [${audioTrack.info.title}](${audioTrack.info.uri}) has been added to the queue"))
@@ -557,10 +627,18 @@ class MusicSession(val musicManager: MusicManager, val guild: Guild, var boundCh
                 val response = completableDeferred.await()
                 val amountAdded = response.songsQueued
                 when {
-                    response.queueMax -> if (amountAdded == 0) messageCallback(errorEmbed("❗ No songs from the playlist [${audioPlaylist.name}]($query) could be added to the queue since the queue is full! " +
-                            "To increase the size of the queue consider donating to our [patreon.com/theprimedtnt](https://www.patreon.com/theprimedtnt)"))
-                    else messageCallback(errorEmbed("❗ Only **$amountAdded** of **${tracks.size}** songs from the playlist [${audioPlaylist.name}]($query) could be added to the queue since the queue is full! " +
-                            "To increase the size of the queue consider donating to our [patreon.com/theprimedtnt](https://www.patreon.com/theprimedtnt)"))
+                    response.queueMax -> if (amountAdded == 0) messageCallback(
+                        errorEmbed(
+                            "❗ No songs from the playlist [${audioPlaylist.name}]($query) could be added to the queue since the queue is full! " +
+                                "To increase the size of the queue consider donating to our [patreon.com/theprimedtnt](https://www.patreon.com/theprimedtnt)"
+                        )
+                    )
+                    else messageCallback(
+                        errorEmbed(
+                            "❗ Only **$amountAdded** of **${tracks.size}** songs from the playlist [${audioPlaylist.name}]($query) could be added to the queue since the queue is full! " +
+                                "To increase the size of the queue consider donating to our [patreon.com/theprimedtnt](https://www.patreon.com/theprimedtnt)"
+                        )
+                    )
 
                     response.userLimit -> if (amountAdded == 0) messageCallback(errorEmbed("❗ No songs from the playlist [${audioPlaylist.name}]($query) could be added to the queue since you hit the user song limit!"))
                     else messageCallback(errorEmbed("❗ Only **$amountAdded** of **${tracks.size}** songs from the playlist [${audioPlaylist.name}]($query) could be added to the queue since you hit the user song limit!"))
@@ -622,8 +700,16 @@ class MusicSession(val musicManager: MusicManager, val guild: Guild, var boundCh
     }
 
     private interface MusicLoaderEvent
-    private class QueueTaskEvent(val member: Member, val query: String, val textChannel: TextChannel, val top: Boolean, val skip: Boolean) : MusicLoaderEvent
-    private class TaskFinishEvent(val musicLoaderTask: MusicLoader.MusicLoaderTask, val cancelled: Boolean) : MusicLoaderEvent
+    private class QueueTaskEvent(
+        val member: Member,
+        val query: String,
+        val textChannel: TextChannel,
+        val top: Boolean,
+        val skip: Boolean
+    ) : MusicLoaderEvent
+
+    private class TaskFinishEvent(val musicLoaderTask: MusicLoader.MusicLoaderTask, val cancelled: Boolean) :
+        MusicLoaderEvent
 
     inner class MusicLoader {
 
@@ -654,7 +740,8 @@ class MusicSession(val musicManager: MusicManager, val guild: Guild, var boundCh
             }
         }
 
-        suspend fun load(member: Member, query: String, textChannel: TextChannel, top: Boolean, skip: Boolean) = musicLoaderActor.send(QueueTaskEvent(member, query, textChannel, top, skip))
+        suspend fun load(member: Member, query: String, textChannel: TextChannel, top: Boolean, skip: Boolean) =
+            musicLoaderActor.send(QueueTaskEvent(member, query, textChannel, top, skip))
 
         fun destroy() {
             destroyed = true
@@ -662,13 +749,14 @@ class MusicSession(val musicManager: MusicManager, val guild: Guild, var boundCh
         }
 
         inner class MusicLoaderTask(
-                val member: Member,
-                val textChannel: TextChannel,
-                val query: String,
-                val top: Boolean,
-                val skip: Boolean
+            val member: Member,
+            val textChannel: TextChannel,
+            val query: String,
+            val top: Boolean,
+            val skip: Boolean
         ) {
-            private val message = textChannel.sendMessage(embed("\uD83D\uDD0E Loading **$query** to queue...")).sendCached()
+            private val message =
+                textChannel.sendMessage(embed("\uD83D\uDD0E Loading **$query** to queue...")).sendCached()
             private val completableDeferred = musicManager.audioPlayerManager.loadItemDeferred(query)
 
             init {
@@ -725,15 +813,15 @@ class AudioData(var requesterId: Long = 0)
 
 // Lavalink shortcuts
 
-fun Lavalink.connect(voiceChannel: VoiceChannel) = getLink(voiceChannel.guild).connect(voiceChannel)
-fun Lavalink.getPlayer(guild: Guild) = getLink(guild).player!!
+fun JdaLavalink.connect(voiceChannel: VoiceChannel) = getLink(voiceChannel.guild).connect(voiceChannel)
+fun JdaLavalink.getPlayer(guild: Guild) = getLink(guild).player!!
 
 fun CommandExecution.selectMusic(results: List<AudioTrack>) = selectionBuilder<AudioTrack>()
-        .title("\uD83D\uDD0E Music Search Results:")
-        .results(results)
-        .noResultsMessage("Unknown Song!")
-        .resultsRenderer { "**${it.info.title}** *by ${it.info.author}*" }
-        .description("Type the number of the song you want")
+    .title("\uD83D\uDD0E Music Search Results:")
+    .results(results)
+    .noResultsMessage("Unknown Song!")
+    .resultsRenderer { "**${it.info.title}** *by ${it.info.author}*" }
+    .description("Type the number of the song you want")
 
 class MusicNoMatchException : RuntimeException()
 
@@ -762,7 +850,16 @@ fun AudioPlayerManager.loadItemDeferred(searchQuery: String): CompletableDeferre
 
 object MusicUtils {
 
-    private val allowedHosts = listOf("youtube.com", "youtu.be", "music.youtube.com", "soundcloud.com", "bandcamp.com", "beam.pro", "mixer.com", "vimeo.com")
+    private val allowedHosts = listOf(
+        "youtube.com",
+        "youtu.be",
+        "music.youtube.com",
+        "soundcloud.com",
+        "bandcamp.com",
+        "beam.pro",
+        "mixer.com",
+        "vimeo.com"
+    )
 
     fun getEffectiveSearchQuery(query: String): MusicQuery? {
         return try {

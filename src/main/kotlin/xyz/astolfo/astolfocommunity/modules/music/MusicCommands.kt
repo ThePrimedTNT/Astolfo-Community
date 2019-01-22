@@ -636,7 +636,7 @@ suspend fun CommandExecution.joinAction(forceJoinMessage: Boolean = false): Comp
         messageAction(errorEmbed("I don't have permission to speak in **${vc.name}**")).queue()
         return null
     }
-    val changedChannels = application.musicManager.lavaLink.getLink(vc.guild).channel != vc
+    val changedChannels = application.musicManager.lavaLink.getLink(vc.guild).channel?.toLong() != vc.idLong
     application.musicManager.lavaLink.connect(vc)
     val session = application.musicManager.getSession(guild, event.channel)
     if (changedChannels || forceJoinMessage) messageAction(embed("I have joined your voice channel!")).queue()
