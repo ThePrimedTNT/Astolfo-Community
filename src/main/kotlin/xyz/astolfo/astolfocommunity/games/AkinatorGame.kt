@@ -3,10 +3,10 @@ package xyz.astolfo.astolfocommunity.games
 import com.markozajc.akiwrapper.Akiwrapper
 import com.markozajc.akiwrapper.AkiwrapperBuilder
 import com.markozajc.akiwrapper.core.entities.Guess
-import kotlinx.coroutines.experimental.*
-import kotlinx.coroutines.experimental.channels.Channel
-import kotlinx.coroutines.experimental.channels.actor
-import kotlinx.coroutines.experimental.channels.sendBlocking
+import kotlinx.coroutines.*
+import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.channels.actor
+import kotlinx.coroutines.channels.sendBlocking
 import net.dv8tion.jda.core.entities.Member
 import net.dv8tion.jda.core.entities.TextChannel
 import net.dv8tion.jda.core.events.message.MessageReceivedEvent
@@ -27,12 +27,12 @@ class AkinatorGame(member: Member, channel: TextChannel) : Game(member, channel)
 
         init {
             answerMap = listOf(
-                    Answer.YES to listOf("Y", "yes"),
-                    Answer.NO to listOf("N", "no"),
-                    Answer.DONT_KNOW to listOf("DK", "dont know", "don't know"),
-                    Answer.PROBABLY to listOf("P", "probably"),
-                    Answer.PROBABLY_NOT to listOf("PN", "probably not"),
-                    Answer.UNDO to listOf("U", "B", "undo", "back")
+                Answer.YES to listOf("Y", "yes"),
+                Answer.NO to listOf("N", "no"),
+                Answer.DONT_KNOW to listOf("DK", "dont know", "don't know"),
+                Answer.PROBABLY to listOf("P", "probably"),
+                Answer.PROBABLY_NOT to listOf("PN", "probably not"),
+                Answer.UNDO to listOf("U", "B", "undo", "back")
             ).map {
                 val answer = it.first
                 it.second.map { it to answer }
@@ -82,14 +82,15 @@ class AkinatorGame(member: Member, channel: TextChannel) : Game(member, channel)
         object TimeoutEvent : AkinatorEvent()
     }
 
-    private val ankinatorActor = actor<AkinatorEvent>(context = akinatorContext, capacity = Channel.UNLIMITED) {
-        for (event in this.channel) {
-            if (destroyed) continue
-            handleEvent(event)
+    private val ankinatorActor =
+        GlobalScope.actor<AkinatorEvent>(context = akinatorContext, capacity = Channel.UNLIMITED) {
+            for (event in this.channel) {
+                if (destroyed) continue
+                handleEvent(event)
+            }
+            // Dispose messages
+            handleEvent(AkinatorEvent.DestroyEvent)
         }
-        // Dispose messages
-        handleEvent(AkinatorEvent.DestroyEvent)
-    }
 
     private suspend fun handleEvent(event: AkinatorEvent) {
         when (event) {
@@ -109,12 +110,12 @@ class AkinatorGame(member: Member, channel: TextChannel) : Game(member, channel)
                 val rawContent = event.message
                 // go through all possible response choices and select the most similar
                 val bestMatch = answerMap.map { it to it.key.levenshteinDistance(rawContent, true) }
-                        .filter {
-                            // Only allow No and Yes for guesses
-                            if (akiState == State.GUESS) yesNoList.contains(it.first.value)
-                            else true
-                        }
-                        .sortedBy { it.second }.first()
+                    .filter {
+                        // Only allow No and Yes for guesses
+                        if (akiState == State.GUESS) yesNoList.contains(it.first.value)
+                        else true
+                    }
+                    .sortedBy { it.second }.first()
                 // check if response is close enough to closest possible result
                 if (bestMatch.second >= max(1, bestMatch.first.key.length / 4)) {
                     errorMessage = channel.sendMessage(embed("Unknown answer!")).sendCached()
@@ -142,7 +143,8 @@ class AkinatorGame(member: Member, channel: TextChannel) : Game(member, channel)
                                 when (akiState) {
                                     State.GUESS -> {
                                         // Still has questions to ask (Only can guess normally if next question is valid)
-                                        channel.sendMessage("Aww, here are some more questions to narrow the result.").queue()
+                                        channel.sendMessage("Aww, here are some more questions to narrow the result.")
+                                            .queue()
                                         akiState = State.ASKING
                                     }
                                     State.ITERATING -> {
@@ -194,7 +196,9 @@ class AkinatorGame(member: Member, channel: TextChannel) : Game(member, channel)
                     return
                 }
                 // ask it and start timeout
-                questionMessage = channel.sendMessage(embed("**#${question.step + 1}** ${question.question}\n(Answer: yes/no/don't know/probably/probably not or undo)")).sendCached()
+                questionMessage =
+                    channel.sendMessage(embed("**#${question.step + 1}** ${question.question}\n(Answer: yes/no/don't know/probably/probably not or undo)"))
+                        .sendCached()
                 resetTimeout()
             }
             is AkinatorEvent.NoMoreQuestions -> {
@@ -202,10 +206,10 @@ class AkinatorGame(member: Member, channel: TextChannel) : Game(member, channel)
                 akiState = State.ITERATING
                 // Get best guess else get guess thats above 50%
                 val bestGuess = getGuess() ?: akiWrapper.getGuessesAboveProbability(0.50)
-                        .filter { !hasGuessed.contains(it.name) }
-                        .sortedByDescending { it.probability }.firstOrNull()
+                    .filter { !hasGuessed.contains(it.name) }
+                    .sortedByDescending { it.probability }.firstOrNull()
 
-                if(bestGuess == null){
+                if (bestGuess == null) {
                     // No more guesses, defeat
                     channel.sendMessage("Aww, you have defeated me!").queue()
                     endGame()
@@ -252,8 +256,8 @@ class AkinatorGame(member: Member, channel: TextChannel) : Game(member, channel)
 
     private suspend fun resetTimeout() {
         stopTimeout()
-        timeoutJob = launch {
-            delay(5, TimeUnit.MINUTES)
+        timeoutJob = GlobalScope.launch {
+            delay(TimeUnit.MINUTES.toMillis(5))
             ankinatorActor.send(AkinatorEvent.TimeoutEvent)
         }
     }
@@ -262,8 +266,8 @@ class AkinatorGame(member: Member, channel: TextChannel) : Game(member, channel)
      * Get guess with probability greater then 85% and grab guess with highest probability
      */
     private fun getGuess() = akiWrapper.getGuessesAboveProbability(0.85)
-            .filter { !hasGuessed.contains(it.name) }
-            .sortedByDescending { it.probability }.firstOrNull()
+        .filter { !hasGuessed.contains(it.name) }
+        .sortedByDescending { it.probability }.firstOrNull()
 
     override suspend fun start() {
         super.start()

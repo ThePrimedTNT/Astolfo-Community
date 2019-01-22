@@ -1,12 +1,9 @@
 package xyz.astolfo.astolfocommunity.games
 
-import kotlinx.coroutines.experimental.Job
-import kotlinx.coroutines.experimental.channels.Channel
-import kotlinx.coroutines.experimental.channels.actor
-import kotlinx.coroutines.experimental.channels.sendBlocking
-import kotlinx.coroutines.experimental.delay
-import kotlinx.coroutines.experimental.launch
-import kotlinx.coroutines.experimental.newFixedThreadPoolContext
+import kotlinx.coroutines.*
+import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.channels.actor
+import kotlinx.coroutines.channels.sendBlocking
 import net.dv8tion.jda.core.entities.Member
 import net.dv8tion.jda.core.entities.TextChannel
 import net.dv8tion.jda.core.entities.User
@@ -83,7 +80,7 @@ class ShiritoriGame(member: Member, channel: TextChannel, private val difficulty
     private object WinEvent : ShiritoriEvent
     private object DestroyEvent : ShiritoriEvent
 
-    private val shiritoriActor = actor<ShiritoriEvent>(context = shiritoriContext, capacity = Channel.UNLIMITED) {
+    private val shiritoriActor = GlobalScope.actor<ShiritoriEvent>(context = shiritoriContext, capacity = Channel.UNLIMITED) {
         for (event in this.channel) {
             if (destroyed) continue
             handleEvent(event)
@@ -187,8 +184,8 @@ class ShiritoriGame(member: Member, channel: TextChannel, private val difficulty
                     thinkingMessage = channel.sendMessage("Thinking...").sendCached()
                     val chosenWord = wordPool.filter { it.startsWith(startLetter) && !usedWords.contains(it) }.let { it[(random.nextDouble().pow(2) * it.size).toInt()] }
                     computerDelay?.cancel()
-                    computerDelay = launch(shiritoriContext) {
-                        delay(((1 - random.nextDouble().pow(2)) * difficulty.responseTime).toLong(), TimeUnit.SECONDS)
+                    computerDelay = GlobalScope.launch(shiritoriContext) {
+                        delay(TimeUnit.SECONDS.toMillis(((1 - random.nextDouble().pow(2)) * difficulty.responseTime).toLong()))
                         thinkingMessage?.delete()
                         thinkingMessage = null
                         channel.sendMessage(chosenWord).queue()

@@ -1,11 +1,12 @@
 package xyz.astolfo.astolfocommunity.modules.music
 
 import com.sedmelluq.discord.lavaplayer.track.AudioTrack
-import kotlinx.coroutines.experimental.Job
-import kotlinx.coroutines.experimental.channels.Channel
-import kotlinx.coroutines.experimental.channels.actor
-import kotlinx.coroutines.experimental.channels.sendBlocking
-import kotlinx.coroutines.experimental.newFixedThreadPoolContext
+import kotlinx.coroutines.GlobalScope
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.channels.actor
+import kotlinx.coroutines.channels.sendBlocking
+import kotlinx.coroutines.newFixedThreadPoolContext
 import xyz.astolfo.astolfocommunity.messages.*
 
 class MusicNowPlayingMessage(private val musicSession: MusicSession) {
@@ -16,7 +17,7 @@ class MusicNowPlayingMessage(private val musicSession: MusicSession) {
 
     private var destroyed = false
 
-    private val messageActor = actor<AudioTrack>(context = nowPlayingContext, capacity = Channel.UNLIMITED) {
+    private val messageActor = GlobalScope.actor<AudioTrack>(context = nowPlayingContext, capacity = Channel.UNLIMITED) {
         for (track in channel) {
             if(destroyed) continue
             updateInternal(track)

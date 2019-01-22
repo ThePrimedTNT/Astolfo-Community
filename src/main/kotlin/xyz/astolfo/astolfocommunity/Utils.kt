@@ -2,9 +2,9 @@ package xyz.astolfo.astolfocommunity
 
 import com.github.salomonbrys.kotson.fromJson
 import com.google.gson.Gson
-import kotlinx.coroutines.experimental.*
-import kotlinx.coroutines.experimental.sync.Mutex
-import kotlinx.coroutines.experimental.sync.withLock
+import kotlinx.coroutines.*
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import net.dv8tion.jda.bot.sharding.ShardManager
 import net.dv8tion.jda.core.Permission
 import net.dv8tion.jda.core.entities.Guild
@@ -20,8 +20,8 @@ val ASTOLFO_GSON = Gson()
 val ASTOLFO_HTTP_CLIENT = OkHttpClient()
 
 inline fun <reified T : Any> webJson(
-        url: String,
-        accept: String? = "application/json"
+    url: String,
+    accept: String? = "application/json"
 ) = web(url, accept).wrap {
     ASTOLFO_GSON.fromJson<T>(it)
 }
@@ -76,14 +76,15 @@ fun ShardManager.getEffectiveName(guild: Guild?, userId: Long): String? {
 }
 
 class RateLimiter<K>(
-        /**
-         * The number of checks allowed before rate-limited status.
-         */
-        val threshold: Int,
-        /**
-         * How long the key will be timed out for.
-         */
-        val timeout: Long) {
+    /**
+     * The number of checks allowed before rate-limited status.
+     */
+    val threshold: Int,
+    /**
+     * How long the key will be timed out for.
+     */
+    val timeout: Long
+) {
 
     companion object {
         private val rateLimitContext = newFixedThreadPoolContext(10, "Rate Limiter Context")
@@ -100,8 +101,8 @@ class RateLimiter<K>(
             val data = map.computeIfAbsent(key) { mutableListOf() }
             val timestamp = System.currentTimeMillis()
             data.add(timestamp)
-            launch(rateLimitContext) {
-                delay(timeout, TimeUnit.SECONDS)
+            GlobalScope.launch(rateLimitContext) {
+                delay(TimeUnit.SECONDS.toMillis(timeout))
                 mapMutex.withLock {
                     data.remove(timestamp)
                     if (data.isEmpty()) map.remove(key)
@@ -113,7 +114,7 @@ class RateLimiter<K>(
     suspend fun remainingTime(key: K): Long? {
         mapMutex.withLock {
             return map[key]?.takeLast(threshold)?.firstOrNull()
-                    ?.let { (timeout * 1000) - (System.currentTimeMillis() - it) }
+                ?.let { (timeout * 1000) - (System.currentTimeMillis() - it) }
         }
     }
 
@@ -128,7 +129,10 @@ class RateLimiter<K>(
 object Utils {
 
     private val TIMESTAMP_PATTERN = Regex("^(?:(?:(?<hours>\\d+):)?(?:(?<minutes>\\d+):))?(?<seconds>\\d+)$")
-    private val WORD_PATTERN = Regex("^((?:(?<hours>\\d+)(?:h))|(?:(?<minutes>\\d+)(?:m))|(?:(?<seconds>\\d+)(?:s)))+$", RegexOption.IGNORE_CASE)
+    private val WORD_PATTERN = Regex(
+        "^((?:(?<hours>\\d+)(?:h))|(?:(?<minutes>\\d+)(?:m))|(?:(?<seconds>\\d+)(?:s)))+$",
+        RegexOption.IGNORE_CASE
+    )
 
     fun parseTimeString(input: String): Long? {
         val inputNoSpaces = input.replace(Regex("\\s+"), "")
@@ -138,8 +142,8 @@ object Utils {
     private fun parse(pattern: Regex, input: String): Long? {
         val groupCollection = pattern.matchEntire(input)?.groups ?: return null
         return TimeUnit.HOURS.toMillis(groupCollection["hours"]?.value?.toLongOrNull() ?: 0) +
-                TimeUnit.MINUTES.toMillis(groupCollection["minutes"]?.value?.toLongOrNull() ?: 0) +
-                TimeUnit.SECONDS.toMillis(groupCollection["seconds"]?.value?.toLongOrNull() ?: 0)
+            TimeUnit.MINUTES.toMillis(groupCollection["minutes"]?.value?.toLongOrNull() ?: 0) +
+            TimeUnit.SECONDS.toMillis(groupCollection["seconds"]?.value?.toLongOrNull() ?: 0)
     }
 
     fun formatSongDuration(duration: Long, isStream: Boolean = false): String {
@@ -150,7 +154,7 @@ object Utils {
         val seconds = TimeUnit.MILLISECONDS.toSeconds(duration) % TimeUnit.MINUTES.toSeconds(1)
 
         val list = hours.takeIf { it > 0 }?.let { arrayOf(hours, minutes, seconds) }
-                ?: arrayOf(minutes, seconds)
+            ?: arrayOf(minutes, seconds)
 
         return list.mapIndexed { index, time ->
             if (index == 0) String.format("%d", time)
@@ -189,12 +193,12 @@ fun String.words(): List<String> {
 }
 
 fun String.splitFirst(delimiter: String) =
-        if (contains(delimiter)) substringBefore(delimiter).trim() to substringAfter(delimiter).trim()
-        else this to ""
+    if (contains(delimiter)) substringBefore(delimiter).trim() to substringAfter(delimiter).trim()
+    else this to ""
 
 fun String.splitLast(delimiter: String) =
-        if (contains(delimiter)) substringBeforeLast(delimiter).trim() to substringAfterLast(delimiter).trim()
-        else this to ""
+    if (contains(delimiter)) substringBeforeLast(delimiter).trim() to substringAfterLast(delimiter).trim()
+    else this to ""
 
 fun String.levenshteinDistance(t: String, ignoreCase: Boolean = false): Int {
     // degenerate cases
@@ -233,14 +237,14 @@ fun String.levenshteinDistance(t: String, ignoreCase: Boolean = false): Int {
 }
 
 val <T> Deferred<T>.value: T?
-    get() = if (isCompleted && !isCompletedExceptionally) getCompleted() else null
+    get() = if (isCompleted && getCompletionExceptionOrNull() == null) getCompleted() else null
 
 inline fun <T> synchronized2(lock1: Any, lock2: Any, block: () -> T): T =
-        synchronized(lock1) {
-            synchronized(lock2) {
-                block()
-            }
+    synchronized(lock1) {
+        synchronized(lock2) {
+            block()
         }
+    }
 
 fun TextChannel.hasPermission(vararg permissions: Permission) = guild.selfMember.hasPermission(this, *permissions)
 

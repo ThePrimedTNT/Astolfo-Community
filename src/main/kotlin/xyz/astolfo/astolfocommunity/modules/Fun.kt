@@ -5,8 +5,8 @@ import com.github.natanbc.weeb4j.image.HiddenMode
 import com.github.natanbc.weeb4j.image.NsfwFilter
 import com.oopsjpeg.osu4j.backend.EndpointUsers
 import com.oopsjpeg.osu4j.backend.Osu
-import kotlinx.coroutines.experimental.sync.Mutex
-import kotlinx.coroutines.experimental.sync.withLock
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import org.jsoup.Jsoup
 import xyz.astolfo.astolfocommunity.games.*
 import xyz.astolfo.astolfocommunity.menus.memberSelectionBuilder
@@ -16,7 +16,9 @@ import xyz.astolfo.astolfocommunity.webJson
 import xyz.astolfo.astolfocommunity.words
 import java.math.BigInteger
 import java.util.*
-import kotlin.coroutines.experimental.suspendCoroutine
+import kotlin.coroutines.suspendCoroutine
+import kotlin.coroutines.resume
+import kotlin.coroutines.resumeWithException
 
 fun createFunModule() = module("Fun") {
     command("osu") {

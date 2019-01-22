@@ -1,14 +1,11 @@
 package xyz.astolfo.astolfocommunity.games
 
-import kotlinx.coroutines.experimental.CompletableDeferred
-import kotlinx.coroutines.experimental.channels.Channel
-import kotlinx.coroutines.experimental.channels.actor
-import kotlinx.coroutines.experimental.channels.sendBlocking
-import kotlinx.coroutines.experimental.delay
-import kotlinx.coroutines.experimental.launch
-import kotlinx.coroutines.experimental.newFixedThreadPoolContext
-import kotlinx.coroutines.experimental.sync.Mutex
-import kotlinx.coroutines.experimental.sync.withLock
+import kotlinx.coroutines.*
+import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.channels.actor
+import kotlinx.coroutines.channels.sendBlocking
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import net.dv8tion.jda.core.Permission
 import net.dv8tion.jda.core.entities.Member
 import net.dv8tion.jda.core.entities.Message
@@ -35,7 +32,7 @@ object GameHandler {
     private class StartGame(val sessionKey: GameSessionKey, val game: Game) : GameEvent
     private class EndGame(val sessionKey: GameSessionKey) : GameEvent
 
-    private val gameActor = actor<GameEvent>(context = gameHandlerContext, capacity = Channel.UNLIMITED) {
+    private val gameActor = GlobalScope.actor<GameEvent>(context = gameHandlerContext, capacity = Channel.UNLIMITED) {
         for (event in channel) {
             sessionMutex.withLock {
                 handleEvent(event)
@@ -68,7 +65,8 @@ object GameHandler {
 
     suspend fun end(channelId: Long, userId: Long) = gameActor.send(EndGame(GameSessionKey(channelId, userId)))
 
-    suspend fun start(channelId: Long, userId: Long, game: Game) = gameActor.send(StartGame(GameSessionKey(channelId, userId), game))
+    suspend fun start(channelId: Long, userId: Long, game: Game) =
+        gameActor.send(StartGame(GameSessionKey(channelId, userId), game))
 
     data class GameSessionKey(val channelId: Long, val userId: Long)
 
@@ -94,7 +92,8 @@ abstract class Game(val member: Member, val channel: TextChannel) {
 
 }
 
-abstract class ReactionGame(member: Member, channel: TextChannel, private val reactions: List<String>) : Game(member, channel) {
+abstract class ReactionGame(member: Member, channel: TextChannel, private val reactions: List<String>) :
+    Game(member, channel) {
 
     companion object {
         private val reactionGameContext = newFixedThreadPoolContext(30, "Reaction Game")
@@ -108,24 +107,25 @@ abstract class ReactionGame(member: Member, channel: TextChannel, private val re
     private class ReactionEvent(val event: GenericMessageReactionEvent) : ReactionGameEvent
     private class DeleteEvent(val event: MessageDeleteEvent) : ReactionGameEvent
 
-    private val reactionGameActor = actor<ReactionGameEvent>(context = reactionGameContext, capacity = Channel.UNLIMITED) {
-        for (event in this.channel) {
-            if (destroyed) continue
-            handleEvent(event)
-        }
+    private val reactionGameActor =
+        GlobalScope.actor<ReactionGameEvent>(context = reactionGameContext, capacity = Channel.UNLIMITED) {
+            for (event in this.channel) {
+                if (destroyed) continue
+                handleEvent(event)
+            }
 
-        handleEvent(DestroyEvent)
-    }
+            handleEvent(DestroyEvent)
+        }
 
     private class MessageEvent(val newContent: Message)
 
     // TODO this works perfectly, maybe make it a separate thing I can reuse elsewhere?
-    private val messageActor = actor<MessageEvent>(context = reactionGameContext, capacity = Channel.UNLIMITED) {
+    private val messageActor = GlobalScope.actor<MessageEvent>(context = reactionGameContext, capacity = Channel.UNLIMITED) {
         var contentDeferred = CompletableDeferred<Message?>()
 
         val contentMutex = Mutex()
         var stopJob = false
-        launch(reactionGameContext) {
+        GlobalScope.launch(reactionGameContext) {
             while (isActive) {
                 contentMutex.withLock {
                     // don't await if job is stopped and nothing is left to change in message
@@ -146,7 +146,7 @@ abstract class ReactionGame(member: Member, channel: TextChannel, private val re
                     currentMessage!!.editMessage(newContent!!)
                 }
                 // Delay for 2 seconds so we don't spam discord
-                delay(2, TimeUnit.SECONDS)
+                delay(TimeUnit.SECONDS.toMillis(2))
             }
         }
 
@@ -181,7 +181,9 @@ abstract class ReactionGame(member: Member, channel: TextChannel, private val re
                 if (currentMessage!!.idLong.value != reactionEvent.messageIdLong || reactionEvent.user.isBot) return
 
                 if (reactionEvent.user.idLong != member.user.idLong) {
-                    if (reactionEvent.textChannel.hasPermission(Permission.MESSAGE_MANAGE)) reactionEvent.reaction.removeReaction(reactionEvent.user).queue()
+                    if (reactionEvent.textChannel.hasPermission(Permission.MESSAGE_MANAGE)) reactionEvent.reaction.removeReaction(
+                        reactionEvent.user
+                    ).queue()
                     return
                 }
 

@@ -1,12 +1,10 @@
 package xyz.astolfo.astolfocommunity.commands
 
 import io.sentry.Sentry
-import kotlinx.coroutines.experimental.channels.Channel
-import kotlinx.coroutines.experimental.channels.actor
-import kotlinx.coroutines.experimental.channels.sendBlocking
-import kotlinx.coroutines.experimental.delay
-import kotlinx.coroutines.experimental.launch
-import kotlinx.coroutines.experimental.newFixedThreadPoolContext
+import kotlinx.coroutines.*
+import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.channels.actor
+import kotlinx.coroutines.channels.sendBlocking
 import net.dv8tion.jda.core.events.message.guild.GuildMessageReceivedEvent
 import net.dv8tion.jda.core.hooks.ListenerAdapter
 import xyz.astolfo.astolfocommunity.AstolfoCommunityApplication
@@ -29,10 +27,10 @@ class MessageListener(val application: AstolfoCommunityApplication) {
     }
 
     init {
-        launch(messageProcessorContext) {
+        GlobalScope.launch(messageProcessorContext) {
             while (isActive) {
                 // Clean up every 5 minutes
-                delay(5, TimeUnit.MINUTES)
+                delay(TimeUnit.MINUTES.toMillis(5))
                 messageActor.send(CleanUp)
             }
         }
@@ -47,16 +45,17 @@ class MessageListener(val application: AstolfoCommunityApplication) {
     private class GuildMessageReceived(val messageData: MessageData) : MessageEvent
     private object CleanUp : MessageEvent
 
-    private val messageActor = actor<MessageEvent>(context = messageProcessorContext, capacity = Channel.UNLIMITED) {
-        for (event in channel) {
-            try {
-                handleEvent(event)
-            }catch (e: Throwable){
-                e.printStackTrace()
-                Sentry.capture(e)
+    private val messageActor =
+        GlobalScope.actor<MessageEvent>(context = messageProcessorContext, capacity = Channel.UNLIMITED) {
+            for (event in channel) {
+                try {
+                    handleEvent(event)
+                } catch (e: Throwable) {
+                    e.printStackTrace()
+                    Sentry.capture(e)
+                }
             }
         }
-    }
 
     private val guildListeners = mutableMapOf<Long, CacheEntry>()
 

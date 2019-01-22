@@ -4,8 +4,10 @@ import com.github.natanbc.weeb4j.TokenType
 import com.github.natanbc.weeb4j.Weeb4J
 import com.timgroup.statsd.NonBlockingStatsDClient
 import io.sentry.Sentry
-import kotlinx.coroutines.experimental.delay
-import kotlinx.coroutines.experimental.launch
+import kotlinx.coroutines.GlobalScope
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
+import kotlinx.coroutines.launch
 import net.dv8tion.jda.bot.sharding.DefaultShardManagerBuilder
 import net.dv8tion.jda.bot.sharding.ShardManager
 import net.dv8tion.jda.core.OnlineStatus
@@ -33,8 +35,10 @@ import java.util.concurrent.TimeUnit
 @SpringBootApplication
 @EnableCaching
 @EnableConfigurationProperties(AstolfoProperties::class)
-class AstolfoCommunityApplication(val astolfoRepositories: AstolfoRepositories,
-                                  val properties: AstolfoProperties) {
+class AstolfoCommunityApplication(
+    val astolfoRepositories: AstolfoRepositories,
+    val properties: AstolfoProperties
+) {
 
     final val donationManager = DonationManager(this, properties)
     final val musicManager = MusicManager(this, properties)
@@ -50,17 +54,28 @@ class AstolfoCommunityApplication(val astolfoRepositories: AstolfoRepositories,
 
         val statsListener = StatsListener(this)
         val shardManagerBuilder = DefaultShardManagerBuilder()
-                .setCompressionEnabled(true)
-                .setToken(properties.token)
-                .setStatus(OnlineStatus.DO_NOT_DISTURB)
-                .setGame(Game.watching("myself boot"))
-                .addEventListeners(messageListener.listener, statsListener, musicManager.lavaLink, musicManager.musicManagerListener, JoinLeaveManager(this).listener)
-                .setEnableShutdownHook(false)
-                .setShardsTotal(properties.shard_count)
-        if (properties.custom_gateway_enabled) shardManagerBuilder.setSessionController(AstolfoSessionController(properties.custom_gateway_url, properties.custom_gateway_delay))
+            .setCompressionEnabled(true)
+            .setToken(properties.token)
+            .setStatus(OnlineStatus.DO_NOT_DISTURB)
+            .setGame(Game.watching("myself boot"))
+            .addEventListeners(
+                messageListener.listener,
+                statsListener,
+                musicManager.lavaLink,
+                musicManager.musicManagerListener,
+                JoinLeaveManager(this).listener
+            )
+            .setEnableShutdownHook(false)
+            .setShardsTotal(properties.shard_count)
+        if (properties.custom_gateway_enabled) shardManagerBuilder.setSessionController(
+            AstolfoSessionController(
+                properties.custom_gateway_url,
+                properties.custom_gateway_delay
+            )
+        )
         shardManager = shardManagerBuilder.build()
         statsListener.init()
-        launch {
+        GlobalScope.launch {
             while (isActive && shardManager.shardsRunning != shardManager.shardsTotal) delay(1000)
             shardManager.setGame(Game.listening("the community"))
             shardManager.setStatus(OnlineStatus.ONLINE)
@@ -78,6 +93,7 @@ class AstolfoCommunityApplication(val astolfoRepositories: AstolfoRepositories,
     }
 }
 
+@Suppress("ConfigurationProperties")
 @ConfigurationProperties
 class AstolfoProperties {
     var token = ""
@@ -106,17 +122,26 @@ class AstolfoProperties {
 
 class StatsListener(val application: AstolfoCommunityApplication) : ListenerAdapter() {
     internal fun init() {
-        launch {
+        GlobalScope.launch {
             while (isActive) {
                 application.statsDClient.recordGaugeValue("guilds", application.shardManager.guilds.size.toLong())
-                application.statsDClient.recordGaugeValue("musicsessions", application.musicManager.sessionCount.toLong())
-                application.statsDClient.recordGaugeValue("musiclinks", application.musicManager.lavaLink.links.size.toLong())
-                application.statsDClient.recordGaugeValue("musiclinksconnected", application.musicManager.lavaLink.links.filter {
-                    it.jda.getGuildById(it.guildIdLong)?.selfMember?.voiceState?.inVoiceChannel() == true
-                }.size.toLong())
+                application.statsDClient.recordGaugeValue(
+                    "musicsessions",
+                    application.musicManager.sessionCount.toLong()
+                )
+                application.statsDClient.recordGaugeValue(
+                    "musiclinks",
+                    application.musicManager.lavaLink.links.size.toLong()
+                )
+                application.statsDClient.recordGaugeValue(
+                    "musiclinksconnected",
+                    application.musicManager.lavaLink.links.filter {
+                        it.jda.getGuildById(it.guildIdLong)?.selfMember?.voiceState?.inVoiceChannel() == true
+                    }.size.toLong()
+                )
                 application.statsDClient.recordGaugeValue("users", application.shardManager.users.toSet().size.toLong())
                 application.statsDClient.recordGaugeValue("cachedmessages", MessageCache.cachedMessageCount.toLong())
-                delay(1, TimeUnit.MINUTES)
+                delay(TimeUnit.MINUTES.toMillis(1))
             }
         }
     }

@@ -1,35 +1,37 @@
 package xyz.astolfo.astolfocommunity
 
 import io.sentry.Sentry
-import kotlinx.coroutines.experimental.CoroutineStart
-import kotlinx.coroutines.experimental.channels.Channel
-import kotlinx.coroutines.experimental.channels.actor
-import kotlinx.coroutines.experimental.channels.sendBlocking
-import kotlinx.coroutines.experimental.delay
-import kotlinx.coroutines.experimental.launch
-import kotlinx.coroutines.experimental.newFixedThreadPoolContext
+import kotlinx.coroutines.*
+import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.channels.actor
+import kotlinx.coroutines.channels.sendBlocking
 import okhttp3.*
 import okio.ByteString
 import org.slf4j.LoggerFactory
 import java.util.concurrent.TimeUnit
 
-class AstolfoWebSocketClient(val wsName: String, private val requestBuilder: Request.Builder, val listener: WebSocketListener) {
+class AstolfoWebSocketClient(
+    val wsName: String,
+    private val requestBuilder: Request.Builder,
+    val listener: WebSocketListener
+) {
 
     companion object {
         private val websocketContext = newFixedThreadPoolContext(5, "Astolfo WebSocket Client")
         private val logger = LoggerFactory.getLogger(AstolfoWebSocketClient::class.java)
         val ASTOLFO_WS_CLIENT = OkHttpClient.Builder()
-                .pingInterval(2, TimeUnit.SECONDS)
-                .connectTimeout(2, TimeUnit.SECONDS)
-                .readTimeout(2, TimeUnit.SECONDS)
-                .writeTimeout(2, TimeUnit.SECONDS)
-                .build()
+            .pingInterval(2, TimeUnit.SECONDS)
+            .connectTimeout(2, TimeUnit.SECONDS)
+            .readTimeout(2, TimeUnit.SECONDS)
+            .writeTimeout(2, TimeUnit.SECONDS)
+            .build()
     }
 
     private val wsListener = object : WebSocketListener() {
         override fun onOpen(webSocket: WebSocket, response: Response) {
             logger.info("[$wsName WS] Connected!")
         }
+
         override fun onClosed(webSocket: WebSocket, code: Int, reason: String) {
             logger.info("[$wsName WS] Socket Closed!")
             listener.onClosed(webSocket, code, reason)
@@ -60,7 +62,11 @@ class AstolfoWebSocketClient(val wsName: String, private val requestBuilder: Req
     private object Reconnect : WSEvent
     private object Closed : WSEvent
 
-    private val wsActor = actor<WSEvent>(context = websocketContext, capacity = Channel.UNLIMITED, start = CoroutineStart.LAZY) {
+    private val wsActor = GlobalScope.actor<WSEvent>(
+        context = websocketContext,
+        capacity = Channel.UNLIMITED,
+        start = CoroutineStart.LAZY
+    ) {
         for (event in channel) {
             if (destroyed) continue
             handleEvent(event)
@@ -104,8 +110,8 @@ class AstolfoWebSocketClient(val wsName: String, private val requestBuilder: Req
                 if (connected) handleEvent(Disconnect)
                 connected = false // Just to make sure
                 requestedConnected = true
-                launch(context = websocketContext) {
-                    delay(30, TimeUnit.SECONDS) // wait 30 seconds before reconnecting
+                GlobalScope.launch(context = websocketContext) {
+                    delay(TimeUnit.SECONDS.toMillis(30)) // wait 30 seconds before reconnecting
                     if (requestedConnected) wsActor.send(Connect)
                 }
             }

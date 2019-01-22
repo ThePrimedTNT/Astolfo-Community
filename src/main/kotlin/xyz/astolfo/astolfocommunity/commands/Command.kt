@@ -1,9 +1,6 @@
 package xyz.astolfo.astolfocommunity.commands
 
-import kotlinx.coroutines.experimental.DefaultDispatcher
-import kotlinx.coroutines.experimental.async
-import kotlinx.coroutines.experimental.suspendCancellableCoroutine
-import kotlinx.coroutines.experimental.withContext
+import kotlinx.coroutines.*
 import net.dv8tion.jda.core.EmbedBuilder
 import net.dv8tion.jda.core.Permission
 import net.dv8tion.jda.core.entities.Message
@@ -12,6 +9,8 @@ import net.dv8tion.jda.core.events.message.guild.GuildMessageReceivedEvent
 import xyz.astolfo.astolfocommunity.*
 import xyz.astolfo.astolfocommunity.messages.*
 import java.util.concurrent.TimeUnit
+import kotlin.coroutines.resume
+import kotlin.coroutines.resumeWithException
 
 class Command(
         val name: String,
@@ -106,7 +105,7 @@ open class CommandExecution(
     suspend fun <T> tempMessage(embed: MessageEmbed, temp: suspend () -> T) = tempMessage(message { setEmbed(embed) }, temp)
     suspend fun <T> tempMessage(msg: Message, temp: suspend () -> T): T {
         val message = messageAction(msg).sendCached()
-        val job = async { temp() }
+        val job = GlobalScope.async { temp() }
         val dispose = {
             synchronized(message) {
                 if (message.isDeleted) return@synchronized // discard if already deleted
@@ -144,11 +143,11 @@ open class CommandExecution(
     })
 
     // TODO this seems odd to have here
-    suspend fun getProfile() = withContext(DefaultDispatcher) { application.astolfoRepositories.getEffectiveUserProfile(event.author.idLong) }
+    suspend fun getProfile() = withContext(Dispatchers.Default) { application.astolfoRepositories.getEffectiveUserProfile(event.author.idLong) }
 
-    suspend fun getGuildSettings() = withContext(DefaultDispatcher) { application.astolfoRepositories.getEffectiveGuildSettings(event.guild.idLong) }
+    suspend fun getGuildSettings() = withContext(Dispatchers.Default) { application.astolfoRepositories.getEffectiveGuildSettings(event.guild.idLong) }
     suspend fun setGuildSettings(guildSettings: GuildSettings) =
-            withContext(DefaultDispatcher) { application.astolfoRepositories.guildSettingsRepository.save(guildSettings) }
+            withContext(Dispatchers.Default) { application.astolfoRepositories.guildSettingsRepository.save(guildSettings) }
 
     suspend inline fun <E> withGuildSettings(block: (GuildSettings) -> E): E {
         val guildSettings = getGuildSettings()

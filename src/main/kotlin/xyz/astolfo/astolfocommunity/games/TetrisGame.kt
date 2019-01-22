@@ -1,11 +1,8 @@
 package xyz.astolfo.astolfocommunity.games
 
-import kotlinx.coroutines.experimental.Job
-import kotlinx.coroutines.experimental.channels.Channel
-import kotlinx.coroutines.experimental.channels.actor
-import kotlinx.coroutines.experimental.delay
-import kotlinx.coroutines.experimental.launch
-import kotlinx.coroutines.experimental.newFixedThreadPoolContext
+import kotlinx.coroutines.*
+import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.channels.actor
 import net.dv8tion.jda.core.EmbedBuilder
 import net.dv8tion.jda.core.entities.Member
 import net.dv8tion.jda.core.entities.TextChannel
@@ -20,7 +17,11 @@ import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.roundToInt
 
-class TetrisGame(member: Member, channel: TextChannel) : ReactionGame(member, channel, listOf(ROTATE_ANTICLOCKWISE_EMOTE, LEFT_EMOTE, QUICK_FALL_EMOTE, RIGHT_EMOTE, ROTATE_CLOCKWISE_EMOTE)) {
+class TetrisGame(member: Member, channel: TextChannel) : ReactionGame(
+    member,
+    channel,
+    listOf(ROTATE_ANTICLOCKWISE_EMOTE, LEFT_EMOTE, QUICK_FALL_EMOTE, RIGHT_EMOTE, ROTATE_CLOCKWISE_EMOTE)
+) {
 
     companion object {
         private const val MAP_WIDTH = 7
@@ -37,13 +38,13 @@ class TetrisGame(member: Member, channel: TextChannel) : ReactionGame(member, ch
         private val tetrisContext = newFixedThreadPoolContext(30, "Tetris")
 
         private val pieces = listOf(
-                mutableListOf(Point(0, 0), Point(1, 0), Point(2, 0), Point(3, 0)) to "\uD83D\uDCD8",
-                mutableListOf(Point(0, 0), Point(1, 0), Point(2, 0), Point(2, 1)) to "\uD83D\uDCD4",
-                mutableListOf(Point(0, 1), Point(0, 0), Point(1, 0), Point(2, 0)) to "\uD83D\uDCD9",
-                mutableListOf(Point(0, 0), Point(0, 1), Point(1, 0), Point(1, 1)) to "\uD83D\uDCD2",
-                mutableListOf(Point(0, 1), Point(1, 1), Point(1, 0), Point(2, 0)) to "\uD83D\uDCD7",
-                mutableListOf(Point(0, 0), Point(1, 0), Point(1, 1), Point(2, 0)) to "\uD83D\uDCD3",
-                mutableListOf(Point(0, 0), Point(1, 0), Point(1, 1), Point(2, 1)) to "\uD83D\uDCD5"
+            mutableListOf(Point(0, 0), Point(1, 0), Point(2, 0), Point(3, 0)) to "\uD83D\uDCD8",
+            mutableListOf(Point(0, 0), Point(1, 0), Point(2, 0), Point(2, 1)) to "\uD83D\uDCD4",
+            mutableListOf(Point(0, 1), Point(0, 0), Point(1, 0), Point(2, 0)) to "\uD83D\uDCD9",
+            mutableListOf(Point(0, 0), Point(0, 1), Point(1, 0), Point(1, 1)) to "\uD83D\uDCD2",
+            mutableListOf(Point(0, 1), Point(1, 1), Point(1, 0), Point(2, 0)) to "\uD83D\uDCD7",
+            mutableListOf(Point(0, 0), Point(1, 0), Point(1, 1), Point(2, 0)) to "\uD83D\uDCD3",
+            mutableListOf(Point(0, 0), Point(1, 0), Point(1, 1), Point(2, 1)) to "\uD83D\uDCD5"
         )
     }
 
@@ -63,7 +64,7 @@ class TetrisGame(member: Member, channel: TextChannel) : ReactionGame(member, ch
     private class PlaceEvent(val first: Boolean) : TetrisEvent
     private class MoveEvent(val moveType: String) : TetrisEvent
 
-    private val tetrisActor = actor<TetrisEvent>(context = tetrisContext, capacity = Channel.UNLIMITED) {
+    private val tetrisActor = GlobalScope.actor<TetrisEvent>(context = tetrisContext, capacity = Channel.UNLIMITED) {
         for (event in this.channel) {
             if (destroyed) continue
             handleEvent(event)
@@ -76,10 +77,10 @@ class TetrisGame(member: Member, channel: TextChannel) : ReactionGame(member, ch
         when (event) {
             is StartEvent -> {
                 handleEvent(PlaceEvent(true))
-                updateJob = launch {
+                updateJob = GlobalScope.launch {
                     while (isActive) {
                         tetrisActor.send(UpdateEvent)
-                        delay(UPDATE_SPEED, TimeUnit.SECONDS)
+                        delay(TimeUnit.SECONDS.toMillis(UPDATE_SPEED))
                     }
                 }
             }
@@ -146,7 +147,8 @@ class TetrisGame(member: Member, channel: TextChannel) : ReactionGame(member, ch
                 val validLocations = piece.second
 
                 val spawnLocation = validLocations[random.nextInt(validLocations.size)]
-                fallingTetromino = Tetromino(tetrominoPoints.map { Block(Point(it.x + spawnLocation, it.y), tetrominoEmote) })
+                fallingTetromino =
+                    Tetromino(tetrominoPoints.map { Block(Point(it.x + spawnLocation, it.y), tetrominoEmote) })
             }
             is DestroyEvent -> {
                 updateJob.cancel()
@@ -174,8 +176,8 @@ class TetrisGame(member: Member, channel: TextChannel) : ReactionGame(member, ch
             (0 until MAP_WIDTH).joinToString(separator = "") { x ->
                 val point = Point(x, y)
                 val block = stationaryBlocks.find { it.location == point }
-                        ?: fallingTetromino.blocks.find { it.location == point }
-                        ?: quickFallTetromino.blocks.find { it.location == point }
+                    ?: fallingTetromino.blocks.find { it.location == point }
+                    ?: quickFallTetromino.blocks.find { it.location == point }
                 block?.emote ?: "\u2B1B"
             }
         } + if (dead) "\n**You have topped out!**" else "")

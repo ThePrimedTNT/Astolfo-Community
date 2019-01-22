@@ -1,8 +1,8 @@
 package xyz.astolfo.astolfocommunity.menus
 
 import com.jagrosh.jdautilities.commons.utils.FinderUtil
-import kotlinx.coroutines.experimental.CompletableDeferred
-import kotlinx.coroutines.experimental.suspendCancellableCoroutine
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.suspendCancellableCoroutine
 import net.dv8tion.jda.core.entities.Member
 import net.dv8tion.jda.core.entities.Message
 import net.dv8tion.jda.core.entities.Role
@@ -11,6 +11,8 @@ import xyz.astolfo.astolfocommunity.commands.CommandExecution
 import xyz.astolfo.astolfocommunity.commands.CommandSession
 import xyz.astolfo.astolfocommunity.messages.*
 import java.util.concurrent.atomic.AtomicReference
+import kotlin.coroutines.resume
+import kotlin.coroutines.resumeWithException
 
 fun CommandExecution.memberSelectionBuilder(query: String) = selectionBuilder<Member>()
         .results(FinderUtil.findMembers(query, event.guild))

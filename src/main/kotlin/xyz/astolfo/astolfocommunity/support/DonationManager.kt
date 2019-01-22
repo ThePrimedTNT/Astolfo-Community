@@ -2,9 +2,10 @@ package xyz.astolfo.astolfocommunity.support
 
 import com.github.salomonbrys.kotson.fromJson
 import com.google.gson.JsonObject
-import kotlinx.coroutines.experimental.channels.Channel
-import kotlinx.coroutines.experimental.channels.actor
-import kotlinx.coroutines.experimental.channels.sendBlocking
+import kotlinx.coroutines.GlobalScope
+import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.channels.actor
+import kotlinx.coroutines.channels.sendBlocking
 import net.dv8tion.jda.core.entities.Member
 import net.dv8tion.jda.core.entities.Message
 import okhttp3.Request
@@ -75,7 +76,7 @@ class DonationManager(private val application: AstolfoCommunityApplication,
     private class UpdateEvent(val entry: PatreonEntry) : WSEvent
     private class DeleteEvent(val entryId: Long) : WSEvent
 
-    private val wsActor = actor<WSEvent>(capacity = Channel.UNLIMITED) {
+    private val wsActor = GlobalScope.actor<WSEvent>(capacity = Channel.UNLIMITED) {
         for (event in channel) {
             handleEvent(event)
         }

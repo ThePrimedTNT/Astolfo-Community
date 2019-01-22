@@ -1,9 +1,9 @@
 package xyz.astolfo.astolfocommunity.commands
 
 import io.sentry.Sentry
-import kotlinx.coroutines.experimental.*
-import kotlinx.coroutines.experimental.channels.Channel
-import kotlinx.coroutines.experimental.channels.actor
+import kotlinx.coroutines.*
+import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.channels.actor
 import net.dv8tion.jda.core.Permission
 import net.dv8tion.jda.core.events.message.guild.GuildMessageReceivedEvent
 import xyz.astolfo.astolfocommunity.AstolfoCommunityApplication
@@ -16,8 +16,8 @@ import xyz.astolfo.astolfocommunity.splitFirst
 import java.util.concurrent.TimeUnit
 
 class SessionListener(
-        val application: AstolfoCommunityApplication,
-        val channelListener: ChannelListener
+    val application: AstolfoCommunityApplication,
+    val channelListener: ChannelListener
 ) {
 
     companion object {
@@ -27,15 +27,18 @@ class SessionListener(
 
     private var destroyed = false
 
-    suspend fun addMessage(guildMessageData: GuildListener.GuildMessageData) = sessionActor.send(MessageEvent(guildMessageData))
-    suspend fun addCommand(guildMessageData: GuildListener.GuildMessageData) = sessionActor.send(CommandEvent(guildMessageData))
+    suspend fun addMessage(guildMessageData: GuildListener.GuildMessageData) =
+        sessionActor.send(MessageEvent(guildMessageData))
+
+    suspend fun addCommand(guildMessageData: GuildListener.GuildMessageData) =
+        sessionActor.send(CommandEvent(guildMessageData))
 
     private interface SessionEvent
     private class MessageEvent(val guildMessageData: GuildListener.GuildMessageData) : SessionEvent
     private class CommandEvent(val guildMessageData: GuildListener.GuildMessageData) : SessionEvent
     private object CleanUp : SessionEvent
 
-    private val sessionActor = actor<SessionEvent>(context = sessionContext, capacity = Channel.UNLIMITED) {
+    private val sessionActor = GlobalScope.actor<SessionEvent>(context = sessionContext, capacity = Channel.UNLIMITED) {
         for (event in channel) {
             if (destroyed) continue
             try {
@@ -65,7 +68,14 @@ class SessionListener(
                 //if (!processRateLimit(event)) return@launch
                 val guildMessageData = event.guildMessageData
                 val jdaEvent = guildMessageData.messageReceivedEvent
-                val execution = CommandExecution(application, jdaEvent, currentSession, currentSession.commandPath, jdaEvent.message.contentRaw, guildMessageData.timeIssued)
+                val execution = CommandExecution(
+                    application,
+                    jdaEvent,
+                    currentSession,
+                    currentSession.commandPath,
+                    jdaEvent.message.contentRaw,
+                    guildMessageData.timeIssued
+                )
                 if (currentSession.onMessageReceived(execution) == CommandSession.ResponseAction.RUN_COMMAND) {
                     // If the response listeners return true or all the response listeners removed themselves
                     handleEvent(CleanUp)
@@ -102,7 +112,11 @@ class SessionListener(
                         return
                     }
                     if (commandMessage.contains("prefix", true)) {
-                        channel.sendMessage("Yahoo! My prefix in this guild is **${guildSettings.getEffectiveGuildPrefix(application)}**!").queue()
+                        channel.sendMessage(
+                            "Yahoo! My prefix in this guild is **${guildSettings.getEffectiveGuildPrefix(
+                                application
+                            )}**!"
+                        ).queue()
                         return
                     }
                     val chatBotManager = channelListener.guildListener.messageListener.chatBotManager
@@ -135,14 +149,15 @@ class SessionListener(
                     return
                 }
 
-                fun createExecution(session: CommandSession, commandPath: String, commandContent: String) = CommandExecution(
+                fun createExecution(session: CommandSession, commandPath: String, commandContent: String) =
+                    CommandExecution(
                         application,
                         jdaEvent,
                         session,
                         commandPath,
                         commandContent,
                         guildMessageData.timeIssued
-                )
+                    )
 
                 val module = commandNodes.first
 
@@ -160,17 +175,27 @@ class SessionListener(
                         hasPermission = member.hasPermission(channel, *permission.permissionDefaults)
                     // Check Astolfo permission if discord permission didn't already grant permissions
                     if (hasPermission != true)
-                        AstolfoPermissionUtils.hasPermission(member, channel, application.astolfoRepositories.getEffectiveGuildSettings(jdaEvent.guild.idLong).permissions, permission)?.let { hasPermission = it }
+                        AstolfoPermissionUtils.hasPermission(
+                            member,
+                            channel,
+                            application.astolfoRepositories.getEffectiveGuildSettings(jdaEvent.guild.idLong).permissions,
+                            permission
+                        )?.let { hasPermission = it }
 
                     if (hasPermission == false) {
-                        channel.sendMessage(errorEmbed("You are missing the astolfo **${permission.path}**${if (permission.permissionDefaults.isNotEmpty())
-                            " or discord ${permission.permissionDefaults.joinToString(", ") { "**${it.getName()}**" }}" else ""} permission(s)"))
-                                .queue()
+                        channel.sendMessage(
+                            errorEmbed(
+                                "You are missing the astolfo **${permission.path}**${if (permission.permissionDefaults.isNotEmpty())
+                                    " or discord ${permission.permissionDefaults.joinToString(", ") { "**${it.getName()}**" }}" else ""} permission(s)"
+                            )
+                        )
+                            .queue()
                         return
                     }
 
                     // INHERITED ACTIONS
-                    val inheritedExecution = createExecution(InheritedCommandSession(commandPath), commandPath, commandContent)
+                    val inheritedExecution =
+                        createExecution(InheritedCommandSession(commandPath), commandPath, commandContent)
                     if (!command.inheritedActions.all { it.invoke(inheritedExecution) }) return
                 }
                 // COMMAND ENDPOINT
@@ -181,8 +206,8 @@ class SessionListener(
                     application.statsDClient.incrementCounter("commandExecuteCount", "command:$commandPath")
                     currentSession = CommandSessionImpl(commandPath)
                     val execution = createExecution(currentSession!!, commandPath, commandContent)
-                    sessionJob = launch(commandContext) {
-                        withTimeout(1, TimeUnit.MINUTES) {
+                    sessionJob = GlobalScope.launch(commandContext) {
+                        withTimeout(TimeUnit.MINUTES.toMillis(1)) {
                             command.action(execution)
                         }
                     }
@@ -192,7 +217,8 @@ class SessionListener(
 
                 // Checks if command is the same as the previous, if so, check if its a follow up response
                 if (currentSession != null && currentSession.commandPath.equals(commandPath, true)) {
-                    val action = currentSession.onMessageReceived(createExecution(currentSession, commandPath, commandContent))
+                    val action =
+                        currentSession.onMessageReceived(createExecution(currentSession, commandPath, commandContent))
                     when (action) {
                         CommandSession.ResponseAction.RUN_COMMAND -> {
                             runNewSession()
@@ -215,7 +241,7 @@ class SessionListener(
         val donorGuild = application.donationManager.getByMember(data.messageReceivedEvent.guild.owner)
         if (!donorGuild.patreonBot) {
             data.messageReceivedEvent.channel.sendMessage(
-                    errorEmbed("In order to use the high quality patreon bot, the owner of your guild must pledge at least $10 on [patreon.com/theprimedtnt](https://www.patreon.com/theprimedtnt)")
+                errorEmbed("In order to use the high quality patreon bot, the owner of your guild must pledge at least $10 on [patreon.com/theprimedtnt](https://www.patreon.com/theprimedtnt)")
             ).queue()
             return false
         }
@@ -229,7 +255,8 @@ class SessionListener(
         rateLimiter.add(user)
         if (wasLimited) return false
         if (rateLimiter.isLimited(user)) {
-            event.channel.sendMessage("${event.member.asMention} You have been ratelimited! Please wait a little and try again!").queue()
+            event.channel.sendMessage("${event.member.asMention} You have been ratelimited! Please wait a little and try again!")
+                .queue()
             return false
         }
         return true

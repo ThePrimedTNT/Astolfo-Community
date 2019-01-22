@@ -1,8 +1,8 @@
 package xyz.astolfo.astolfocommunity.messages
 
-import kotlinx.coroutines.experimental.*
-import kotlinx.coroutines.experimental.sync.Mutex
-import kotlinx.coroutines.experimental.sync.withLock
+import kotlinx.coroutines.*
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import net.dv8tion.jda.core.MessageBuilder
 import net.dv8tion.jda.core.Permission
 import net.dv8tion.jda.core.entities.Emote
@@ -28,9 +28,9 @@ object MessageCache {
         private set
 
     init {
-        launch(messageCacheContext) {
+        GlobalScope.launch(messageCacheContext) {
             while (isActive) {
-                delay(1, TimeUnit.SECONDS)
+                delay(TimeUnit.SECONDS.toMillis(1))
                 clearDeletedMessages()
             }
         }
@@ -51,8 +51,8 @@ object MessageCache {
     fun sendCached(restAction: RestAction<Message>): CachedMessage {
         val completableDeferred = restAction.submit().toCompletableDeferred()
         val cachedMessage = CachedMessage(completableDeferred)
-        launch(messageCacheContext) {
-            val result = withTimeout(1, TimeUnit.MINUTES) {
+        GlobalScope.launch(messageCacheContext) {
+            val result = withTimeout(TimeUnit.MINUTES.toMillis(1)) {
                 completableDeferred.await()
             }
             cachedMessageMutex.withLock {
@@ -64,8 +64,8 @@ object MessageCache {
         return cachedMessage
     }
 
-    private class MessageReference(val messageId: Long, cachedMessage: CachedMessage)
-        : WeakReference<CachedMessage>(cachedMessage, messageReferenceQueue)
+    private class MessageReference(val messageId: Long, cachedMessage: CachedMessage) :
+        WeakReference<CachedMessage>(cachedMessage, messageReferenceQueue)
 
 }
 
@@ -80,7 +80,6 @@ fun <T : Any?> RequestFuture<T>.toCompletableDeferred(parent: Job? = null): Comp
             completableDeferred.completeExceptionally(e)
         }
     }
-    completableDeferred.cancelFutureOnCompletion(this)
     return completableDeferred
 }
 
@@ -103,15 +102,15 @@ class CachedMessage(messageDeferred: CompletableDeferred<Message>) {
     private val emoteManager = EmoteManager()
 
     init {
-        launch(cachedContext) {
+        GlobalScope.launch(cachedContext) {
             // Lock the use of the message until its created
             // TODO handle failed creations
             messageMutex.withLock {
                 try {
-                    withTimeout(1, TimeUnit.MINUTES) {
+                    withTimeout(TimeUnit.MINUTES.toMillis(1)) {
                         message = messageDeferred.await()
                     }
-                }catch (e: Throwable){
+                } catch (e: Throwable) {
                     isDeleted = true
                 }
                 isCreated = true
@@ -127,9 +126,9 @@ class CachedMessage(messageDeferred: CompletableDeferred<Message>) {
         return if (isCreated) CompletableDeferred(block(message))
         else {
             val completableDeferred = CompletableDeferred<T>()
-            launch(cachedContext) {
+            GlobalScope.launch(cachedContext) {
                 messageMutex.withLock {
-                    if(isDeleted) return@launch
+                    if (isDeleted) return@launch
                     try {
                         completableDeferred.complete(block(message))
                     } catch (e: Throwable) {
@@ -150,28 +149,28 @@ class CachedMessage(messageDeferred: CompletableDeferred<Message>) {
     // Edit Message Methods
 
     fun editMessage(newContent: String, delay: Long = 0, unit: TimeUnit = TimeUnit.SECONDS) =
-            editMessage(MessageBuilder().content(newContent).build(), delay, unit)
+        editMessage(MessageBuilder().content(newContent).build(), delay, unit)
 
     fun editMessage(newContent: MessageEmbed, delay: Long = 0, unit: TimeUnit = TimeUnit.SECONDS) =
-            editMessage(MessageBuilder().setEmbed(newContent).build(), delay, unit)
+        editMessage(MessageBuilder().setEmbed(newContent).build(), delay, unit)
 
     fun editMessage(newContent: Message, delay: Long = 0, unit: TimeUnit = TimeUnit.SECONDS) =
-            editManager.edit(newContent, delay, unit)
+        editManager.edit(newContent, delay, unit)
 
     // Reactions
 
     fun addReaction(unicode: String, delay: Long = 0, unit: TimeUnit = TimeUnit.SECONDS) =
-            emoteManager.addReaction(unicode, delay, unit)
+        emoteManager.addReaction(unicode, delay, unit)
 
     fun addReaction(emote: Emote, delay: Long = 0, unit: TimeUnit = TimeUnit.SECONDS) =
-            emoteManager.addReaction(emote, delay, unit)
+        emoteManager.addReaction(emote, delay, unit)
 
     fun clearReactions(delay: Long = 0, unit: TimeUnit = TimeUnit.SECONDS) =
-            emoteManager.clearReactions(delay, unit)
+        emoteManager.clearReactions(delay, unit)
 
     // Misc
 
-    fun delete() = launch(cachedContext) {
+    fun delete() = GlobalScope.launch(cachedContext) {
         editManager.dispose()
         internalWaitForMessage { msg ->
             if (!msg.hasPermission(Permission.MESSAGE_READ)) return@internalWaitForMessage
@@ -188,8 +187,8 @@ class CachedMessage(messageDeferred: CompletableDeferred<Message>) {
 
         fun edit(newContent: Message, delay: Long, delayUnit: TimeUnit) {
             if (delay <= 0) runBlocking(cachedContext) { editInternal(newContent) }
-            else launch(cachedContext) {
-                delay(delay, delayUnit)
+            else GlobalScope.launch(cachedContext) {
+                delay(delayUnit.toMillis(delay))
                 editInternal(newContent)
             }
         }
@@ -206,8 +205,8 @@ class CachedMessage(messageDeferred: CompletableDeferred<Message>) {
                 val completableDeferred = internalWaitForMessage {
                     it.editMessage(newContent).submit().toCompletableDeferred(mainJob)
                 }.await()
-                launch(parent = mainJob, context = cachedContext) {
-                    withTimeout(1, TimeUnit.MINUTES) {
+                (GlobalScope + mainJob).launch(context = cachedContext) {
+                    withTimeout(TimeUnit.MINUTES.toMillis(1)) {
                         muteUnknownError {
                             val newMessage = completableDeferred.await()
                             messageMutex.withLock {
@@ -230,8 +229,12 @@ class CachedMessage(messageDeferred: CompletableDeferred<Message>) {
     // TODO finish this class
     inner class EmoteManager {
 
-        fun addReaction(unicode: String, delay: Long, delayUnit: TimeUnit) = addReaction(EmoteActionKey(0, unicode), delay, delayUnit)
-        fun addReaction(emote: Emote, delay: Long, delayUnit: TimeUnit) = addReaction(EmoteActionKey(0, emote = emote), delay, delayUnit)
+        fun addReaction(unicode: String, delay: Long, delayUnit: TimeUnit) =
+            addReaction(EmoteActionKey(0, unicode), delay, delayUnit)
+
+        fun addReaction(emote: Emote, delay: Long, delayUnit: TimeUnit) =
+            addReaction(EmoteActionKey(0, emote = emote), delay, delayUnit)
+
         private fun addReaction(key: EmoteActionKey, delay: Long, delayUnit: TimeUnit) = runBlocking(cachedContext) {
             internalWaitForMessage { msg ->
                 if (!msg.hasPermission(Permission.MESSAGE_HISTORY)) return@internalWaitForMessage
@@ -255,9 +258,11 @@ class CachedMessage(messageDeferred: CompletableDeferred<Message>) {
 
     }
 
-    data class EmoteActionKey(val user: Long,
-                              val unicode: String? = null,
-                              val emote: Emote? = null)
+    data class EmoteActionKey(
+        val user: Long,
+        val unicode: String? = null,
+        val emote: Emote? = null
+    )
 }
 
 private suspend inline fun muteUnknownError(crossinline block: suspend () -> Unit) {

@@ -1,6 +1,6 @@
 package xyz.astolfo.astolfocommunity.commands
 
-import kotlinx.coroutines.experimental.*
+import kotlinx.coroutines.*
 import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.TimeUnit
 
@@ -13,10 +13,10 @@ class CommandSessionImpl(override val commandPath: String) : CommandSession {
 
     override fun updatable(rate: Long, unit: TimeUnit, updater: (CommandSession) -> Unit) {
         if (destroyed) IllegalStateException("You cannot register an updater to a destroyed session!")
-        launch(parent = parentJob) {
+        (GlobalScope + parentJob).launch {
             while (isActive) {
                 updater.invoke(this@CommandSessionImpl)
-                delay(rate, unit)
+                delay(unit.toMillis(rate))
             }
         }
     }
@@ -55,7 +55,8 @@ class CommandSessionImpl(override val commandPath: String) : CommandSession {
 
 class InheritedCommandSession(override val commandPath: String) : CommandSession {
 
-    private fun inheritedError(): NotImplementedError = throw NotImplementedError("Inherited Actions don't support command sessions!")
+    private fun inheritedError(): NotImplementedError =
+        throw NotImplementedError("Inherited Actions don't support command sessions!")
 
     override fun updatable(rate: Long, unit: TimeUnit, updater: (CommandSession) -> Unit) {
         throw inheritedError()

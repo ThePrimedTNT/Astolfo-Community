@@ -17,10 +17,10 @@ import com.sedmelluq.discord.lavaplayer.track.AudioItem
 import com.sedmelluq.discord.lavaplayer.track.AudioPlaylist
 import com.sedmelluq.discord.lavaplayer.track.AudioTrack
 import com.sedmelluq.discord.lavaplayer.track.AudioTrackEndReason
-import kotlinx.coroutines.experimental.*
-import kotlinx.coroutines.experimental.channels.Channel
-import kotlinx.coroutines.experimental.channels.actor
-import kotlinx.coroutines.experimental.channels.sendBlocking
+import kotlinx.coroutines.*
+import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.channels.actor
+import kotlinx.coroutines.channels.sendBlocking
 import lavalink.client.LavalinkUtil
 import lavalink.client.io.jda.JdaLavalink
 import lavalink.client.io.jda.JdaLink
@@ -73,7 +73,7 @@ class MusicManager(val application: AstolfoCommunityApplication, properties: Ast
     private class DeleteMusicEvent(val guild: Guild) : MusicEvent
     private object CleanUpMusicEvent : MusicEvent
 
-    private val musicActor = actor<MusicEvent>(context = musicContext, capacity = Channel.UNLIMITED) {
+    private val musicActor = GlobalScope.actor<MusicEvent>(context = musicContext, capacity = Channel.UNLIMITED) {
         for (event in channel) {
             handleEvent(event)
         }
@@ -143,7 +143,7 @@ class MusicManager(val application: AstolfoCommunityApplication, properties: Ast
 
     val musicManagerListener = object : ListenerAdapter() {
         override fun onReady(event: ReadyEvent) {
-            launch(musicContext) {
+            GlobalScope.launch(musicContext) {
                 val shardFile = File(saveFolder, "${event.jda.shardInfo.shardId}.json")
                 println("Loading music session file from ${shardFile.absolutePath}")
                 if (!shardFile.exists()) return@launch
@@ -165,7 +165,7 @@ class MusicManager(val application: AstolfoCommunityApplication, properties: Ast
         }
 
         override fun onGuildLeave(event: GuildLeaveEvent) {
-            launch(musicContext) { stopSession(event.guild) }
+            GlobalScope.launch(musicContext) { stopSession(event.guild) }
         }
     }
 
@@ -201,9 +201,9 @@ class MusicManager(val application: AstolfoCommunityApplication, properties: Ast
         audioPlayerManager.registerSourceManager(HttpAudioSourceManager())
 
         // Send a clean up task every 2 minutes
-        launch {
+        GlobalScope.launch {
             while (isActive) {
-                delay(2, TimeUnit.MINUTES)
+                delay(TimeUnit.MINUTES.toMillis(2))
                 musicActor.send(CleanUpMusicEvent)
             }
         }
@@ -311,7 +311,7 @@ class MusicSession(val musicManager: MusicManager, val guild: Guild, var boundCh
     // Move Helpers
     class MoveResponse(val movedTrack: AudioTrack?, val newPosition: Int)
 
-    private val musicActor = actor<MusicEvent>(capacity = Channel.UNLIMITED, context = musicContext) {
+    private val musicActor = GlobalScope.actor<MusicEvent>(capacity = Channel.UNLIMITED, context = musicContext) {
         for (event in channel) {
             if (destroyed) continue
             handleEvent(event)
@@ -602,7 +602,7 @@ class MusicSession(val musicManager: MusicManager, val guild: Guild, var boundCh
             boundChannel = textChannel
             val completableDeferred = CompletableDeferred<QueueSongsResponse>()
             queue(member, listOf(audioTrack), top, skip, completableDeferred)
-            withTimeout(1, TimeUnit.MINUTES) {
+            withTimeout(TimeUnit.MINUTES.toMillis(1)) {
                 val response = completableDeferred.await()
                 when {
                     response.queueMax -> messageCallback(
@@ -623,7 +623,7 @@ class MusicSession(val musicManager: MusicManager, val guild: Guild, var boundCh
             val completableDeferred = CompletableDeferred<QueueSongsResponse>()
             val tracks = audioPlaylist.tracks
             queue(member, tracks, top, skip, completableDeferred)
-            withTimeout(1, TimeUnit.MINUTES) {
+            withTimeout(TimeUnit.MINUTES.toMillis(1)) {
                 val response = completableDeferred.await()
                 val amountAdded = response.songsQueued
                 when {
@@ -716,17 +716,18 @@ class MusicSession(val musicManager: MusicManager, val guild: Guild, var boundCh
         private var destroyed = false
         private val tasks = mutableListOf<MusicLoaderTask>()
 
-        private val musicLoaderActor = actor<MusicLoaderEvent>(capacity = Channel.UNLIMITED, context = musicContext) {
-            for (event in channel) {
-                if (destroyed) continue
-                handleEvent(event)
+        private val musicLoaderActor =
+            GlobalScope.actor<MusicLoaderEvent>(capacity = Channel.UNLIMITED, context = musicContext) {
+                for (event in channel) {
+                    if (destroyed) continue
+                    handleEvent(event)
+                }
+                // Clean up
+                for (task in tasks.toList()) {
+                    handleEvent(TaskFinishEvent(task, true))
+                }
+                tasks.clear()
             }
-            // Clean up
-            for (task in tasks.toList()) {
-                handleEvent(TaskFinishEvent(task, true))
-            }
-            tasks.clear()
-        }
 
         private suspend fun handleEvent(event: MusicLoaderEvent) {
             when (event) {
@@ -760,7 +761,7 @@ class MusicSession(val musicManager: MusicManager, val guild: Guild, var boundCh
             private val completableDeferred = musicManager.audioPlayerManager.loadItemDeferred(query)
 
             init {
-                completableDeferred.invokeOnCompletion(onCancelling = false) {
+                completableDeferred.invokeOnCompletion {
                     // Queue that its ready
                     if (destroyed) return@invokeOnCompletion // ignore if its already destroyed
                     musicLoaderActor.sendBlocking(TaskFinishEvent(this@MusicLoaderTask, false))
@@ -844,7 +845,6 @@ fun AudioPlayerManager.loadItemDeferred(searchQuery: String): CompletableDeferre
             future.complete(playlist)
         }
     })
-    future.cancelFutureOnCompletion(loadTask)
     return future
 }
 

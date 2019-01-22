@@ -1,12 +1,8 @@
 package xyz.astolfo.astolfocommunity.games
 
-import kotlinx.coroutines.experimental.Job
-import kotlinx.coroutines.experimental.channels.Channel
-import kotlinx.coroutines.experimental.channels.actor
-import kotlinx.coroutines.experimental.channels.sendBlocking
-import kotlinx.coroutines.experimental.delay
-import kotlinx.coroutines.experimental.launch
-import kotlinx.coroutines.experimental.newFixedThreadPoolContext
+import kotlinx.coroutines.*
+import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.channels.actor
 import net.dv8tion.jda.core.EmbedBuilder
 import net.dv8tion.jda.core.entities.Member
 import net.dv8tion.jda.core.entities.TextChannel
@@ -18,7 +14,8 @@ import java.awt.Point
 import java.util.*
 import java.util.concurrent.TimeUnit
 
-class SnakeGame(member: Member, channel: TextChannel) : ReactionGame(member, channel, listOf(LEFT_EMOTE, UP_EMOTE, DOWN_EMOTE, RIGHT_EMOTE)) {
+class SnakeGame(member: Member, channel: TextChannel) :
+    ReactionGame(member, channel, listOf(LEFT_EMOTE, UP_EMOTE, DOWN_EMOTE, RIGHT_EMOTE)) {
 
     companion object {
         private val snakeContext = newFixedThreadPoolContext(30, "Snake")
@@ -60,9 +57,9 @@ class SnakeGame(member: Member, channel: TextChannel) : ReactionGame(member, cha
     private object UpdateEvent : SnakeEvent
     private class DirectionEvent(val newDirection: SnakeDirection) : SnakeEvent
 
-    private val snakeActor = actor<SnakeEvent>(context = snakeContext, capacity = Channel.UNLIMITED) {
-        for(event in this.channel){
-            if(destroyed) continue
+    private val snakeActor = GlobalScope.actor<SnakeEvent>(context = snakeContext, capacity = Channel.UNLIMITED) {
+        for (event in this.channel) {
+            if (destroyed) continue
             handleEvent(event)
         }
 
@@ -70,20 +67,20 @@ class SnakeGame(member: Member, channel: TextChannel) : ReactionGame(member, cha
     }
 
     private suspend fun handleEvent(event: SnakeEvent) {
-        when(event) {
-            is StartEvent ->{
+        when (event) {
+            is StartEvent -> {
                 var startLocation = randomPoint()
                 while (startLocation == appleLocation) startLocation = randomPoint()
                 snake.add(startLocation)
 
-                updateJob = launch(snakeContext) {
+                updateJob = GlobalScope.launch(snakeContext) {
                     while (isActive && running) {
                         snakeActor.send(UpdateEvent)
-                        delay(UPDATE_SPEED, TimeUnit.SECONDS)
+                        delay(TimeUnit.SECONDS.toMillis(UPDATE_SPEED))
                     }
                 }
             }
-            is DirectionEvent ->{
+            is DirectionEvent -> {
                 snakeDirection = event.newDirection
             }
             is UpdateEvent -> {
@@ -108,7 +105,8 @@ class SnakeGame(member: Member, channel: TextChannel) : ReactionGame(member, cha
 
                     if (appleLocation == newPoint) {
                         var startLocation = randomPoint()
-                        while (startLocation == appleLocation || snake.contains(startLocation)) startLocation = randomPoint()
+                        while (startLocation == appleLocation || snake.contains(startLocation)) startLocation =
+                            randomPoint()
                         appleLocation = startLocation
                     } else {
                         snake.removeAt(snake.size - 1)

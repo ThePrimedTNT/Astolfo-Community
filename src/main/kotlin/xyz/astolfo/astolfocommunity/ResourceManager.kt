@@ -2,10 +2,7 @@ package xyz.astolfo.astolfocommunity
 
 import com.github.salomonbrys.kotson.fromJson
 import com.google.common.cache.CacheBuilder
-import kotlinx.coroutines.experimental.CompletableDeferred
-import kotlinx.coroutines.experimental.Job
-import kotlinx.coroutines.experimental.launch
-import kotlinx.coroutines.experimental.newFixedThreadPoolContext
+import kotlinx.coroutines.*
 import org.jsoup.parser.Parser
 import xyz.astolfo.astolfocommunity.commands.CommandExecution
 import java.util.*
@@ -17,24 +14,25 @@ object ResourceManager {
     private val resourceContext = newFixedThreadPoolContext(50, "Resource Manager")
 
     private val webCache = CacheBuilder.newBuilder()
-            .expireAfterAccess(10, TimeUnit.MINUTES)
-            .build<String, String>()
+        .expireAfterAccess(10, TimeUnit.MINUTES)
+        .build<String, String>()
 
     private val random = Random()
 
     suspend fun CommandExecution.getImage(tag: String, explicit: Boolean): ResolvedImageObject? {
-        val completableDeferred = CompletableDeferred<ResolvedImageObject>()
-        val mainJob = Job()
-        ResourceType.values().forEach { type ->
-            val job = launch(parent = mainJob, context = resourceContext) {
-                val result = getImage(tag, explicit, type)
-                if (result != null) completableDeferred.complete(result)
+        var finalResult: ResolvedImageObject? = null
+        supervisorScope {
+            ResourceType.values().forEach { type ->
+                launch {
+                    val result = getImage(tag, explicit, type)
+                    if (result != null) {
+                        finalResult = result
+                        this@supervisorScope.coroutineContext[Job]?.cancelChildren()
+                    }
+                }
             }
-            val handle = completableDeferred.invokeOnCompletion { job.cancel() }
-            job.invokeOnCompletion(onCancelling = false, handler = { handle.dispose() })
         }
-        mainJob.invokeOnCompletion { if (completableDeferred.isActive) completableDeferred.cancel() }
-        return completableDeferred.await()
+        return finalResult
     }
 
     suspend fun getImage(tag: String, explicit: Boolean, type: ResourceType): ResolvedImageObject? {
@@ -42,7 +40,8 @@ object ResourceManager {
             if (type == ResourceType.E621) it.replace("yuri", "female/female", ignoreCase = true)
             else it
         }
-        return downloadImages(processedTag, explicit, type).takeIf { it.isNotEmpty() }?.let { it.getOrNull(random.nextInt(it.size)) }
+        return downloadImages(processedTag, explicit, type).takeIf { it.isNotEmpty() }
+            ?.let { it.getOrNull(random.nextInt(it.size)) }
     }
 
     private suspend fun downloadImages(tag: String, explicit: Boolean, type: ResourceType): List<ResolvedImageObject> {
@@ -61,13 +60,15 @@ object ResourceManager {
         return cachedWeb(website).let { data ->
             if (type.json) ASTOLFO_GSON.fromJson(data)
             else Parser.xmlParser().parseInput(data, website)
-                    .getElementsByTag("posts").map { posts ->
-                        posts.getElementsByTag("post").map { post ->
-                            ImageObject(post.attr("file_url"),
-                                    post.attr("tags"),
-                                    post.attr("rating"))
-                        }
-                    }.flatten()
+                .getElementsByTag("posts").map { posts ->
+                    posts.getElementsByTag("post").map { post ->
+                        ImageObject(
+                            post.attr("file_url"),
+                            post.attr("tags"),
+                            post.attr("rating")
+                        )
+                    }
+                }.flatten()
         }.filter {
             if (!explicit)
                 it.rating == "s"

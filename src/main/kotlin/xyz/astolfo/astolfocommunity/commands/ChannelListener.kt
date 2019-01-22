@@ -1,37 +1,45 @@
 package xyz.astolfo.astolfocommunity.commands
 
 import io.sentry.Sentry
-import kotlinx.coroutines.experimental.channels.Channel
-import kotlinx.coroutines.experimental.channels.actor
-import kotlinx.coroutines.experimental.delay
-import kotlinx.coroutines.experimental.launch
+import kotlinx.coroutines.GlobalScope
+import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.channels.actor
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
+import kotlinx.coroutines.launch
 import xyz.astolfo.astolfocommunity.AstolfoCommunityApplication
 import java.util.concurrent.TimeUnit
 
 class ChannelListener(
-        val application: AstolfoCommunityApplication,
-        val guildListener: GuildListener
+    val application: AstolfoCommunityApplication,
+    val guildListener: GuildListener
 ) {
 
-    private val cleanUpJob = launch(MessageListener.messageProcessorContext) {
+    private val cleanUpJob = GlobalScope.launch(MessageListener.messageProcessorContext) {
         while (isActive && !destroyed) {
             // Clean up every 5 minutes
-            delay(5, TimeUnit.MINUTES)
+            delay(TimeUnit.MINUTES.toMillis(5))
             channelActor.send(CleanUp)
         }
     }
 
     private var destroyed = false
 
-    suspend fun addMessage(guildMessageData: GuildListener.GuildMessageData) = channelActor.send(MessageEvent(guildMessageData))
-    suspend fun addCommand(guildMessageData: GuildListener.GuildMessageData) = channelActor.send(CommandEvent(guildMessageData))
+    suspend fun addMessage(guildMessageData: GuildListener.GuildMessageData) =
+        channelActor.send(MessageEvent(guildMessageData))
+
+    suspend fun addCommand(guildMessageData: GuildListener.GuildMessageData) =
+        channelActor.send(CommandEvent(guildMessageData))
 
     private interface ChannelEvent
     private class CommandEvent(val guildMessageData: GuildListener.GuildMessageData) : ChannelEvent
     private class MessageEvent(val guildMessageData: GuildListener.GuildMessageData) : ChannelEvent
     private object CleanUp : ChannelEvent
 
-    private val channelActor = actor<ChannelEvent>(context = MessageListener.messageProcessorContext, capacity = Channel.UNLIMITED) {
+    private val channelActor = GlobalScope.actor<ChannelEvent>(
+        context = MessageListener.messageProcessorContext,
+        capacity = Channel.UNLIMITED
+    ) {
         for (event in channel) {
             if (destroyed) continue
             try {
