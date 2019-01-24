@@ -32,7 +32,11 @@ dependencies {
     compile "org.jetbrains.kotlinx:kotlinx-coroutines-core:1.1.0"
 
     // Discord
-    compile "net.dv8tion:JDA:3.8.1_456"
+    compile("net.dv8tion:JDA:3.8.1_456") {
+        exclude group: "club.minnced", module: "opus-java"
+    }
+    compile "club.minnced:opus-java-api:1.0.4"
+    compile "club.minnced:opus-java-natives:1.0.4"
     compile "com.github.FredBoat:Lavalink-Client:1a4b0f5"
     compile "com.jagrosh:jda-utilities:2.1.5"
 
