@@ -72,12 +72,11 @@ configurations {
 }
 
 group = 'xyz.astolfo'
-version = '2.0.0'
+version = '1.24.19'
 sourceCompatibility = 1.8
 
 bootJar {
     baseName = 'Astolfo'
-    version = ""
 }
 
 compileKotlin {
