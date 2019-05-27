@@ -1,6 +1,5 @@
 package xyz.astolfo.astolfocommunity.modules.admin
 
-import net.dv8tion.jda.core.Permission
 import net.dv8tion.jda.core.entities.Guild
 import net.dv8tion.jda.core.entities.Member
 import net.dv8tion.jda.core.events.guild.member.GuildMemberJoinEvent
@@ -8,11 +7,10 @@ import net.dv8tion.jda.core.events.guild.member.GuildMemberLeaveEvent
 import net.dv8tion.jda.core.hooks.ListenerAdapter
 import xyz.astolfo.astolfocommunity.AstolfoCommunityApplication
 import xyz.astolfo.astolfocommunity.JoinLeaveSetting
-import xyz.astolfo.astolfocommunity.commands.CommandExecution
+import xyz.astolfo.astolfocommunity.commands.CommandContext
 import xyz.astolfo.astolfocommunity.menus.textChannelSelectionBuilder
-import xyz.astolfo.astolfocommunity.messages.description
+import xyz.astolfo.astolfocommunity.messages.embed
 import xyz.astolfo.astolfocommunity.messages.field
-import xyz.astolfo.astolfocommunity.messages.title
 import xyz.astolfo.astolfocommunity.modules.ModuleBuilder
 
 fun ModuleBuilder.createJoinLeaveCommands() {
@@ -21,30 +19,32 @@ fun ModuleBuilder.createJoinLeaveCommands() {
 }
 
 private fun ModuleBuilder.createCommand(join: Boolean) = command(if (join) "joinmessage" else "leavemessage") {
-    permission(Permission.MANAGE_SERVER)
+    //    permission(Permission.MANAGE_SERVER)
     command("enable") {
         description("Enables the ${if (join) "Join" else "Leave"} message")
         action {
             withJoinLeaveSetting(join) { it.enabled = true }
-            messageAction(embed("The ${if (join) "Join" else "Leave"} message has been enabled!")).queue()
+            reply(embed("The ${if (join) "Join" else "Leave"} message has been enabled!")).queue()
         }
     }
     command("disable") {
         description("Disables the ${if (join) "Join" else "Leave"} message")
         action {
             withJoinLeaveSetting(join) { it.enabled = false }
-            messageAction(embed("The ${if (join) "Join" else "Leave"} message has been disabled!")).queue()
+            reply(embed("The ${if (join) "Join" else "Leave"} message has been disabled!")).queue()
         }
     }
     command("info") {
         description("Information about the ${if (join) "Join" else "Leave"} message")
         action {
             withJoinLeaveSetting(join) { setting ->
-                messageAction(embed {
-                    title("${if (join) "Join" else "Leave"} Message Info")
+                reply(embed {
+                    setTitle("${if (join) "Join" else "Leave"} Message Info")
                     field("State", if (setting.enabled) "\u2705 Enabled" else "\u274C Disabled", true)
-                    field("Announce Channel", this@action.event.guild.getTextChannelById(setting.channelId)?.asMention
-                            ?: "None", true)
+                    field(
+                        "Announce Channel", this@action.event.guild.getTextChannelById(setting.channelId)?.asMention
+                            ?: "None", true
+                    )
                     field("Message", "```\n${setting.effectiveMessage(join)}\n```", false)
                 }).queue()
             }
@@ -53,10 +53,11 @@ private fun ModuleBuilder.createCommand(join: Boolean) = command(if (join) "join
     command("placeholders") {
         description("Lists the valid placeholders for the message.")
         action {
-            messageAction(embed {
-                title("${if (join) "Join" else "Leave"} Placeholder Info")
-                this@embed.description("List of placeholders you can use in your ${if (join) "join" else "leave"} message. The bot will automatically replace them with the requested information.\n" +
-                        "```\n${JoinLeaveManager.Placeholder.values().joinToString(separator = "\n") { "${it.pattern} - ${it.description}" }}\n```")
+            reply(embed {
+                setTitle("${if (join) "Join" else "Leave"} Placeholder Info")
+                this@embed.setDescription("List of placeholders you can use in your ${if (join) "join" else "leave"} message. The bot will automatically replace them with the requested information.\n" +
+                    "```\n${JoinLeaveManager.Placeholder.values().joinToString(separator = "\n") { "${it.pattern} - ${it.description}" }}\n```"
+                )
             }).queue()
         }
     }
@@ -64,17 +65,23 @@ private fun ModuleBuilder.createCommand(join: Boolean) = command(if (join) "join
         description("Sets/resets the ${if (join) "Join" else "Leave"} message")
         action {
             withJoinLeaveSetting(join) {
-                it.message = args
-                messageAction(embed("The ${if (join) "Join" else "Leave"} message has been changed to: ```\n${it.effectiveMessage(join)}\n```")).queue()
+                it.message = commandContent
+                reply(
+                    embed(
+                        "The ${if (join) "Join" else "Leave"} message has been changed to: ```\n${it.effectiveMessage(
+                            join
+                        )}\n```"
+                    )
+                ).queue()
             }
         }
     }
     command("setchannel") {
         description("Changes the channel the ${if (join) "Join" else "Leave"} message is announced in")
         action {
-            val channel = textChannelSelectionBuilder(args).execute() ?: return@action
+            val channel = textChannelSelectionBuilder(commandContent).execute() ?: return@action
             withJoinLeaveSetting(join) { it.channelId = channel.idLong }
-            messageAction(embed("The announce channel for ${if (join) "Join" else "Leave"} message has been changed to: **${channel.asMention}**")).queue()
+            reply(embed("The announce channel for ${if (join) "Join" else "Leave"} message has been changed to: **${channel.asMention}**")).queue()
         }
     }
 }
@@ -128,11 +135,12 @@ fun JoinLeaveSetting.effectiveMessage(join: Boolean): String {
     return if (join) "%mention% has joined the guild!" else "%mention% has left the guild!"
 }
 
-private suspend fun <E> CommandExecution.withJoinLeaveSetting(join: Boolean, block: suspend (JoinLeaveSetting) -> E): E = withGuildSettings { guildSettings ->
-    val joinLeaveMap = guildSettings.joinLeaveMessage.toMutableMap()
-    val joinLeaveSetting = joinLeaveMap.getOrDefault(join, JoinLeaveSetting())
-    val result = block(joinLeaveSetting)
-    joinLeaveMap[join] = joinLeaveSetting
-    guildSettings.joinLeaveMessage = joinLeaveMap
-    result
-}
+private suspend fun <E> CommandContext.withJoinLeaveSetting(join: Boolean, block: suspend (JoinLeaveSetting) -> E): E =
+    withGuildSettings { guildSettings ->
+        val joinLeaveMap = guildSettings.joinLeaveMessage.toMutableMap()
+        val joinLeaveSetting = joinLeaveMap.getOrDefault(join, JoinLeaveSetting())
+        val result = block(joinLeaveSetting)
+        joinLeaveMap[join] = joinLeaveSetting
+        guildSettings.joinLeaveMessage = joinLeaveMap
+        result
+    }

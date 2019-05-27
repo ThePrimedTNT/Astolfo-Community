@@ -7,34 +7,34 @@ import net.dv8tion.jda.core.entities.Member
 import net.dv8tion.jda.core.entities.Message
 import net.dv8tion.jda.core.entities.Role
 import net.dv8tion.jda.core.entities.TextChannel
-import xyz.astolfo.astolfocommunity.commands.CommandExecution
+import xyz.astolfo.astolfocommunity.commands.CommandContext
 import xyz.astolfo.astolfocommunity.commands.CommandSession
 import xyz.astolfo.astolfocommunity.messages.*
 import java.util.concurrent.atomic.AtomicReference
 import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
 
-fun CommandExecution.memberSelectionBuilder(query: String) = selectionBuilder<Member>()
-        .results(FinderUtil.findMembers(query, event.guild))
-        .noResultsMessage("Unknown Member!")
-        .resultsRenderer { "**${it.effectiveName} (${it.user.name}#${it.user.discriminator})**" }
-        .description("Type the number of the member you want.")
+fun CommandContext.memberSelectionBuilder(query: String) = selectionBuilder<Member>()
+    .results(FinderUtil.findMembers(query, event.guild))
+    .noResultsMessage("Unknown Member!")
+    .resultsRenderer { "**${it.effectiveName} (${it.user.name}#${it.user.discriminator})**" }
+    .description("Type the number of the member you want.")
 
-fun CommandExecution.textChannelSelectionBuilder(query: String) = selectionBuilder<TextChannel>()
-        .results(FinderUtil.findTextChannels(query, event.guild))
-        .noResultsMessage("Unknown Text Channel!")
-        .resultsRenderer { "**${it.name} (${it.id})**" }
-        .description("Type the number of the text channel you want.")
+fun CommandContext.textChannelSelectionBuilder(query: String) = selectionBuilder<TextChannel>()
+    .results(FinderUtil.findTextChannels(query, event.guild))
+    .noResultsMessage("Unknown Text Channel!")
+    .resultsRenderer { "**${it.name} (${it.id})**" }
+    .description("Type the number of the text channel you want.")
 
-fun CommandExecution.roleSelectionBuilder(query: String) = selectionBuilder<Role>()
-        .results(FinderUtil.findRoles(query, event.guild))
-        .noResultsMessage("Unknown Role!")
-        .resultsRenderer { "**${it.name} (${it.id})**" }
-        .description("Type the number of the role you want.")
+fun CommandContext.roleSelectionBuilder(query: String) = selectionBuilder<Role>()
+    .results(FinderUtil.findRoles(query, event.guild))
+    .noResultsMessage("Unknown Role!")
+    .resultsRenderer { "**${it.name} (${it.id})**" }
+    .description("Type the number of the role you want.")
 
-fun <E> CommandExecution.selectionBuilder() = SelectionMenuBuilder<E>(this)
+fun <E> CommandContext.selectionBuilder() = SelectionMenuBuilder<E>(this)
 
-class SelectionMenuBuilder<E>(private val execution: CommandExecution) {
+class SelectionMenuBuilder<E>(private val execution: CommandContext) {
     var title = "Selection Menu"
     var results = emptyList<E>()
     var noResultsMessage = "No results!"
@@ -59,7 +59,7 @@ class SelectionMenuBuilder<E>(private val execution: CommandExecution) {
 
     suspend fun execute(): E? = with(execution) {
         if (results.isEmpty()) {
-            messageAction(errorEmbed(noResultsMessage)).queue()
+            reply(errorEmbed(noResultsMessage)).queue()
             return null
         }
 
@@ -72,25 +72,25 @@ class SelectionMenuBuilder<E>(private val execution: CommandExecution) {
         val response = CompletableDeferred<E?>()
         val errorMessage = AtomicReference<CachedMessage>()
         // Waits for a follow up response for user selection
-        responseListener {
-            if (menu.isDestroyed) {
-                CommandSession.ResponseAction.UNREGISTER_LISTENER
-            } else if (args.matches("\\d+".toRegex())) {
-                val numSelection = args.toBigInteger().toInt()
-                if (numSelection < 1 || numSelection > results.size) {
-                    errorMessage.getAndSet(messageAction("Unknown Selection").sendCached())?.delete()
-                    return@responseListener CommandSession.ResponseAction.IGNORE_COMMAND
-                }
-                val selectedMember = results[numSelection - 1]
-                response.complete(selectedMember)
-                CommandSession.ResponseAction.IGNORE_AND_UNREGISTER_LISTENER
-            } else {
-                if (event.message.contentRaw == args) {
-                    errorMessage.getAndSet(messageAction("Response must be a number!").sendCached())?.delete()
-                    return@responseListener CommandSession.ResponseAction.IGNORE_COMMAND
-                } else CommandSession.ResponseAction.RUN_COMMAND
-            }
-        }
+//        responseListener {
+//            if (menu.isDestroyed) {
+//                CommandSession.ResponseAction.UNREGISTER_LISTENER
+//            } else if (args.matches("\\d+".toRegex())) {
+//                val numSelection = args.toBigInteger().toInt()
+//                if (numSelection < 1 || numSelection > results.size) {
+//                    errorMessage.getAndSet(messageAction("Unknown Selection").sendCached())?.delete()
+//                    return@responseListener CommandSession.ResponseAction.IGNORE_COMMAND
+//                }
+//                val selectedMember = results[numSelection - 1]
+//                response.complete(selectedMember)
+//                CommandSession.ResponseAction.IGNORE_AND_UNREGISTER_LISTENER
+//            } else {
+//                if (event.message.contentRaw == args) {
+//                    errorMessage.getAndSet(messageAction("Response must be a number!").sendCached())?.delete()
+//                    return@responseListener CommandSession.ResponseAction.IGNORE_COMMAND
+//                } else CommandSession.ResponseAction.RUN_COMMAND
+//            }
+//        }
         val dispose = {
             synchronized(menu) {
                 if (!menu.isDestroyed) menu.destroy()
@@ -111,10 +111,10 @@ class SelectionMenuBuilder<E>(private val execution: CommandExecution) {
     }
 }
 
-fun CommandExecution.chatInput(inputMessage: String) = ChatInputBuilder(this)
-        .description(inputMessage)
+fun CommandContext.chatInput(inputMessage: String) = ChatInputBuilder(this)
+    .description(inputMessage)
 
-class ChatInputBuilder(private val execution: CommandExecution) {
+class ChatInputBuilder(private val execution: CommandContext) {
     private var title: String = ""
     private var description: String = "Input = Output"
     private var responseValidator: (String) -> Boolean = { true }
@@ -125,26 +125,26 @@ class ChatInputBuilder(private val execution: CommandExecution) {
 
     suspend fun execute(): String? = with(execution) {
         val response = CompletableDeferred<String?>()
-        val message = messageAction(embed {
+        val message = reply(embed {
             if (title.isNotBlank()) title(title)
             description(description)
         }).sendCached()
         // Waits for a follow up response for user selection
-        responseListener {
-            if (message.isDeleted) {
-                CommandSession.ResponseAction.UNREGISTER_LISTENER
-            } else {
-                val result = responseValidator.invoke(args)
-                if (result) {
-                    // If the validator says its valid
-                    response.complete(args)
-                    CommandSession.ResponseAction.IGNORE_AND_UNREGISTER_LISTENER
-                } else {
-                    CommandSession.ResponseAction.IGNORE_COMMAND
-                }
-            }
-        }
-        destroyListener { response.complete(null) }
+//        responseListener {
+//            if (message.isDeleted) {
+//                CommandSession.ResponseAction.UNREGISTER_LISTENER
+//            } else {
+//                val result = responseValidator.invoke(args)
+//                if (result) {
+//                    // If the validator says its valid
+//                    response.complete(args)
+//                    CommandSession.ResponseAction.IGNORE_AND_UNREGISTER_LISTENER
+//                } else {
+//                    CommandSession.ResponseAction.IGNORE_COMMAND
+//                }
+//            }
+//        }
+//        destroyListener { response.complete(null) }
         response.invokeOnCompletion { message.delete() }
         return response.await()
     }

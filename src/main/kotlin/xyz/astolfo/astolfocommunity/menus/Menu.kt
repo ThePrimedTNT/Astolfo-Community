@@ -3,7 +3,7 @@ package xyz.astolfo.astolfocommunity.menus
 import net.dv8tion.jda.core.entities.Message
 import net.dv8tion.jda.core.events.message.react.GenericMessageReactionEvent
 import net.dv8tion.jda.core.hooks.ListenerAdapter
-import xyz.astolfo.astolfocommunity.commands.CommandExecution
+import xyz.astolfo.astolfocommunity.commands.CommandContext
 import xyz.astolfo.astolfocommunity.commands.CommandSession
 import xyz.astolfo.astolfocommunity.messages.*
 import xyz.astolfo.astolfocommunity.value
@@ -11,8 +11,10 @@ import kotlin.math.max
 import kotlin.math.min
 
 
-fun CommandExecution.paginator(titleProvider: String? = "", builder: PaginatorBuilder.() -> Unit) = paginator({ titleProvider }, builder)
-fun CommandExecution.paginator(titleProvider: () -> String? = { null }, builder: PaginatorBuilder.() -> Unit): Paginator {
+fun CommandContext.paginator(titleProvider: String? = "", builder: PaginatorBuilder.() -> Unit) =
+    paginator({ titleProvider }, builder)
+
+fun CommandContext.paginator(titleProvider: () -> String? = { null }, builder: PaginatorBuilder.() -> Unit): Paginator {
     val paginatorBuilder = PaginatorBuilder(this, titleProvider, PaginatorProvider(0) { listOf() }) {
         message {
             embed {
@@ -28,8 +30,17 @@ fun CommandExecution.paginator(titleProvider: () -> String? = { null }, builder:
 
 private const val default_extraCharactersPerLine = 20
 
-fun PaginatorBuilder.provider(perPage: Int, provider: List<String>, extraCharactersPerLine: Int = default_extraCharactersPerLine) = provider(perPage, { provider }, extraCharactersPerLine)
-fun PaginatorBuilder.provider(perPage: Int, provider: () -> List<String>, extraCharactersPerLine: Int = default_extraCharactersPerLine) {
+fun PaginatorBuilder.provider(
+    perPage: Int,
+    provider: List<String>,
+    extraCharactersPerLine: Int = default_extraCharactersPerLine
+) = provider(perPage, { provider }, extraCharactersPerLine)
+
+fun PaginatorBuilder.provider(
+    perPage: Int,
+    provider: () -> List<String>,
+    extraCharactersPerLine: Int = default_extraCharactersPerLine
+) {
     this.provider = PaginatorProvider(perPage, extraCharactersPerLine, provider)
 }
 
@@ -37,13 +48,20 @@ fun PaginatorBuilder.renderer(renderer: Paginator.() -> Message) {
     this.renderer = renderer
 }
 
-class PaginatorBuilder(private val commandExecution: CommandExecution, var titleProvider: () -> String?, var provider: PaginatorProvider, var renderer: Paginator.() -> Message) {
+class PaginatorBuilder(
+    private val commandExecution: CommandContext,
+    var titleProvider: () -> String?,
+    var provider: PaginatorProvider,
+    var renderer: Paginator.() -> Message
+) {
     fun build() = Paginator(commandExecution, titleProvider, provider, renderer)
 }
 
-class PaginatorProvider(val perPage: Int,
-                        val extraCharactersPerLine: Int = default_extraCharactersPerLine,
-                        provider: () -> List<String>) {
+class PaginatorProvider(
+    val perPage: Int,
+    val extraCharactersPerLine: Int = default_extraCharactersPerLine,
+    provider: () -> List<String>
+) {
     val provider = {
         val provided = provider.invoke()
         pageCount = Math.ceil(provided.size.toDouble() / perPage).toInt()
@@ -57,7 +75,12 @@ class PaginatorProvider(val perPage: Int,
         private set
 }
 
-class Paginator(private val commandExecution: CommandExecution, val titleProvider: () -> String?, val provider: PaginatorProvider, val renderer: Paginator.() -> Message) {
+class Paginator(
+    private val commandExecution: CommandContext,
+    val titleProvider: () -> String?,
+    val provider: PaginatorProvider,
+    val renderer: Paginator.() -> Message
+) {
     var currentPage = 0
         set(value) {
             val oldPage = field
@@ -69,8 +92,10 @@ class Paginator(private val commandExecution: CommandExecution, val titleProvide
         get() {
             val content = provider.provider.invoke()
             return if (content.isEmpty()) emptyList()
-            else content.subList((currentPage * provider.perPage).coerceIn(content.indices),
-                    ((currentPage + 1) * provider.perPage).coerceIn(0..content.size))
+            else content.subList(
+                (currentPage * provider.perPage).coerceIn(content.indices),
+                ((currentPage + 1) * provider.perPage).coerceIn(0..content.size)
+            )
         }
 
     val providedString: String
@@ -116,14 +141,14 @@ class Paginator(private val commandExecution: CommandExecution, val titleProvide
     init {
         commandExecution.event.jda.addEventListener(listener)
         render()
-        commandExecution.session.addListener(destroyListener)
+//        commandExecution.session.addListener(destroyListener)
     }
 
     fun destroy() {
         // Clean Up
         if (isDestroyed) return
         isDestroyed = true
-        commandExecution.session.removeListener(destroyListener)
+//        commandExecution.session.removeListener(destroyListener)
         commandExecution.event.jda.removeEventListener(listener)
         message?.delete()
         message = null
@@ -141,7 +166,7 @@ class Paginator(private val commandExecution: CommandExecution, val titleProvide
         if (isDestroyed) return
         val newMessage = renderer.invoke(this@Paginator)
         if (message == null) {
-            message = commandExecution.messageAction(newMessage).sendCached()
+            message = commandExecution.reply(newMessage).sendCached()
 
             val pageCount = provider.pageCount
             val emotes = mutableListOf<String>()

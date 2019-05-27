@@ -4,7 +4,7 @@ import com.github.salomonbrys.kotson.fromJson
 import com.google.common.cache.CacheBuilder
 import kotlinx.coroutines.*
 import org.jsoup.parser.Parser
-import xyz.astolfo.astolfocommunity.commands.CommandExecution
+import xyz.astolfo.astolfocommunity.commands.CommandContext
 import java.util.*
 import java.util.concurrent.TimeUnit
 
@@ -19,7 +19,7 @@ object ResourceManager {
 
     private val random = Random()
 
-    suspend fun CommandExecution.getImage(tag: String, explicit: Boolean): ResolvedImageObject? {
+    suspend fun CommandContext.getImage(tag: String, explicit: Boolean): ResolvedImageObject? {
         var finalResult: ResolvedImageObject? = null
         supervisorScope {
             ResourceType.values().forEach { type ->

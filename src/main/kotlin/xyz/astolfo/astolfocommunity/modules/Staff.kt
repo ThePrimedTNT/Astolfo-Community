@@ -4,6 +4,8 @@ import xyz.astolfo.astolfocommunity.RadioEntry
 import xyz.astolfo.astolfocommunity.menus.paginator
 import xyz.astolfo.astolfocommunity.menus.provider
 import xyz.astolfo.astolfocommunity.messages.description
+import xyz.astolfo.astolfocommunity.messages.embed
+import xyz.astolfo.astolfocommunity.messages.errorEmbed
 import java.net.MalformedURLException
 import java.net.URL
 
@@ -11,14 +13,16 @@ fun createStaffModule() = module("Developer", hidden = true) {
     command("dev") {
         inheritedAction {
             if (!application.staffMemberIds.contains(event.author.idLong)) {
-                messageAction(errorEmbed("You're not allowed to use developer commands, please contact a staff member if you want to use them!")).queue()
+                reply(errorEmbed("You're not allowed to use developer commands, please contact a staff member if you want to use them!")).queue()
                 false
             } else true
         }
         action {
-            messageAction(embed {
-                description("addRadio [url] [name] - Adds a radio to the database\n" +
-                        "removeRadio [id] - Removes a radio from the database")
+            reply(embed {
+                description(
+                    "addRadio [url] [name] - Adds a radio to the database\n" +
+                        "removeRadio [id] - Removes a radio from the database"
+                )
             }).queue()
         }
         command("stop") {
@@ -30,31 +34,32 @@ fun createStaffModule() = module("Developer", hidden = true) {
             action {
                 val urlString: String
                 val name: String
-                if (args.contains(" ")) {
-                    urlString = args.substringBefore(" ").trim()
-                    name = args.substringAfter(" ").trim()
+                if (commandContent.contains(" ")) {
+                    urlString = commandContent.substringBefore(" ").trim()
+                    name = commandContent.substringAfter(" ").trim()
                 } else {
-                    urlString = args
+                    urlString = commandContent
                     name = ""
                 }
                 try {
                     URL(urlString)
                 } catch (e: MalformedURLException) {
-                    messageAction(errorEmbed("That's not a valid url!")).queue()
+                    reply(errorEmbed("That's not a valid url!")).queue()
                     return@action
                 }
                 if (name.isBlank()) {
-                    messageAction(errorEmbed("Please give the radio station a name!")).queue()
+                    reply(errorEmbed("Please give the radio station a name!")).queue()
                     return@action
                 }
-                val radioEntry = application.astolfoRepositories.radioRepository.save(RadioEntry(name = name, url = urlString))
-                messageAction(embed("Radio station #${radioEntry.id!!} **${radioEntry.name}** has been added!")).queue()
+                val radioEntry =
+                    application.astolfoRepositories.radioRepository.save(RadioEntry(name = name, url = urlString))
+                reply(embed("Radio station #${radioEntry.id!!} **${radioEntry.name}** has been added!")).queue()
             }
         }
         command("removeRadio") {
             action {
-                application.astolfoRepositories.radioRepository.deleteById(args.toLong())
-                messageAction(embed("Deleted!")).queue()
+                application.astolfoRepositories.radioRepository.deleteById(commandContent.toLong())
+                reply(embed("Deleted!")).queue()
             }
         }
         command("patreon") {
@@ -71,13 +76,13 @@ fun createStaffModule() = module("Developer", hidden = true) {
             command("give") {
                 action {
                     application.donationManager.give(event.member.user.idLong)
-                    messageAction(embed("Done!")).queue()
+                    reply(embed("Done!")).queue()
                 }
             }
             command("take") {
                 action {
                     application.donationManager.remove(event.member.user.idLong)
-                    messageAction(embed("Done!")).queue()
+                    reply(embed("Done!")).queue()
                 }
             }
         }

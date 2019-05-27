@@ -20,7 +20,7 @@ class MessageListener(val application: AstolfoCommunityApplication) {
     val listener = object : ListenerAdapter() {
         override fun onGuildMessageReceived(event: GuildMessageReceivedEvent) {
             application.statsDClient.incrementCounter("messages_received")
-            val timeIssued = System.nanoTime()
+            val timeIssued = System.currentTimeMillis()
             if (event.author.isBot || event.isWebhookMessage || !event.channel.canTalk()) return
             messageActor.sendBlocking(GuildMessageReceived(MessageData(event, timeIssued)))
         }

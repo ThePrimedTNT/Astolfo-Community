@@ -9,12 +9,15 @@ import net.dv8tion.jda.bot.sharding.ShardManager
 import net.dv8tion.jda.core.Permission
 import net.dv8tion.jda.core.entities.Guild
 import net.dv8tion.jda.core.entities.TextChannel
+import net.dv8tion.jda.core.requests.RestAction
 import okhttp3.*
 import org.apache.commons.lang3.StringUtils
 import java.io.IOException
 import java.text.NumberFormat
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.TimeUnit
+import kotlin.coroutines.resume
+import kotlin.coroutines.resumeWithException
 
 val ASTOLFO_GSON = Gson()
 val ASTOLFO_HTTP_CLIENT = OkHttpClient()
@@ -252,4 +255,21 @@ fun String.smartParseBoolean() = when {
     StringUtils.equalsAnyIgnoreCase(this, "enable", "enabled", "on", "true", "yes") -> true
     StringUtils.equalsAnyIgnoreCase(this, "disable", "disabled", "off", "false", "no") -> false
     else -> null
+}
+
+suspend fun <R> RestAction<R>.await() = suspendCancellableCoroutine<R> { cont ->
+    val requestFuture = submit()
+    requestFuture.whenComplete { result, error ->
+        if (error != null) {
+            // Throw exception if Rest Action throws exception
+            cont.resumeWithException(error)
+        } else {
+            // Return Rest Action result when completed
+            cont.resume(result)
+        }
+    }
+    cont.invokeOnCancellation {
+        // Cancel Rest Action when coroutine is cancelled
+        requestFuture.cancel(true)
+    }
 }

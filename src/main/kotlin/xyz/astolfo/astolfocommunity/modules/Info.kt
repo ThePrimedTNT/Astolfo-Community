@@ -1,102 +1,148 @@
 package xyz.astolfo.astolfocommunity.modules
 
 import net.dv8tion.jda.core.JDAInfo
+import net.dv8tion.jda.core.entities.PrivateChannel
+import xyz.astolfo.astolfocommunity.await
+import xyz.astolfo.astolfocommunity.commands.Command
+import xyz.astolfo.astolfocommunity.commands.CommandContext
 import xyz.astolfo.astolfocommunity.menus.memberSelectionBuilder
 import xyz.astolfo.astolfocommunity.messages.*
 import java.text.DecimalFormat
 
-fun createInfoModule() = module("Info") {
-    command("ping") {
-        val format = DecimalFormat("#0.###")
-        action {
-            val pingStartTime = System.nanoTime()
-            messageAction(message("pinging")).queue { message ->
-                val pingEndTime = System.nanoTime()
-                val pingTimeDifference = pingEndTime - pingStartTime
-                val processTime = pingStartTime - timeIssued
-                message.editMessage("REST Ping: **${format.format(pingTimeDifference / 1000000.0)}ms**" +
-                        "\nDiscord WebSocket: **${message.jda.ping}ms**" +
-                        "\nBot Process Time: **${format.format(processTime / 1000000.0)}ms**").queue()
-            }
-        }
-    }
-    command("about", "info") {
-        val numberFormatter = DecimalFormat.getIntegerInstance()
-        action {
-            messageAction(embed {
-                title("Astolfo Community Info")
-                val shardManager = application.shardManager
-                val guildCount = shardManager.guildCache.size()
-                val totalChannels = shardManager.textChannelCache.size() + shardManager.voiceChannelCache.size()
-                val userCount = shardManager.userCache.size()
-                description("Astolfo-Community is an open-sourced community version of Astolfo! If you want to contribute or take a look at the source code, visit our [Github](https://github.com/ThePrimedTNT/Astolfo-Community)!")
-                field("Stats", "$guildCount *servers*" +
-                        "\n${numberFormatter.format(totalChannels)} *channels*" +
-                        "\n${numberFormatter.format(userCount)} *users*" +
-                        "\n${application.shardManager.shards.size} *Shards (#${event.jda.shardInfo.shardId + 1})*", true)
-                field("Music", "${numberFormatter.format(application.musicManager.sessionCount)} *sessions*" +
-                        "\n${numberFormatter.format(application.musicManager.queuedSongCount)} *queued songs*" +
-                        "\n${numberFormatter.format(application.musicManager.listeningCount)} *listening*", true)
-                field("Version", "v1.0.26", true) // Number of commits? idk
-                field("Library", "JDA ${JDAInfo.VERSION}", true)
-                field("Our support server", "https://discord.gg/23RB2Wc", true)
+object InfoModule : Module("info", Type.GENERIC) {
 
-            }).queue()
+    init {
+        +PingCommand
+        +AboutCommand
+        +AvatarCommand
+        +LinksCommand
+        +UserCountCommand
+        +DonateCommand
+        +HelpCommand
+    }
+
+    object PingCommand : Command("ping") {
+        override suspend fun executeDefault(context: CommandContext) {
+            val restPingStart = System.currentTimeMillis()
+            val botProcessDuration = restPingStart - context.timeIssued
+
+            val sentPingingMessage = context.reply(message("Pinging...")).await()
+
+            val restPingEnd = System.currentTimeMillis()
+            val restPing = restPingEnd - restPingStart
+
+            sentPingingMessage.editMessage(
+                message(
+                    "**REST Ping:** ${restPing}ms\n" +
+                        "**Discord Websocket Ping:** ${context.jda.ping}ms\n" +
+                        "**Bot Process Duration:** ${botProcessDuration}ms"
+                )
+            ).queue()
         }
     }
-    command("avatar", "pfp") {
-        action {
-            val selectedMember = memberSelectionBuilder(args).title("Profile Selection").execute() ?: return@action
-            messageAction(embed {
-                title("Astolfo Profile Pictures", selectedMember.user.avatarUrl)
+
+    object AboutCommand : Command("about") {
+        private val numberFormatter = DecimalFormat.getIntegerInstance()
+        override suspend fun executeDefault(context: CommandContext) {
+            context.reply(
+                embed {
+                    setTitle("Astolfo » About")
+                    description("Astolfo Bot was developed based on the popular anime character Astolfo.")
+                    val shardManager = context.application.shardManager
+                    field(
+                        "Stats",
+                        "${numberFormatter.format(shardManager.guildCache.size())} *servers*\n" +
+                            "${numberFormatter.format(shardManager.textChannelCache.size() + shardManager.voiceChannelCache.size())} *channels*\n" +
+                            "${numberFormatter.format(shardManager.userCache.size())} *users*\n" +
+                            "${numberFormatter.format(shardManager.shardCache.size())} *shards (#${numberFormatter.format(
+                                context.jda.shardInfo.shardId
+                            )})*",
+                        true
+                    )
+                    val musicManager = context.application.musicManager
+                    field(
+                        "Music",
+                        "${numberFormatter.format(musicManager.sessionCount)} *sessions*\n" +
+                            "${numberFormatter.format(musicManager.queuedSongCount)} *queued songs*\n" +
+                            "${numberFormatter.format(musicManager.listeningCount)} *listening*",
+                        true
+                    )
+                    field("Version", "v2.0.0", true) // TODO make this a constant somewhere
+                    field("Library", "JDA ${JDAInfo.VERSION}", true)
+                    field("Our support server", "https://discord.gg/23RB2Wc", true)
+                }
+            ).queue()
+        }
+    }
+
+    object AvatarCommand : Command("avatar") {
+        override suspend fun executeDefault(context: CommandContext) {
+            val selectedMember = context.memberSelectionBuilder(context.commandContent)
+                .title("Profile Selection")
+                .execute() ?: return
+            context.reply(embed {
+                title("Astolfo » Profile Pictures", selectedMember.user.avatarUrl)
                 description("${selectedMember.asMention} Profile Picture!")
                 image(selectedMember.user.effectiveAvatarUrl)
             }).queue()
         }
     }
-    command("links", "invite") {
-        action {
-            messageAction(embed {
-                title("Useful links")
-                description("**Bot's Website**:   https://astolfo.xyz/" +
+
+    object LinksCommand : Command("links") {
+        override suspend fun executeDefault(context: CommandContext) {
+            context.reply(embed {
+                title("Astolfo » Useful links")
+                description(
+                    "**Bot's Website**:   https://astolfo.xyz/" +
                         "\n**GitHub**:                https://www.github.com/theprimedtnt/astolfo-community" +
                         "\n**Commands**:        https://astolfo.xyz/commands" +
                         "\n**Support Server**: https://astolfo.xyz/support" +
                         "\n**Donate**:                https://astolfo.xyz/donate" +
-                        "\n**Invite Astolfo**:    https://astolfo.xyz/invite")
+                        "\n**Invite Astolfo**:    https://astolfo.xyz/invite"
+                )
             }).queue()
         }
     }
-    command("usercount") {
-        action {
-            messageAction(embed("There are **${event.message.guild.members.size}** members in this guild.")).queue()
+
+    object UserCountCommand : Command("usercount") {
+        override suspend fun executeDefault(context: CommandContext) {
+            context.reply(
+                embed("There are **${context.event.message.guild.members.size}** members in this guild.")
+            ).queue()
         }
     }
-    command("donate", "patreon", "patron") {
-        action {
-            messageAction(embed {
+
+    object DonateCommand : Command("donate") {
+        override suspend fun executeDefault(context: CommandContext) {
+            context.reply(embed {
                 title("As Astolfo grows, it needs to upgrade its servers.")
-                field("PS: You get rewards and perks for donating!", "Donate here: https://www.patreon.com/theprimedtnt", false)
-                field("Did you know you can upvote 20 times per month and receive free \$5 supporter status for the next 30 days?",
-                        "Upvote here: https://discordbots.org/bot/astolfo/vote", false)
+                field(
+                    "PS: You get rewards and perks for donating!",
+                    "Donate here: https://www.patreon.com/theprimedtnt",
+                    false
+                )
             }).queue()
         }
     }
-    command("help") {
-        action {
-            messageAction(embed(":mailbox: I have private messaged you a list of commands!")).queue()
-            event.author.openPrivateChannel().queue {
-                it.sendMessage(embed {
-                    title("Astolfo Command Help")
-                    description("If you're having  trouble with anything, you can always stop by our support server!" +
-                            "\nInvite Link: https://discord.gg/23RB2Wc")
-                    for (module in modules) {
-                        if ((module.hidden) || (module.nsfw && !this@action.event.channel.isNSFW)) continue
-                        val commandNames = module.commands.joinToString(" ") { "`${it.name}` " }
-                        field("${module.name} Commands", commandNames, false)
-                    }
-                }).queue()
-            }
+
+    object HelpCommand : Command("help") {
+        override suspend fun executeDefault(context: CommandContext) {
+            val privateChannel: PrivateChannel = context.executor.openPrivateChannel().await()
+
+            privateChannel.sendMessage(embed {
+                title("Astolfo CommandData Help")
+                description(
+                    "If you're having  trouble with anything, you can always stop by our support server!" +
+                        "\nInvite Link: https://discord.gg/23RB2Wc"
+                )
+                for (module in modules) {
+                    if (module.type == Type.ADMIN || (module.type == Type.NSFW && !context.event.channel.isNSFW)) continue
+                    val commandNames = module.children.joinToString(" ") { "`${it.name}` " }
+                    field("${module.name} Commands", commandNames, false)
+                }
+            }).await()
+
+            context.reply(embed(":mailbox: I have private messaged you a list of commands!")).queue()
         }
     }
 }
